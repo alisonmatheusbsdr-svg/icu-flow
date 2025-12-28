@@ -26,7 +26,7 @@ interface VasoactiveDrugCalculatorProps {
   concentrations: Concentration[];
   patientWeight: number | null;
   currentDoseMlH: number;
-  onApply: (doseMlH: number) => void;
+  onApply: (doseMlH: number, concentrationUgMl: number) => void;
 }
 
 export function VasoactiveDrugCalculator({
@@ -111,8 +111,9 @@ export function VasoactiveDrugCalculator({
 
   const handleApply = () => {
     const flow = parseFloat(flowMlH);
-    if (!isNaN(flow) && flow > 0) {
-      onApply(flow);
+    const concentrationValue = getConcentrationValue();
+    if (!isNaN(flow) && flow > 0 && concentrationValue) {
+      onApply(flow, concentrationValue);
       setOpen(false);
     }
   };

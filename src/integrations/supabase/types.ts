@@ -351,6 +351,7 @@ export type Database = {
       }
       vasoactive_drugs: {
         Row: {
+          concentration_ug_ml: number | null
           created_at: string
           dose_ml_h: number
           drug_name: string
@@ -360,6 +361,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          concentration_ug_ml?: number | null
           created_at?: string
           dose_ml_h: number
           drug_name: string
@@ -369,6 +371,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          concentration_ug_ml?: number | null
           created_at?: string
           dose_ml_h?: number
           drug_name?: string

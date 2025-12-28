@@ -1,0 +1,1 @@
+ALTER TABLE vasoactive_drugs ADD COLUMN concentration_ug_ml NUMERIC;
