@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate }: Patient
   const { user } = useAuth();
   const [newEvolution, setNewEvolution] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const historyEndRef = useRef<HTMLDivElement>(null);
 
   const draftKey = `evolution_draft_${patient.id}`;
 
@@ -27,6 +28,13 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate }: Patient
       setNewEvolution(savedDraft);
     }
   }, [draftKey]);
+
+  // Scroll to bottom when evolutions change
+  useEffect(() => {
+    if (historyEndRef.current) {
+      historyEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [patient.evolutions]);
 
   const handleAddEvolution = async () => {
     if (!newEvolution.trim() || !user) return;
@@ -78,6 +86,7 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate }: Patient
                 </div>
               </div>
             ))}
+            <div ref={historyEndRef} />
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">Nenhuma evolução registrada</p>
