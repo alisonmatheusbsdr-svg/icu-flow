@@ -49,6 +49,35 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate }: Patient
 
   return (
     <div className="space-y-4">
+      {/* Evolution History */}
+      <div className="section-card">
+        <h3 className="section-title">
+          <Clock className="h-4 w-4" />
+          Histórico
+        </h3>
+        
+        {patient.evolutions && patient.evolutions.length > 0 ? (
+          <div className="space-y-0 max-h-80 overflow-y-auto">
+            {patient.evolutions.map((evo) => (
+              <div key={evo.id} className="evolution-item">
+                <p className="text-sm whitespace-pre-wrap text-foreground">{evo.content}</p>
+                <div className="text-xs text-muted-foreground mt-1 text-right">
+                  Dr. {authorProfiles[evo.created_by]?.nome || 'Desconhecido'} - {' '}
+                  {new Date(evo.created_at).toLocaleString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Nenhuma evolução registrada</p>
+        )}
+      </div>
+
       {/* New Evolution */}
       <div className="section-card">
         <div className="flex items-center justify-between mb-3">
@@ -82,35 +111,6 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate }: Patient
             Validar Plantão
           </Button>
         </div>
-      </div>
-
-      {/* Evolution History */}
-      <div className="section-card">
-        <h3 className="section-title">
-          <Clock className="h-4 w-4" />
-          Histórico
-        </h3>
-        
-        {patient.evolutions && patient.evolutions.length > 0 ? (
-          <div className="space-y-0 max-h-80 overflow-y-auto">
-            {patient.evolutions.map((evo) => (
-              <div key={evo.id} className="evolution-item">
-                <p className="text-sm whitespace-pre-wrap text-foreground">{evo.content}</p>
-                <div className="text-xs text-muted-foreground mt-1 text-right">
-                  Dr. {authorProfiles[evo.created_by]?.nome || 'Desconhecido'} - {' '}
-                  {new Date(evo.created_at).toLocaleString('pt-BR', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">Nenhuma evolução registrada</p>
-        )}
       </div>
     </div>
   );
