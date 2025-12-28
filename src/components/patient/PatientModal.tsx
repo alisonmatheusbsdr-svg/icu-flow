@@ -102,33 +102,34 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-6xl w-[95vw] h-[90vh] p-0 overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-card border-b px-6 py-4 flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-foreground">
-                Leito {bedNumber} - {patient?.initials || '...'}
-              </h2>
-              {patient && (
-                <p className="text-sm text-muted-foreground mt-1">
-                  {patient.age} anos {patient.weight ? `| ${patient.weight}kg` : ''} | Adm: {new Date(patient.admission_date).toLocaleDateString('pt-BR')} | D{daysAdmitted}
-                </p>
-              )}
-            </div>
+        <div className="bg-card border-b px-6 py-4 flex-shrink-0 space-y-3">
+          {/* Título e informações demográficas */}
+          <div>
+            <h2 className="text-xl font-bold text-foreground">
+              Leito {bedNumber} - {patient?.initials || '...'}
+            </h2>
+            {patient && (
+              <p className="text-sm text-muted-foreground mt-1">
+                {patient.age} anos {patient.weight ? `| ${patient.weight}kg` : ''} | Adm: {new Date(patient.admission_date).toLocaleDateString('pt-BR')} | D{daysAdmitted}
+              </p>
+            )}
+          </div>
+
+          {/* Botões de ação */}
+          {patient && (
             <div className="flex items-center gap-2">
-              {patient && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    document.getElementById('evolution-input-section')?.scrollIntoView({ behavior: 'smooth' });
-                  }}
-                  className="flex items-center gap-2"
-                >
-                  <PenLine className="h-4 w-4" />
-                  Evoluir
-                </Button>
-              )}
-              {patient && patient.is_active && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  document.getElementById('evolution-input-section')?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="flex items-center gap-2"
+              >
+                <PenLine className="h-4 w-4" />
+                Evoluir
+              </Button>
+              {patient.is_active && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -140,11 +141,11 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
                 </Button>
               )}
             </div>
-          </div>
+          )}
 
           {/* Badges */}
           {patient && (
-            <div className="flex flex-wrap gap-2 mt-3">
+            <div className="flex flex-wrap gap-2">
               {patient.main_diagnosis && (
                 <Badge className="bg-destructive text-destructive-foreground">
                   HD: {patient.main_diagnosis}
