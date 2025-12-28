@@ -420,11 +420,54 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
 
       {/* Vasoactive Drugs */}
       <div className="section-card">
-        <div className="section-title">
-          <Syringe className="h-4 w-4 text-[hsl(var(--status-dva))]" />
-          Drogas Vasoativas
+        <div className="section-title justify-between">
+          <div className="flex items-center gap-2">
+            <Syringe className="h-4 w-4 text-[hsl(var(--status-dva))]" />
+            Drogas Vasoativas
+          </div>
+          
+          {/* Add DVA dropdown - now in title */}
+          {(() => {
+            const activeDvaNames = new Set(patient.vasoactive_drugs?.filter(d => d.is_active).map(d => d.drug_name) || []);
+            const availableDvas = Object.entries(VASOACTIVE_DRUGS).filter(([name]) => !activeDvaNames.has(name));
+            
+            return (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-7 w-7">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  {DVA_CATEGORIES.map((category, idx) => {
+                    const categoryDvas = availableDvas.filter(([, config]) => config.category === category.key);
+                    if (categoryDvas.length === 0) return null;
+                    
+                    return (
+                      <div key={category.key}>
+                        {idx > 0 && <DropdownMenuSeparator />}
+                        <DropdownMenuLabel className="text-xs">
+                          {category.emoji} {category.label}
+                        </DropdownMenuLabel>
+                        {categoryDvas.map(([name]) => (
+                          <DropdownMenuItem
+                            key={name}
+                            onClick={() => handleAddDva(name)}
+                            className="cursor-pointer pl-6"
+                          >
+                            {name}
+                          </DropdownMenuItem>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            );
+          })()}
         </div>
-        <div className="space-y-3">
+        
+        <div className="mt-3">
           {/* Active DVAs as removable badges */}
           <TooltipProvider delayDuration={200}>
             <div className="flex flex-wrap gap-2 items-center">
@@ -490,49 +533,10 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
                 );
               })}
 
-              {/* Dropdown to add DVAs grouped by category */}
-              {(() => {
-                const activeDvaNames = new Set(patient.vasoactive_drugs?.filter(d => d.is_active).map(d => d.drug_name) || []);
-                const availableDvas = Object.entries(VASOACTIVE_DRUGS).filter(([name]) => !activeDvaNames.has(name));
-                
-                if (availableDvas.length === 0) return null;
-                
-                return (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" className="h-8 gap-1">
-                        <Plus className="h-3.5 w-3.5" />
-                        Adicionar
-                        <ChevronDown className="h-3 w-3 opacity-50" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-56">
-                      {DVA_CATEGORIES.map((category, idx) => {
-                        const categoryDvas = availableDvas.filter(([, config]) => config.category === category.key);
-                        if (categoryDvas.length === 0) return null;
-                        
-                        return (
-                          <div key={category.key}>
-                            {idx > 0 && <DropdownMenuSeparator />}
-                            <DropdownMenuLabel className="text-xs">
-                              {category.emoji} {category.label}
-                            </DropdownMenuLabel>
-                            {categoryDvas.map(([name]) => (
-                              <DropdownMenuItem
-                                key={name}
-                                onClick={() => handleAddDva(name)}
-                                className="cursor-pointer pl-6"
-                              >
-                                {name}
-                              </DropdownMenuItem>
-                            ))}
-                          </div>
-                        );
-                      })}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                );
-              })()}
+              {/* Empty state */}
+              {(!patient.vasoactive_drugs || patient.vasoactive_drugs.filter(d => d.is_active).length === 0) && (
+                <span className="text-sm text-muted-foreground">Nenhuma droga vasoativa</span>
+              )}
             </div>
           </TooltipProvider>
         </div>
