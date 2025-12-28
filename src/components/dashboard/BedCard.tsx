@@ -1,20 +1,19 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AdmitPatientForm } from './AdmitPatientForm';
-import { Wind, Syringe, Pill, Heart, Plus } from 'lucide-react';
+import { Wind, Heart, Plus } from 'lucide-react';
 import type { Bed, Patient } from '@/types/database';
 
 interface BedCardProps {
   bed: Bed;
   patient?: Patient | null;
   onUpdate: () => void;
+  onPatientClick?: (patientId: string) => void;
 }
 
-export function BedCard({ bed, patient, onUpdate }: BedCardProps) {
-  const navigate = useNavigate();
+export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps) {
   const [isAdmitOpen, setIsAdmitOpen] = useState(false);
 
   const daysInternado = patient 
@@ -48,7 +47,7 @@ export function BedCard({ bed, patient, onUpdate }: BedCardProps) {
   return (
     <Card 
       className="bed-occupied cursor-pointer hover:shadow-md transition-shadow"
-      onClick={() => navigate(`/patient/${patient.id}`)}
+      onClick={() => onPatientClick?.(patient.id)}
     >
       <CardContent className="p-4">
         <div className="flex justify-between items-start mb-2">
