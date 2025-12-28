@@ -414,7 +414,13 @@ export type Database = {
     Enums: {
       app_role: "admin" | "diarista" | "plantonista" | "coordenador"
       approval_status: "pending" | "approved" | "rejected"
-      patient_outcome: "alta" | "obito" | "transferencia"
+      patient_outcome:
+        | "alta"
+        | "obito"
+        | "transferencia"
+        | "alta_enfermaria"
+        | "transferencia_externa"
+        | "transferencia_interna"
       respiratory_status: "ar_ambiente" | "tot"
     }
     CompositeTypes: {
@@ -545,7 +551,14 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "diarista", "plantonista", "coordenador"],
       approval_status: ["pending", "approved", "rejected"],
-      patient_outcome: ["alta", "obito", "transferencia"],
+      patient_outcome: [
+        "alta",
+        "obito",
+        "transferencia",
+        "alta_enfermaria",
+        "transferencia_externa",
+        "transferencia_interna",
+      ],
       respiratory_status: ["ar_ambiente", "tot"],
     },
   },

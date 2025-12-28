@@ -1,7 +1,7 @@
 export type AppRole = 'admin' | 'diarista' | 'plantonista' | 'coordenador';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 export type RespiratoryStatus = 'ar_ambiente' | 'tot';
-export type PatientOutcome = 'alta' | 'obito' | 'transferencia';
+export type PatientOutcome = 'alta' | 'obito' | 'transferencia' | 'alta_enfermaria' | 'transferencia_externa' | 'transferencia_interna';
 
 export interface Profile {
   id: string;
