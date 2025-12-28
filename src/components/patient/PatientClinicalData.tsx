@@ -141,6 +141,7 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
   const [newAtb, setNewAtb] = useState('');
   const [dvaInputs, setDvaInputs] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [showCustomDeviceInput, setShowCustomDeviceInput] = useState(false);
 
   // Calculate days for a device
   const getDeviceDays = (insertionDate: string) => {
@@ -296,11 +297,73 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
     <div className="space-y-4">
       {/* Invasive Devices */}
       <div className="section-card">
-        <div className="section-title">
-          <Activity className="h-4 w-4 text-destructive" />
-          Dispositivos Invasivos
+        <div className="section-title justify-between">
+          <div className="flex items-center gap-2">
+            <Activity className="h-4 w-4 text-destructive" />
+            Dispositivos Invasivos
+          </div>
+          
+          {/* Add device dropdown - now in title */}
+          <DropdownMenu onOpenChange={(open) => { if (!open) { setShowCustomDeviceInput(false); setNewDevice(''); } }}>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" className="h-7 w-7">
+                <Plus className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              {STANDARD_DEVICES.filter(device => !activeDeviceTypes.has(device)).map(device => (
+                <DropdownMenuItem
+                  key={device}
+                  onClick={() => handleAddDevice(device)}
+                  className="cursor-pointer"
+                >
+                  <span className="font-medium">{device}</span>
+                  <span className="text-muted-foreground ml-2 text-xs">
+                    {DEVICE_LABELS[device]}
+                  </span>
+                </DropdownMenuItem>
+              ))}
+              
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs text-muted-foreground">Personalizado</DropdownMenuLabel>
+              
+              {!showCustomDeviceInput ? (
+                <DropdownMenuItem 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setShowCustomDeviceInput(true);
+                  }}
+                  className="cursor-pointer"
+                >
+                  <Plus className="h-3.5 w-3.5 mr-2" />
+                  Adicionar outro...
+                </DropdownMenuItem>
+              ) : (
+                <div className="px-2 py-1.5">
+                  <Input
+                    autoFocus
+                    placeholder="Nome do dispositivo..."
+                    value={newDevice}
+                    onChange={(e) => setNewDevice(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && newDevice.trim()) {
+                        handleAddDevice(newDevice);
+                        setShowCustomDeviceInput(false);
+                      }
+                      if (e.key === 'Escape') {
+                        setShowCustomDeviceInput(false);
+                        setNewDevice('');
+                      }
+                    }}
+                    className="h-8 text-sm"
+                  />
+                </div>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-        <div className="space-y-3">
+        
+        <div className="mt-3">
           {/* Active devices as removable badges */}
           <TooltipProvider delayDuration={200}>
             <div className="flex flex-wrap gap-2 items-center">
@@ -346,47 +409,12 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
                 </div>
               ))}
 
-              {/* Dropdown to add devices */}
-              {STANDARD_DEVICES.filter(device => !activeDeviceTypes.has(device)).length > 0 && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-8 gap-1">
-                      <Plus className="h-3.5 w-3.5" />
-                      Adicionar
-                      <ChevronDown className="h-3 w-3 opacity-50" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-56">
-                    {STANDARD_DEVICES.filter(device => !activeDeviceTypes.has(device)).map(device => (
-                      <DropdownMenuItem
-                        key={device}
-                        onClick={() => handleAddDevice(device)}
-                        className="cursor-pointer"
-                      >
-                        <span className="font-medium">{device}</span>
-                        <span className="text-muted-foreground ml-2 text-xs">
-                          {DEVICE_LABELS[device]}
-                        </span>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+              {/* Empty state */}
+              {(!patient.invasive_devices || patient.invasive_devices.length === 0) && (
+                <span className="text-sm text-muted-foreground">Nenhum dispositivo</span>
               )}
             </div>
           </TooltipProvider>
-
-          {/* Add custom device */}
-          <div className="flex gap-2">
-            <Input
-              placeholder="Drenos / Outros..."
-              value={newDevice}
-              onChange={(e) => setNewDevice(e.target.value)}
-              className="text-sm h-8"
-            />
-            <Button size="sm" className="h-8" onClick={() => handleAddDevice(newDevice)} disabled={!newDevice.trim() || isLoading}>
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
         </div>
       </div>
 
