@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
@@ -16,7 +15,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import { VasoactiveDrugCalculator } from './VasoactiveDrugCalculator';
 import type { PatientWithDetails } from '@/types/database';
 
 interface PatientClinicalDataProps {
@@ -36,12 +38,103 @@ const DEVICE_LABELS: Record<string, string> = {
 
 const STANDARD_DEVICES = Object.keys(DEVICE_LABELS);
 
-// Standard vasoactive drugs
-const STANDARD_DVAS = [
-  { name: 'Noradrenalina', max: 30 },
-  { name: 'Vasopressina', max: 5 },
-  { name: 'Dobutamina', max: 20 }
-];
+// Vasoactive drugs configuration
+interface DvaConfig {
+  category: 'vasopressor' | 'inotropico' | 'vasodilatador';
+  categoryLabel: string;
+  categoryEmoji: string;
+  color: string;
+  supportsUgKgMin: boolean;
+  concentrations: { label: string; value: number }[];
+}
+
+const VASOACTIVE_DRUGS: Record<string, DvaConfig> = {
+  'Noradrenalina': {
+    category: 'vasopressor',
+    categoryLabel: 'Vasopressores',
+    categoryEmoji: '🔴',
+    color: 'hsl(0, 72%, 51%)', // red
+    supportsUgKgMin: true,
+    concentrations: [
+      { label: '4mg/250mL', value: 16 },
+      { label: '8mg/250mL', value: 32 }
+    ]
+  },
+  'Adrenalina': {
+    category: 'vasopressor',
+    categoryLabel: 'Vasopressores',
+    categoryEmoji: '🔴',
+    color: 'hsl(0, 72%, 51%)',
+    supportsUgKgMin: true,
+    concentrations: [
+      { label: '4mg/250mL', value: 16 },
+      { label: '1mg/100mL', value: 10 }
+    ]
+  },
+  'Dopamina': {
+    category: 'vasopressor',
+    categoryLabel: 'Vasopressores',
+    categoryEmoji: '🔴',
+    color: 'hsl(0, 72%, 51%)',
+    supportsUgKgMin: true,
+    concentrations: [
+      { label: '200mg/250mL', value: 800 },
+      { label: '400mg/250mL', value: 1600 }
+    ]
+  },
+  'Vasopressina': {
+    category: 'vasopressor',
+    categoryLabel: 'Vasopressores',
+    categoryEmoji: '🔴',
+    color: 'hsl(0, 72%, 51%)',
+    supportsUgKgMin: false,
+    concentrations: []
+  },
+  'Dobutamina': {
+    category: 'inotropico',
+    categoryLabel: 'Inotrópicos',
+    categoryEmoji: '🔵',
+    color: 'hsl(217, 91%, 60%)', // blue
+    supportsUgKgMin: true,
+    concentrations: [
+      { label: '250mg/250mL', value: 1000 },
+      { label: '500mg/250mL', value: 2000 }
+    ]
+  },
+  'Milrinona': {
+    category: 'inotropico',
+    categoryLabel: 'Inotrópicos',
+    categoryEmoji: '🔵',
+    color: 'hsl(217, 91%, 60%)',
+    supportsUgKgMin: true,
+    concentrations: [
+      { label: '10mg/100mL', value: 100 },
+      { label: '20mg/100mL', value: 200 }
+    ]
+  },
+  'Nitroglicerina': {
+    category: 'vasodilatador',
+    categoryLabel: 'Vasodilatadores',
+    categoryEmoji: '🟢',
+    color: 'hsl(142, 71%, 45%)', // green
+    supportsUgKgMin: false,
+    concentrations: []
+  },
+  'Nitroprussiato': {
+    category: 'vasodilatador',
+    categoryLabel: 'Vasodilatadores',
+    categoryEmoji: '🟢',
+    color: 'hsl(142, 71%, 45%)',
+    supportsUgKgMin: false,
+    concentrations: []
+  }
+};
+
+const DVA_CATEGORIES = [
+  { key: 'vasopressor', label: 'Vasopressores', emoji: '🔴' },
+  { key: 'inotropico', label: 'Inotrópicos', emoji: '🔵' },
+  { key: 'vasodilatador', label: 'Vasodilatadores', emoji: '🟢' }
+] as const;
 
 export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataProps) {
   const [newDevice, setNewDevice] = useState('');
@@ -99,6 +192,35 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
     } else {
       await handleAddDevice(deviceType);
     }
+  };
+
+  // Add DVA
+  const handleAddDva = async (dvaName: string) => {
+    setIsLoading(true);
+    const existing = getDvaByName(dvaName);
+    
+    if (existing) {
+      // Reactivate if exists
+      await supabase.from('vasoactive_drugs').update({ is_active: true, dose_ml_h: 0 }).eq('id', existing.id);
+    } else {
+      await supabase.from('vasoactive_drugs').insert({
+        patient_id: patient.id,
+        drug_name: dvaName,
+        dose_ml_h: 0
+      });
+    }
+    toast.success(`${dvaName} adicionada`);
+    onUpdate();
+    setIsLoading(false);
+  };
+
+  // Remove DVA
+  const handleRemoveDva = async (dvaId: string) => {
+    setIsLoading(true);
+    await supabase.from('vasoactive_drugs').update({ is_active: false }).eq('id', dvaId);
+    toast.success('Droga removida');
+    onUpdate();
+    setIsLoading(false);
   };
 
   // Update DVA dose
@@ -259,35 +381,108 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
           <Syringe className="h-4 w-4 text-[hsl(var(--status-dva))]" />
           Drogas Vasoativas
         </div>
-        <div className="space-y-1">
-          {STANDARD_DVAS.map(dva => {
-            const activeDva = getDvaByName(dva.name);
-            const currentDose = activeDva?.dose_ml_h || 0;
-            const percentage = Math.min((currentDose / dva.max) * 100, 100);
-            
-            return (
-              <div key={dva.name} className="dva-row">
-                <span className="dva-label">{dva.name}</span>
-                <div className="dva-bar-container">
-                  <div className="dva-bar-fill" style={{ width: `${percentage}%` }} />
-                </div>
-                <Input
-                  type="number"
-                  placeholder="--"
-                  value={dvaInputs[dva.name] ?? (currentDose > 0 ? currentDose : '')}
-                  onChange={(e) => setDvaInputs(prev => ({ ...prev, [dva.name]: e.target.value }))}
-                  onBlur={() => {
-                    const val = parseFloat(dvaInputs[dva.name] || '0');
-                    if (dvaInputs[dva.name] !== undefined && dvaInputs[dva.name] !== '') {
-                      handleUpdateDva(dva.name, val);
-                    }
-                  }}
-                  className="w-20 h-8 text-sm text-right"
-                />
-                <span className="text-xs text-muted-foreground w-8">ml/h</span>
-              </div>
-            );
-          })}
+        <div className="space-y-3">
+          {/* Active DVAs as removable badges */}
+          <TooltipProvider delayDuration={200}>
+            <div className="flex flex-wrap gap-2 items-center">
+              {patient.vasoactive_drugs?.filter(d => d.is_active).map(dva => {
+                const config = VASOACTIVE_DRUGS[dva.drug_name];
+                const badgeColor = config?.color || 'hsl(var(--muted-foreground))';
+                
+                return (
+                  <div
+                    key={dva.id}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-sm"
+                    style={{
+                      backgroundColor: `${badgeColor}15`,
+                      borderColor: `${badgeColor}40`,
+                      borderWidth: '1px',
+                      color: badgeColor
+                    }}
+                  >
+                    <span className="font-medium">{dva.drug_name}</span>
+                    <Input
+                      type="number"
+                      value={dvaInputs[dva.drug_name] ?? dva.dose_ml_h}
+                      onChange={(e) => setDvaInputs(prev => ({ ...prev, [dva.drug_name]: e.target.value }))}
+                      onBlur={() => {
+                        const val = parseFloat(dvaInputs[dva.drug_name]?.toString() || dva.dose_ml_h.toString());
+                        if (dvaInputs[dva.drug_name] !== undefined) {
+                          handleUpdateDva(dva.drug_name, val);
+                        }
+                      }}
+                      className="w-14 h-6 text-xs text-center bg-background/50 border-0 p-1"
+                      style={{ color: 'inherit' }}
+                    />
+                    <span className="text-xs opacity-80">ml/h</span>
+                    
+                    {/* Calculator for drugs that support µg/kg/min */}
+                    {config?.supportsUgKgMin && (
+                      <VasoactiveDrugCalculator
+                        drugName={dva.drug_name}
+                        concentrations={config.concentrations}
+                        patientWeight={patient.weight}
+                        currentDoseMlH={dva.dose_ml_h}
+                        onApply={(dose) => handleUpdateDva(dva.drug_name, dose)}
+                      />
+                    )}
+                    
+                    <button
+                      onClick={() => handleRemoveDva(dva.id)}
+                      disabled={isLoading}
+                      className="ml-0.5 p-0.5 rounded hover:bg-foreground/10 transition-colors"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                );
+              })}
+
+              {/* Dropdown to add DVAs grouped by category */}
+              {(() => {
+                const activeDvaNames = new Set(patient.vasoactive_drugs?.filter(d => d.is_active).map(d => d.drug_name) || []);
+                const availableDvas = Object.entries(VASOACTIVE_DRUGS).filter(([name]) => !activeDvaNames.has(name));
+                
+                if (availableDvas.length === 0) return null;
+                
+                return (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-8 gap-1">
+                        <Plus className="h-3.5 w-3.5" />
+                        Adicionar
+                        <ChevronDown className="h-3 w-3 opacity-50" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-56">
+                      {DVA_CATEGORIES.map((category, idx) => {
+                        const categoryDvas = availableDvas.filter(([, config]) => config.category === category.key);
+                        if (categoryDvas.length === 0) return null;
+                        
+                        return (
+                          <div key={category.key}>
+                            {idx > 0 && <DropdownMenuSeparator />}
+                            <DropdownMenuLabel className="text-xs">
+                              {category.emoji} {category.label}
+                            </DropdownMenuLabel>
+                            {categoryDvas.map(([name]) => (
+                              <DropdownMenuItem
+                                key={name}
+                                onClick={() => handleAddDva(name)}
+                                className="cursor-pointer pl-6"
+                              >
+                                {name}
+                              </DropdownMenuItem>
+                            ))}
+                          </div>
+                        );
+                      })}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                );
+              })()}
+            </div>
+          </TooltipProvider>
         </div>
       </div>
 
