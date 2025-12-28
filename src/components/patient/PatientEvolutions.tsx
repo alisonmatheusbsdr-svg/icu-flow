@@ -93,7 +93,7 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate }: Patient
       </div>
 
       {/* New Evolution */}
-      <div className="section-card">
+      <div id="evolution-input-section" className="section-card">
         <h3 className="text-sm font-semibold text-foreground mb-3">SUA EVOLUÇÃO</h3>
         
         <Textarea

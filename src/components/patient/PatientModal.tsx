@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, LogOut } from 'lucide-react';
+import { Loader2, LogOut, PenLine } from 'lucide-react';
 import { TherapeuticPlan } from './TherapeuticPlan';
 import { PatientClinicalData } from './PatientClinicalData';
 import { PatientEvolutions } from './PatientEvolutions';
@@ -114,17 +114,32 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
                 </p>
               )}
             </div>
-            {patient && patient.is_active && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsDischargeDialogOpen(true)}
-                className="flex items-center gap-2"
-              >
-                <LogOut className="h-4 w-4" />
-                Registrar Desfecho
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              {patient && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    document.getElementById('evolution-input-section')?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <PenLine className="h-4 w-4" />
+                  Evoluir
+                </Button>
+              )}
+              {patient && patient.is_active && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsDischargeDialogOpen(true)}
+                  className="flex items-center gap-2"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Registrar Desfecho
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Badges */}
