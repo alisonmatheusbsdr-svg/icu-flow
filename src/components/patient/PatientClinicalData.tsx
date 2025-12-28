@@ -142,6 +142,7 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
   const [dvaInputs, setDvaInputs] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [showCustomDeviceInput, setShowCustomDeviceInput] = useState(false);
+  const [showAtbInput, setShowAtbInput] = useState(false);
 
   // Calculate days for a device
   const getDeviceDays = (insertionDate: string) => {
@@ -549,50 +550,67 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
             <Pill className="h-4 w-4 text-[hsl(var(--status-atb))]" />
             Infectologia
           </div>
-          <div className="flex items-center gap-2">
-            <Input
-              placeholder="Novo antibiótico..."
-              value={newAtb}
-              onChange={(e) => setNewAtb(e.target.value)}
-              className="w-40 h-7 text-sm"
-            />
-            <Button size="sm" variant="outline" onClick={handleAddAntibiotic} disabled={!newAtb.trim() || isLoading}>
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
+          
+          {/* Add antibiotic dropdown - now in title */}
+          <DropdownMenu onOpenChange={(open) => { if (!open) { setShowAtbInput(false); setNewAtb(''); } }}>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" className="h-7 w-7">
+                <Plus className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel className="text-xs text-muted-foreground">Adicionar antibiótico</DropdownMenuLabel>
+              <div className="px-2 py-1.5">
+                <Input
+                  autoFocus
+                  placeholder="Nome do antibiótico..."
+                  value={newAtb}
+                  onChange={(e) => setNewAtb(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newAtb.trim()) {
+                      handleAddAntibiotic();
+                    }
+                  }}
+                  className="h-8 text-sm"
+                />
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
         
-        {patient.antibiotics && patient.antibiotics.length > 0 ? (
-          <div className="space-y-0">
-            {patient.antibiotics.map(atb => {
-              const days = Math.ceil((new Date().getTime() - new Date(atb.start_date).getTime()) / (1000 * 60 * 60 * 24));
-              return (
-                <div key={atb.id} className="atb-row">
-                  <div className="atb-info">
-                    <span className="atb-name">{atb.antibiotic_name}</span>
-                    <span className="atb-date ml-2">
-                      Início: {new Date(atb.start_date).toLocaleDateString('pt-BR')}
-                    </span>
+        <div className="mt-3">
+          {patient.antibiotics && patient.antibiotics.length > 0 ? (
+            <div className="space-y-0">
+              {patient.antibiotics.map(atb => {
+                const days = Math.ceil((new Date().getTime() - new Date(atb.start_date).getTime()) / (1000 * 60 * 60 * 24));
+                return (
+                  <div key={atb.id} className="atb-row">
+                    <div className="atb-info">
+                      <span className="atb-name">{atb.antibiotic_name}</span>
+                      <span className="atb-date ml-2">
+                        Início: {new Date(atb.start_date).toLocaleDateString('pt-BR')}
+                      </span>
+                    </div>
+                    <span className="atb-day">D{days}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 ml-2 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleRemoveAntibiotic(atb.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <span className="atb-day">D{days}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 ml-2 text-muted-foreground hover:text-destructive"
-                    onClick={() => handleRemoveAntibiotic(atb.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground flex items-center gap-2">
-            <AlertCircle className="h-4 w-4" />
-            Nenhum antibiótico em uso
-          </p>
-        )}
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              <AlertCircle className="h-4 w-4" />
+              Nenhum antibiótico em uso
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
