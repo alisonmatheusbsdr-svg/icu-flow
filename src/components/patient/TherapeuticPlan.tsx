@@ -41,7 +41,7 @@ export function TherapeuticPlan({ patient, onUpdate }: TherapeuticPlanProps) {
   };
 
   return (
-    <div className="therapeutic-plan rounded-lg mb-4">
+    <div className="therapeutic-plan rounded-lg mb-4 p-4">
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-semibold text-[hsl(var(--warning))] flex items-center gap-2">
           <FileText className="h-4 w-4" />
