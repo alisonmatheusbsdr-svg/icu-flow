@@ -5,6 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { Check, Plus, Trash2, AlertCircle, Syringe, Activity, Pill } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import type { PatientWithDetails } from '@/types/database';
 
 interface PatientClinicalDataProps {
@@ -12,8 +18,17 @@ interface PatientClinicalDataProps {
   onUpdate: () => void;
 }
 
-// Standard devices list
-const STANDARD_DEVICES = ['TOT', 'CVD', 'CVC', 'PAI', 'SNE', 'SVD'];
+// Standard devices with labels
+const DEVICE_LABELS: Record<string, string> = {
+  'TOT': 'Tubo Orotraqueal',
+  'CVD': 'Cateter Venoso Duplo-lúmen',
+  'CVC': 'Cateter Venoso Central',
+  'PAI': 'Pressão Arterial Invasiva',
+  'SNE': 'Sonda Nasoenteral',
+  'SVD': 'Sonda Vesical de Demora'
+};
+
+const STANDARD_DEVICES = Object.keys(DEVICE_LABELS);
 
 // Standard vasoactive drugs
 const STANDARD_DVAS = [
@@ -144,30 +159,38 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
         </div>
         <div className="space-y-2">
           {/* Standard devices as toggleable checkboxes */}
-          <div className="grid grid-cols-2 gap-2">
-            {STANDARD_DEVICES.map(device => {
-              const isActive = activeDeviceTypes.has(device);
-              const deviceData = patient.invasive_devices?.find(d => d.device_type.toUpperCase() === device);
-              return (
-                <button
-                  key={device}
-                  onClick={() => handleToggleDevice(device)}
-                  disabled={isLoading}
-                  className={`device-checkbox px-2 py-1.5 rounded border transition-colors ${
-                    isActive 
-                      ? 'bg-destructive/10 border-destructive/30 text-destructive' 
-                      : 'bg-muted/50 border-border text-muted-foreground hover:bg-muted'
-                  }`}
-                >
-                  {isActive && <Check className="device-checkbox-icon" />}
-                  <span className="font-medium">{device}</span>
-                  {isActive && deviceData && (
-                    <span className="text-xs ml-auto">D{getDeviceDays(deviceData.insertion_date)}</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          <TooltipProvider delayDuration={200}>
+            <div className="grid grid-cols-2 gap-2">
+              {STANDARD_DEVICES.map(device => {
+                const isActive = activeDeviceTypes.has(device);
+                const deviceData = patient.invasive_devices?.find(d => d.device_type.toUpperCase() === device);
+                return (
+                  <Tooltip key={device}>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => handleToggleDevice(device)}
+                        disabled={isLoading}
+                        className={`device-checkbox px-2 py-1.5 rounded border transition-colors ${
+                          isActive 
+                            ? 'bg-destructive/10 border-destructive/30 text-destructive' 
+                            : 'bg-muted/50 border-border text-muted-foreground hover:bg-muted'
+                        }`}
+                      >
+                        {isActive && <Check className="device-checkbox-icon" />}
+                        <span className="font-medium">{device}</span>
+                        {isActive && deviceData && (
+                          <span className="text-xs ml-auto">D{getDeviceDays(deviceData.insertion_date)}</span>
+                        )}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{DEVICE_LABELS[device]}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })}
+            </div>
+          </TooltipProvider>
 
           {/* Custom devices from DB that aren't standard */}
           {patient.invasive_devices?.filter(d => !STANDARD_DEVICES.includes(d.device_type.toUpperCase())).map(device => (
