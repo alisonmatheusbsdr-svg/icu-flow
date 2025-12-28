@@ -194,7 +194,7 @@
 
   /* Therapeutic plan highlight */
   .therapeutic-plan {
-    @apply bg-warning/10 border-l-4 border-warning p-4 rounded-r-lg;
+    @apply bg-warning/10 border-l-4 border-warning;
   }
 
   /* Evolution timeline */
@@ -205,6 +205,71 @@
   .evolution-item::before {
     content: '';
     @apply absolute left-[-5px] top-1 w-2 h-2 rounded-full bg-primary;
+  }
+
+  /* Device checkbox - red checkmark style */
+  .device-checkbox {
+    @apply flex items-center gap-2 text-sm py-1;
+  }
+
+  .device-checkbox-icon {
+    @apply h-4 w-4 text-destructive;
+  }
+
+  /* DVA progress bar */
+  .dva-row {
+    @apply flex items-center gap-3 py-2;
+  }
+
+  .dva-label {
+    @apply w-28 text-sm font-medium text-foreground;
+  }
+
+  .dva-bar-container {
+    @apply flex-1 h-3 bg-muted rounded-full overflow-hidden;
+  }
+
+  .dva-bar-fill {
+    @apply h-full bg-[hsl(var(--status-dva))] rounded-full transition-all duration-300;
+  }
+
+  .dva-dose {
+    @apply w-16 text-right text-sm font-mono text-muted-foreground;
+  }
+
+  /* Antibiotic row */
+  .atb-row {
+    @apply flex items-center justify-between py-2 border-b border-border last:border-0;
+  }
+
+  .atb-info {
+    @apply flex-1;
+  }
+
+  .atb-name {
+    @apply font-medium text-foreground;
+  }
+
+  .atb-date {
+    @apply text-xs text-muted-foreground;
+  }
+
+  .atb-day {
+    @apply px-2 py-1 bg-[hsl(var(--status-atb))]/20 text-[hsl(var(--status-atb))] rounded text-xs font-bold;
+  }
+
+  /* Evolution textarea dark */
+  .evolution-textarea {
+    @apply bg-muted/80 border-muted text-foreground placeholder:text-muted-foreground;
+  }
+
+  /* Section card compact */
+  .section-card {
+    @apply bg-card rounded-lg border border-border p-4;
+  }
+
+  .section-title {
+    @apply text-sm font-semibold text-foreground mb-3 flex items-center gap-2;
   }
 }
 

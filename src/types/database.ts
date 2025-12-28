@@ -40,6 +40,7 @@ export interface Patient {
   bed_id: string | null;
   initials: string;
   age: number;
+  weight: number | null;
   admission_date: string;
   main_diagnosis: string | null;
   comorbidities: string | null;

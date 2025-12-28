@@ -167,6 +167,7 @@ export type Database = {
           outcome_date: string | null
           respiratory_status: Database["public"]["Enums"]["respiratory_status"]
           updated_at: string
+          weight: number | null
         }
         Insert: {
           admission_date?: string
@@ -183,6 +184,7 @@ export type Database = {
           outcome_date?: string | null
           respiratory_status?: Database["public"]["Enums"]["respiratory_status"]
           updated_at?: string
+          weight?: number | null
         }
         Update: {
           admission_date?: string
@@ -199,6 +201,7 @@ export type Database = {
           outcome_date?: string | null
           respiratory_status?: Database["public"]["Enums"]["respiratory_status"]
           updated_at?: string
+          weight?: number | null
         }
         Relationships: [
           {

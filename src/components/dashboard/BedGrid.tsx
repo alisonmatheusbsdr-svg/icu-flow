@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { BedCard } from './BedCard';
+import { PatientModal } from '@/components/patient/PatientModal';
 import { Loader2 } from 'lucide-react';
 import type { Bed, Patient } from '@/types/database';
 
@@ -17,6 +18,8 @@ interface BedWithPatient extends Bed {
 export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
   const [beds, setBeds] = useState<BedWithPatient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+  const [selectedBedNumber, setSelectedBedNumber] = useState<number>(0);
 
   const fetchBeds = async () => {
     setIsLoading(true);
@@ -37,7 +40,7 @@ export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
           .select('*')
           .in('bed_id', occupiedBedIds)
           .eq('is_active', true);
-        patients = data || [];
+        patients = (data || []).map(p => ({ ...p, weight: p.weight ?? null })) as Patient[];
       }
 
       const bedsWithPatients = bedsData.map(bed => ({
@@ -54,6 +57,17 @@ export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
     fetchBeds();
   }, [unitId]);
 
+  const handlePatientClick = (patientId: string, bedNumber: number) => {
+    setSelectedPatientId(patientId);
+    setSelectedBedNumber(bedNumber);
+  };
+
+  const handleCloseModal = () => {
+    setSelectedPatientId(null);
+    setSelectedBedNumber(0);
+    fetchBeds(); // Refresh data when modal closes
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -67,9 +81,22 @@ export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
       <h2 className="text-xl font-semibold mb-4">{unitName}</h2>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
         {beds.map(bed => (
-          <BedCard key={bed.id} bed={bed} patient={bed.patient} onUpdate={fetchBeds} />
+          <BedCard 
+            key={bed.id} 
+            bed={bed} 
+            patient={bed.patient} 
+            onUpdate={fetchBeds}
+            onPatientClick={(patientId) => handlePatientClick(patientId, bed.bed_number)} 
+          />
         ))}
       </div>
+
+      <PatientModal
+        patientId={selectedPatientId}
+        bedNumber={selectedBedNumber}
+        isOpen={!!selectedPatientId}
+        onClose={handleCloseModal}
+      />
     </div>
   );
 }
