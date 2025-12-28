@@ -17,7 +17,7 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate }: Patient
   const { user } = useAuth();
   const [newEvolution, setNewEvolution] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const historyEndRef = useRef<HTMLDivElement>(null);
+  const historyContainerRef = useRef<HTMLDivElement>(null);
 
   const draftKey = `evolution_draft_${patient.id}`;
 
@@ -29,10 +29,10 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate }: Patient
     }
   }, [draftKey]);
 
-  // Scroll to bottom when evolutions change
+  // Scroll to bottom of history container only (not the whole page)
   useEffect(() => {
-    if (historyEndRef.current) {
-      historyEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (historyContainerRef.current) {
+      historyContainerRef.current.scrollTop = historyContainerRef.current.scrollHeight;
     }
   }, [patient.evolutions]);
 
@@ -71,7 +71,7 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate }: Patient
         </h3>
         
         {patient.evolutions && patient.evolutions.length > 0 ? (
-          <div className="space-y-0 max-h-80 overflow-y-auto">
+          <div ref={historyContainerRef} className="space-y-0 max-h-80 overflow-y-auto">
             {[...patient.evolutions].reverse().map((evo) => (
               <div key={evo.id} className="evolution-item">
                 <p className="text-sm whitespace-pre-wrap text-foreground">{evo.content}</p>
@@ -86,7 +86,6 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate }: Patient
                 </div>
               </div>
             ))}
-            <div ref={historyEndRef} />
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">Nenhuma evolução registrada</p>
