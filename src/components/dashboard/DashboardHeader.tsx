@@ -2,13 +2,16 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUnit } from '@/hooks/useUnit';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Activity, LogOut, Settings, Printer } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Activity, LogOut, Settings, Printer, Home } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 export function DashboardHeader() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { profile, roles, signOut, hasRole } = useAuth();
   const { units, selectedUnit, selectUnit } = useUnit();
+  
+  const isOnAdmin = location.pathname === '/admin';
 
   const roleLabels: Record<string, string> = {
     admin: 'Admin',
@@ -21,12 +24,15 @@ export function DashboardHeader() {
     <header className="bg-card border-b border-border sticky top-0 z-50">
       <div className="container mx-auto px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
+          <button 
+            onClick={() => navigate('/dashboard')} 
+            className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+          >
             <div className="p-1.5 bg-primary rounded-lg">
               <Activity className="h-5 w-5 text-primary-foreground" />
             </div>
             <span className="font-semibold text-foreground">UTI Handoff Pro</span>
-          </div>
+          </button>
 
           {units.length > 0 && (
             <Select value={selectedUnit?.id} onValueChange={(id) => {
@@ -51,7 +57,14 @@ export function DashboardHeader() {
             Imprimir
           </Button>
 
-          {hasRole('admin') && (
+          {isOnAdmin && (
+            <Button variant="outline" size="sm" onClick={() => navigate('/dashboard')} className="gap-2">
+              <Home className="h-4 w-4" />
+              Dashboard
+            </Button>
+          )}
+
+          {!isOnAdmin && hasRole('admin') && (
             <Button variant="outline" size="sm" onClick={() => navigate('/admin')} className="gap-2">
               <Settings className="h-4 w-4" />
               Admin
