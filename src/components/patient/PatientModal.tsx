@@ -4,6 +4,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 
 import { Loader2 } from 'lucide-react';
+import { TherapeuticPlan } from './TherapeuticPlan';
 import { PatientClinicalData } from './PatientClinicalData';
 import { PatientEvolutions } from './PatientEvolutions';
 import type { PatientWithDetails, Profile } from '@/types/database';
@@ -143,6 +144,10 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
           </div>
         ) : patient ? (
           <div className="flex-1 overflow-y-auto p-6 relative">
+            {/* Plano Terapêutico - Full Width */}
+            <TherapeuticPlan patient={patient} onUpdate={() => fetchPatient(true)} />
+            
+            {/* Grid de duas colunas */}
             <div className="grid lg:grid-cols-2 gap-6">
               <PatientClinicalData patient={patient} onUpdate={() => fetchPatient(true)} />
               <PatientEvolutions 
