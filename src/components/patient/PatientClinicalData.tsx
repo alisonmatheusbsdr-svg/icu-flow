@@ -4,13 +4,19 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { Check, Plus, Trash2, AlertCircle, Syringe, Activity, Pill } from 'lucide-react';
+import { Plus, Trash2, AlertCircle, Syringe, Activity, Pill, X, ChevronDown } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { PatientWithDetails } from '@/types/database';
 
 interface PatientClinicalDataProps {
@@ -157,31 +163,29 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
           <Activity className="h-4 w-4 text-destructive" />
           Dispositivos Invasivos
         </div>
-        <div className="space-y-2">
-          {/* Standard devices as toggleable checkboxes */}
+        <div className="space-y-3">
+          {/* Active devices as removable badges */}
           <TooltipProvider delayDuration={200}>
-            <div className="grid grid-cols-2 gap-2">
-              {STANDARD_DEVICES.map(device => {
-                const isActive = activeDeviceTypes.has(device);
+            <div className="flex flex-wrap gap-2 items-center">
+              {/* Standard active devices */}
+              {STANDARD_DEVICES.filter(device => activeDeviceTypes.has(device)).map(device => {
                 const deviceData = patient.invasive_devices?.find(d => d.device_type.toUpperCase() === device);
                 return (
                   <Tooltip key={device}>
                     <TooltipTrigger asChild>
-                      <button
-                        onClick={() => handleToggleDevice(device)}
-                        disabled={isLoading}
-                        className={`device-checkbox px-2 py-1.5 rounded border transition-colors ${
-                          isActive 
-                            ? 'bg-destructive/10 border-destructive/30 text-destructive' 
-                            : 'bg-muted/50 border-border text-muted-foreground hover:bg-muted'
-                        }`}
-                      >
-                        {isActive && <Check className="device-checkbox-icon" />}
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm">
                         <span className="font-medium">{device}</span>
-                        {isActive && deviceData && (
-                          <span className="text-xs ml-auto">D{getDeviceDays(deviceData.insertion_date)}</span>
+                        {deviceData && (
+                          <span className="text-xs opacity-80">D{getDeviceDays(deviceData.insertion_date)}</span>
                         )}
-                      </button>
+                        <button
+                          onClick={() => deviceData && handleRemoveDevice(deviceData.id)}
+                          disabled={isLoading}
+                          className="ml-0.5 p-0.5 rounded hover:bg-destructive/20 transition-colors"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
                     </TooltipTrigger>
                     <TooltipContent>
                       <p>{DEVICE_LABELS[device]}</p>
@@ -189,35 +193,60 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
                   </Tooltip>
                 );
               })}
+
+              {/* Custom active devices */}
+              {patient.invasive_devices?.filter(d => !STANDARD_DEVICES.includes(d.device_type.toUpperCase())).map(device => (
+                <div key={device.id} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm">
+                  <span className="font-medium">{device.device_type}</span>
+                  <span className="text-xs opacity-80">D{getDeviceDays(device.insertion_date)}</span>
+                  <button
+                    onClick={() => handleRemoveDevice(device.id)}
+                    disabled={isLoading}
+                    className="ml-0.5 p-0.5 rounded hover:bg-destructive/20 transition-colors"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+
+              {/* Dropdown to add devices */}
+              {STANDARD_DEVICES.filter(device => !activeDeviceTypes.has(device)).length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 gap-1">
+                      <Plus className="h-3.5 w-3.5" />
+                      Adicionar
+                      <ChevronDown className="h-3 w-3 opacity-50" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-56">
+                    {STANDARD_DEVICES.filter(device => !activeDeviceTypes.has(device)).map(device => (
+                      <DropdownMenuItem
+                        key={device}
+                        onClick={() => handleAddDevice(device)}
+                        className="cursor-pointer"
+                      >
+                        <span className="font-medium">{device}</span>
+                        <span className="text-muted-foreground ml-2 text-xs">
+                          {DEVICE_LABELS[device]}
+                        </span>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
           </TooltipProvider>
 
-          {/* Custom devices from DB that aren't standard */}
-          {patient.invasive_devices?.filter(d => !STANDARD_DEVICES.includes(d.device_type.toUpperCase())).map(device => (
-            <div key={device.id} className="device-checkbox px-2 py-1.5 rounded bg-destructive/10 border border-destructive/30">
-              <Check className="device-checkbox-icon" />
-              <span className="font-medium text-destructive">{device.device_type}</span>
-              <span className="text-xs text-destructive ml-2">D{getDeviceDays(device.insertion_date)}</span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 ml-auto text-destructive hover:text-destructive"
-                onClick={() => handleRemoveDevice(device.id)}
-              >
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            </div>
-          ))}
-
           {/* Add custom device */}
-          <div className="flex gap-2 mt-2">
+          <div className="flex gap-2">
             <Input
               placeholder="Drenos / Outros..."
               value={newDevice}
               onChange={(e) => setNewDevice(e.target.value)}
-              className="text-sm"
+              className="text-sm h-8"
             />
-            <Button size="sm" onClick={() => handleAddDevice(newDevice)} disabled={!newDevice.trim() || isLoading}>
+            <Button size="sm" className="h-8" onClick={() => handleAddDevice(newDevice)} disabled={!newDevice.trim() || isLoading}>
               <Plus className="h-4 w-4" />
             </Button>
           </div>
