@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-
-import { Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Loader2, LogOut } from 'lucide-react';
 import { TherapeuticPlan } from './TherapeuticPlan';
 import { PatientClinicalData } from './PatientClinicalData';
 import { PatientEvolutions } from './PatientEvolutions';
+import { PatientDischargeDialog } from './PatientDischargeDialog';
 import type { PatientWithDetails, Profile } from '@/types/database';
 
 interface PatientModalProps {
@@ -21,6 +22,7 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [authorProfiles, setAuthorProfiles] = useState<Record<string, Profile>>({});
+  const [isDischargeDialogOpen, setIsDischargeDialogOpen] = useState(false);
 
   const fetchPatient = async (isRefresh = false) => {
     if (!patientId) return;
@@ -112,6 +114,17 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
                 </p>
               )}
             </div>
+            {patient && patient.is_active && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsDischargeDialogOpen(true)}
+                className="flex items-center gap-2"
+              >
+                <LogOut className="h-4 w-4" />
+                Registrar Desfecho
+              </Button>
+            )}
           </div>
 
           {/* Badges */}
@@ -171,6 +184,18 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
             Paciente não encontrado
           </div>
+        )}
+
+        {/* Discharge Dialog */}
+        {patient && (
+          <PatientDischargeDialog
+            patientId={patient.id}
+            patientInitials={patient.initials}
+            bedId={patient.bed_id}
+            isOpen={isDischargeDialogOpen}
+            onClose={() => setIsDischargeDialogOpen(false)}
+            onSuccess={onClose}
+          />
         )}
       </DialogContent>
     </Dialog>
