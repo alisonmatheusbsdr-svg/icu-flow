@@ -64,7 +64,7 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate }: Patient
         
         {patient.evolutions && patient.evolutions.length > 0 ? (
           <div className="space-y-0 max-h-80 overflow-y-auto">
-            {patient.evolutions.map((evo) => (
+            {[...patient.evolutions].reverse().map((evo) => (
               <div key={evo.id} className="evolution-item">
                 <p className="text-sm whitespace-pre-wrap text-foreground">{evo.content}</p>
                 <div className="text-xs text-muted-foreground mt-1 text-right">
