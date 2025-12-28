@@ -17,13 +17,18 @@ interface PatientModalProps {
 
 export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientModalProps) {
   const [patient, setPatient] = useState<PatientWithDetails | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [authorProfiles, setAuthorProfiles] = useState<Record<string, Profile>>({});
 
-  const fetchPatient = async () => {
+  const fetchPatient = async (isRefresh = false) => {
     if (!patientId) return;
 
-    setIsLoading(true);
+    if (isRefresh) {
+      setIsRefreshing(true);
+    } else {
+      setIsInitialLoading(true);
+    }
     
     const { data: patientData, error } = await supabase
       .from('patients')
@@ -32,7 +37,8 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
       .maybeSingle();
 
     if (error || !patientData) {
-      setIsLoading(false);
+      setIsInitialLoading(false);
+      setIsRefreshing(false);
       return;
     }
 
@@ -73,7 +79,8 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
       }
     }
 
-    setIsLoading(false);
+    setIsInitialLoading(false);
+    setIsRefreshing(false);
   };
 
   useEffect(() => {
@@ -130,20 +137,30 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
         </div>
 
         {/* Content */}
-        {isLoading ? (
+        {isInitialLoading ? (
           <div className="flex-1 flex items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : patient ? (
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 overflow-y-auto p-6 relative">
             <div className="grid lg:grid-cols-2 gap-6">
-              <PatientClinicalData patient={patient} onUpdate={fetchPatient} />
+              <PatientClinicalData patient={patient} onUpdate={() => fetchPatient(true)} />
               <PatientEvolutions 
                 patient={patient} 
                 authorProfiles={authorProfiles} 
-                onUpdate={fetchPatient} 
+                onUpdate={() => fetchPatient(true)} 
               />
             </div>
+            
+            {/* Overlay sutil durante refresh */}
+            {isRefreshing && (
+              <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] flex items-center justify-center z-10 transition-all duration-200">
+                <div className="bg-card rounded-lg px-4 py-2 shadow-lg flex items-center gap-2 border border-border">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  <span className="text-sm text-muted-foreground">Atualizando...</span>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
