@@ -136,6 +136,40 @@ const DVA_CATEGORIES = [
   { key: 'vasodilatador', label: 'Vasodilatadores', emoji: '🟢' }
 ] as const;
 
+// Common antibiotics configuration
+const COMMON_ANTIBIOTICS: Record<string, { category: string; emoji: string }> = {
+  // Betalactâmicos
+  'Ceftriaxona': { category: 'betalactamico', emoji: '💊' },
+  'Piperacilina-Tazobactam': { category: 'betalactamico', emoji: '💊' },
+  'Meropenem': { category: 'betalactamico', emoji: '💊' },
+  'Amoxicilina-Clavulanato': { category: 'betalactamico', emoji: '💊' },
+  'Cefepime': { category: 'betalactamico', emoji: '💊' },
+  'Ampicilina-Sulbactam': { category: 'betalactamico', emoji: '💊' },
+  
+  // Glicopeptídeos
+  'Vancomicina': { category: 'glicopeptideo', emoji: '🛡️' },
+  'Teicoplanina': { category: 'glicopeptideo', emoji: '🛡️' },
+  
+  // Aminoglicosídeos
+  'Amicacina': { category: 'aminoglicosideo', emoji: '💉' },
+  'Gentamicina': { category: 'aminoglicosideo', emoji: '💉' },
+  
+  // Outros
+  'Metronidazol': { category: 'outro', emoji: '🧪' },
+  'Ciprofloxacino': { category: 'outro', emoji: '🧪' },
+  'Polimixina B': { category: 'outro', emoji: '🧪' },
+  'Linezolida': { category: 'outro', emoji: '🧪' },
+  'Clindamicina': { category: 'outro', emoji: '🧪' },
+  'Fluconazol': { category: 'outro', emoji: '🧪' },
+};
+
+const ATB_CATEGORIES = [
+  { key: 'betalactamico', label: 'Betalactâmicos', emoji: '💊' },
+  { key: 'glicopeptideo', label: 'Glicopeptídeos', emoji: '🛡️' },
+  { key: 'aminoglicosideo', label: 'Aminoglicosídeos', emoji: '💉' },
+  { key: 'outro', label: 'Outros', emoji: '🧪' },
+];
+
 export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataProps) {
   const [newDevice, setNewDevice] = useState('');
   const [newAtb, setNewAtb] = useState('');
@@ -267,22 +301,28 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
     setIsLoading(false);
   };
 
-  // Add antibiotic
-  const handleAddAntibiotic = async () => {
-    if (!newAtb.trim()) return;
+  // Add antibiotic by name
+  const handleAddAntibioticByName = async (name: string) => {
+    if (!name.trim()) return;
     setIsLoading(true);
     const { error } = await supabase.from('antibiotics').insert({
       patient_id: patient.id,
-      antibiotic_name: newAtb,
+      antibiotic_name: name,
       start_date: new Date().toISOString().split('T')[0]
     });
     if (error) toast.error('Erro ao adicionar antibiótico');
     else {
       toast.success('Antibiótico adicionado');
-      setNewAtb('');
       onUpdate();
     }
     setIsLoading(false);
+  };
+
+  // Add antibiotic (from custom input)
+  const handleAddAntibiotic = async () => {
+    if (!newAtb.trim()) return;
+    await handleAddAntibioticByName(newAtb);
+    setNewAtb('');
   };
 
   // Remove antibiotic
@@ -552,30 +592,82 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
           </div>
           
           {/* Add antibiotic dropdown - now in title */}
-          <DropdownMenu onOpenChange={(open) => { if (!open) { setShowAtbInput(false); setNewAtb(''); } }}>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" className="h-7 w-7">
-                <Plus className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel className="text-xs text-muted-foreground">Adicionar antibiótico</DropdownMenuLabel>
-              <div className="px-2 py-1.5">
-                <Input
-                  autoFocus
-                  placeholder="Nome do antibiótico..."
-                  value={newAtb}
-                  onChange={(e) => setNewAtb(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && newAtb.trim()) {
-                      handleAddAntibiotic();
-                    }
-                  }}
-                  className="h-8 text-sm"
-                />
-              </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {(() => {
+            const activeAtbNames = new Set(patient.antibiotics?.map(a => a.antibiotic_name) || []);
+            
+            return (
+              <DropdownMenu onOpenChange={(open) => { if (!open) { setShowAtbInput(false); setNewAtb(''); } }}>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-7 w-7">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64 max-h-80 overflow-y-auto">
+                  {/* Antibiotics by category */}
+                  {ATB_CATEGORIES.map((category, idx) => {
+                    const categoryAtbs = Object.entries(COMMON_ANTIBIOTICS)
+                      .filter(([name, config]) => config.category === category.key && !activeAtbNames.has(name));
+                    
+                    if (categoryAtbs.length === 0) return null;
+                    
+                    return (
+                      <div key={category.key}>
+                        {idx > 0 && <DropdownMenuSeparator />}
+                        <DropdownMenuLabel className="text-xs">
+                          {category.emoji} {category.label}
+                        </DropdownMenuLabel>
+                        {categoryAtbs.map(([name]) => (
+                          <DropdownMenuItem
+                            key={name}
+                            onClick={() => handleAddAntibioticByName(name)}
+                            className="cursor-pointer pl-6"
+                          >
+                            {name}
+                          </DropdownMenuItem>
+                        ))}
+                      </div>
+                    );
+                  })}
+                  
+                  {/* Custom antibiotic option */}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs">🏷️ Personalizado</DropdownMenuLabel>
+                  {!showAtbInput ? (
+                    <DropdownMenuItem 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setShowAtbInput(true);
+                      }}
+                      className="cursor-pointer pl-6"
+                    >
+                      <Plus className="h-3.5 w-3.5 mr-2" />
+                      Adicionar outro...
+                    </DropdownMenuItem>
+                  ) : (
+                    <div className="px-2 py-1.5">
+                      <Input
+                        autoFocus
+                        placeholder="Nome do antibiótico..."
+                        value={newAtb}
+                        onChange={(e) => setNewAtb(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && newAtb.trim()) {
+                            handleAddAntibiotic();
+                            setShowAtbInput(false);
+                          }
+                          if (e.key === 'Escape') {
+                            setShowAtbInput(false);
+                            setNewAtb('');
+                          }
+                        }}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            );
+          })()}
         </div>
         
         <div className="mt-3">
