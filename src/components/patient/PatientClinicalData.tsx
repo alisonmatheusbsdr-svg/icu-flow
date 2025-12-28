@@ -19,6 +19,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { VasoactiveDrugCalculator } from './VasoactiveDrugCalculator';
+import { EditableDayBadge } from './EditableDayBadge';
 import type { PatientWithDetails } from '@/types/database';
 
 interface PatientClinicalDataProps {
@@ -334,6 +335,51 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
     setIsLoading(false);
   };
 
+  // Update device insertion date
+  const handleUpdateDeviceDate = async (deviceId: string, newDate: Date) => {
+    const { error } = await supabase
+      .from('invasive_devices')
+      .update({ insertion_date: newDate.toISOString().split('T')[0] })
+      .eq('id', deviceId);
+    
+    if (error) {
+      toast.error('Erro ao atualizar data');
+    } else {
+      toast.success('Data atualizada');
+      onUpdate();
+    }
+  };
+
+  // Update DVA start date
+  const handleUpdateDvaDate = async (dvaId: string, newDate: Date) => {
+    const { error } = await supabase
+      .from('vasoactive_drugs')
+      .update({ start_date: newDate.toISOString().split('T')[0] })
+      .eq('id', dvaId);
+    
+    if (error) {
+      toast.error('Erro ao atualizar data');
+    } else {
+      toast.success('Data atualizada');
+      onUpdate();
+    }
+  };
+
+  // Update antibiotic start date
+  const handleUpdateAntibioticDate = async (atbId: string, newDate: Date) => {
+    const { error } = await supabase
+      .from('antibiotics')
+      .update({ start_date: newDate.toISOString().split('T')[0] })
+      .eq('id', atbId);
+    
+    if (error) {
+      toast.error('Erro ao atualizar data');
+    } else {
+      toast.success('Data atualizada');
+      onUpdate();
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Invasive Devices */}
@@ -417,7 +463,12 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
                       <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm">
                         <span className="font-medium">{device}</span>
                         {deviceData && (
-                          <span className="text-xs opacity-80">D{getDeviceDays(deviceData.insertion_date)}</span>
+                          <EditableDayBadge
+                            days={getDeviceDays(deviceData.insertion_date)}
+                            startDate={new Date(deviceData.insertion_date)}
+                            onDateChange={(date) => handleUpdateDeviceDate(deviceData.id, date)}
+                            className="text-xs opacity-80"
+                          />
                         )}
                         <button
                           onClick={() => deviceData && handleRemoveDevice(deviceData.id)}
@@ -439,7 +490,12 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
               {patient.invasive_devices?.filter(d => !STANDARD_DEVICES.includes(d.device_type.toUpperCase())).map(device => (
                 <div key={device.id} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm">
                   <span className="font-medium">{device.device_type}</span>
-                  <span className="text-xs opacity-80">D{getDeviceDays(device.insertion_date)}</span>
+                  <EditableDayBadge
+                    days={getDeviceDays(device.insertion_date)}
+                    startDate={new Date(device.insertion_date)}
+                    onDateChange={(date) => handleUpdateDeviceDate(device.id, date)}
+                    className="text-xs opacity-80"
+                  />
                   <button
                     onClick={() => handleRemoveDevice(device.id)}
                     disabled={isLoading}
@@ -517,6 +573,8 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
                 const badgeColor = config?.color || 'hsl(var(--muted-foreground))';
                 const concentrationUgMl = (dva as any).concentration_ug_ml as number | null;
                 const calculatedDose = calculateDoseUgKgMin(dva.dose_ml_h, concentrationUgMl, patient.weight);
+                const startDate = (dva as any).start_date || dva.created_at.split('T')[0];
+                const days = Math.ceil((new Date().getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24));
                 
                 return (
                   <div
@@ -530,6 +588,12 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
                     }}
                   >
                     <span className="font-medium">{dva.drug_name}</span>
+                    <EditableDayBadge
+                      days={days}
+                      startDate={new Date(startDate)}
+                      onDateChange={(date) => handleUpdateDvaDate(dva.id, date)}
+                      className="text-xs opacity-80"
+                    />
                     <Input
                       type="number"
                       value={dvaInputs[dva.drug_name] ?? dva.dose_ml_h}
@@ -683,7 +747,12 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
                         Início: {new Date(atb.start_date).toLocaleDateString('pt-BR')}
                       </span>
                     </div>
-                    <span className="atb-day">D{days}</span>
+                    <EditableDayBadge
+                      days={days}
+                      startDate={new Date(atb.start_date)}
+                      onDateChange={(date) => handleUpdateAntibioticDate(atb.id, date)}
+                      className="atb-day"
+                    />
                     <Button
                       variant="ghost"
                       size="icon"
