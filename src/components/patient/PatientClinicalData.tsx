@@ -223,8 +223,18 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
     setIsLoading(false);
   };
 
+  // Calculate dose in µg/kg/min from ml/h
+  const calculateDoseUgKgMin = (
+    doseMlH: number,
+    concentrationUgMl: number | null,
+    weightKg: number | null
+  ): number | null => {
+    if (!doseMlH || !concentrationUgMl || !weightKg || weightKg <= 0) return null;
+    return (doseMlH * concentrationUgMl) / (weightKg * 60);
+  };
+
   // Update DVA dose
-  const handleUpdateDva = async (dvaName: string, dose: number) => {
+  const handleUpdateDva = async (dvaName: string, dose: number, concentrationUgMl?: number) => {
     setIsLoading(true);
     const existing = getDvaByName(dvaName);
     
@@ -233,13 +243,18 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
       await supabase.from('vasoactive_drugs').update({ is_active: false }).eq('id', existing.id);
       toast.success(`${dvaName} removida`);
     } else if (dose > 0) {
+      const updateData: { dose_ml_h: number; concentration_ug_ml?: number } = { dose_ml_h: dose };
+      if (concentrationUgMl !== undefined) {
+        updateData.concentration_ug_ml = concentrationUgMl;
+      }
+      
       if (existing) {
-        await supabase.from('vasoactive_drugs').update({ dose_ml_h: dose }).eq('id', existing.id);
+        await supabase.from('vasoactive_drugs').update(updateData).eq('id', existing.id);
       } else {
         await supabase.from('vasoactive_drugs').insert({
           patient_id: patient.id,
           drug_name: dvaName,
-          dose_ml_h: dose
+          ...updateData
         });
       }
       toast.success(`${dvaName} atualizada`);
@@ -388,6 +403,8 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
               {patient.vasoactive_drugs?.filter(d => d.is_active).map(dva => {
                 const config = VASOACTIVE_DRUGS[dva.drug_name];
                 const badgeColor = config?.color || 'hsl(var(--muted-foreground))';
+                const concentrationUgMl = (dva as any).concentration_ug_ml as number | null;
+                const calculatedDose = calculateDoseUgKgMin(dva.dose_ml_h, concentrationUgMl, patient.weight);
                 
                 return (
                   <div
@@ -416,6 +433,13 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
                     />
                     <span className="text-xs opacity-80">ml/h</span>
                     
+                    {/* Show calculated dose in µg/kg/min if available */}
+                    {config?.supportsUgKgMin && calculatedDose !== null && (
+                      <span className="text-xs opacity-60">
+                        ({calculatedDose.toFixed(2)} µg/kg/min)
+                      </span>
+                    )}
+                    
                     {/* Calculator for drugs that support µg/kg/min */}
                     {config?.supportsUgKgMin && (
                       <VasoactiveDrugCalculator
@@ -423,7 +447,7 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
                         concentrations={config.concentrations}
                         patientWeight={patient.weight}
                         currentDoseMlH={dva.dose_ml_h}
-                        onApply={(dose) => handleUpdateDva(dva.drug_name, dose)}
+                        onApply={(dose, concentration) => handleUpdateDva(dva.drug_name, dose, concentration)}
                       />
                     )}
                     
