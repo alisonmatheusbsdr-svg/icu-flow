@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Home, Skull, ArrowRightLeft, Building2 } from 'lucide-react';
+import { Loader2, Home, Cross, ArrowRightLeft, Building2 } from 'lucide-react';
 import type { PatientOutcome } from '@/types/database';
 
 interface PatientDischargeDialogProps {
@@ -43,7 +43,7 @@ type DischargeOutcome = 'alta_enfermaria' | 'obito' | 'transferencia_externa' | 
 
 const outcomeOptions: { value: DischargeOutcome; label: string; icon: React.ReactNode; color: string }[] = [
   { value: 'alta_enfermaria', label: 'Alta para Enfermaria', icon: <Home className="h-4 w-4" />, color: 'text-green-600' },
-  { value: 'obito', label: 'Óbito', icon: <Skull className="h-4 w-4" />, color: 'text-red-600' },
+  { value: 'obito', label: 'Óbito', icon: <Cross className="h-4 w-4" />, color: 'text-red-600' },
   { value: 'transferencia_externa', label: 'Transferência Externa', icon: <Building2 className="h-4 w-4" />, color: 'text-blue-600' },
   { value: 'transferencia_interna', label: 'Transferência Interna', icon: <ArrowRightLeft className="h-4 w-4" />, color: 'text-orange-600' },
 ];
