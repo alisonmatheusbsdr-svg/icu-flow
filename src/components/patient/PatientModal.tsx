@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { X, Loader2 } from 'lucide-react';
+
+import { Loader2 } from 'lucide-react';
 import { PatientClinicalData } from './PatientClinicalData';
 import { PatientEvolutions } from './PatientEvolutions';
 import type { PatientWithDetails, Profile } from '@/types/database';
@@ -104,9 +104,6 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
                 </p>
               )}
             </div>
-            <Button variant="ghost" size="icon" onClick={onClose}>
-              <X className="h-5 w-5" />
-            </Button>
           </div>
 
           {/* Badges */}
