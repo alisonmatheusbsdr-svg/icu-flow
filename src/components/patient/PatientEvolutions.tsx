@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { Copy, Check, Clock } from 'lucide-react';
+import { Check, Clock, Save } from 'lucide-react';
 import type { PatientWithDetails, Profile } from '@/types/database';
 
 interface PatientEvolutionsProps {
@@ -18,7 +18,15 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate }: Patient
   const [newEvolution, setNewEvolution] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const lastEvolution = patient.evolutions?.[0];
+  const draftKey = `evolution_draft_${patient.id}`;
+
+  // Load draft on mount
+  useEffect(() => {
+    const savedDraft = localStorage.getItem(draftKey);
+    if (savedDraft) {
+      setNewEvolution(savedDraft);
+    }
+  }, [draftKey]);
 
   const handleAddEvolution = async () => {
     if (!newEvolution.trim() || !user) return;
@@ -33,18 +41,16 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate }: Patient
     } else {
       toast.success('Evolução registrada!');
       setNewEvolution('');
+      localStorage.removeItem(draftKey); // Clear draft after successful save
       onUpdate();
     }
     setIsLoading(false);
   };
 
-  const handleCopyLastEvolution = () => {
-    if (lastEvolution) {
-      setNewEvolution(lastEvolution.content);
-      toast.success('Evolução anterior copiada');
-    } else {
-      toast.info('Nenhuma evolução anterior para copiar');
-    }
+  const handleSaveDraft = () => {
+    if (!newEvolution.trim()) return;
+    localStorage.setItem(draftKey, newEvolution);
+    toast.success('Rascunho salvo!');
   };
 
   return (
@@ -80,18 +86,7 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate }: Patient
 
       {/* New Evolution */}
       <div className="section-card">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-foreground">SUA EVOLUÇÃO</h3>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCopyLastEvolution}
-            className="text-xs gap-1"
-          >
-            <Copy className="h-3 w-3" />
-            Copiar Anterior
-          </Button>
-        </div>
+        <h3 className="text-sm font-semibold text-foreground mb-3">SUA EVOLUÇÃO</h3>
         
         <Textarea
           placeholder="Registrar evolução do plantão..."
@@ -101,14 +96,23 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate }: Patient
           className="evolution-textarea mb-3"
         />
         
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <Button 
+            variant="outline"
+            onClick={handleSaveDraft} 
+            disabled={isLoading || !newEvolution.trim()}
+            className="gap-2"
+          >
+            <Save className="h-4 w-4" />
+            Salvar Rascunho
+          </Button>
           <Button 
             onClick={handleAddEvolution} 
             disabled={isLoading || !newEvolution.trim()}
             className="bg-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/90 text-white gap-2"
           >
             <Check className="h-4 w-4" />
-            Validar Plantão
+            Validar Evolução
           </Button>
         </div>
       </div>
