@@ -40,6 +40,7 @@ export function EditPatientDialog({
   const [weight, setWeight] = useState(patient.weight?.toString() || "");
   const [mainDiagnosis, setMainDiagnosis] = useState(patient.main_diagnosis || "");
   const [comorbidities, setComorbidities] = useState(patient.comorbidities || "");
+  const [allergies, setAllergies] = useState(patient.allergies || "");
   const [respiratoryStatus, setRespiratoryStatus] = useState(patient.respiratory_status);
   const [isPalliative, setIsPalliative] = useState(patient.is_palliative);
 
@@ -62,6 +63,7 @@ export function EditPatientDialog({
           weight: weight ? parseFloat(weight) : null,
           main_diagnosis: mainDiagnosis.trim() || null,
           comorbidities: comorbidities.trim() || null,
+          allergies: allergies.trim() || null,
           respiratory_status: respiratoryStatus,
           is_palliative: isPalliative,
         })
@@ -145,6 +147,17 @@ export function EditPatientDialog({
               value={comorbidities}
               onChange={(e) => setComorbidities(e.target.value)}
               placeholder="Ex: HAS, DM, IRC"
+              rows={2}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="allergies">Alergias</Label>
+            <Textarea
+              id="allergies"
+              value={allergies}
+              onChange={(e) => setAllergies(e.target.value)}
+              placeholder="Ex: Dipirona, Penicilina"
               rows={2}
             />
           </div>
