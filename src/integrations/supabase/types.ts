@@ -155,7 +155,6 @@ export type Database = {
         Row: {
           admission_date: string
           age: number
-          allergies: string | null
           bed_id: string | null
           comorbidities: string | null
           created_at: string
@@ -173,7 +172,6 @@ export type Database = {
         Insert: {
           admission_date?: string
           age: number
-          allergies?: string | null
           bed_id?: string | null
           comorbidities?: string | null
           created_at?: string
@@ -191,7 +189,6 @@ export type Database = {
         Update: {
           admission_date?: string
           age?: number
-          allergies?: string | null
           bed_id?: string | null
           comorbidities?: string | null
           created_at?: string

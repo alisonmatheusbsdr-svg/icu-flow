@@ -44,7 +44,6 @@ export interface Patient {
   admission_date: string;
   main_diagnosis: string | null;
   comorbidities: string | null;
-  allergies: string | null;
   respiratory_status: RespiratoryStatus;
   is_palliative: boolean;
   is_active: boolean;

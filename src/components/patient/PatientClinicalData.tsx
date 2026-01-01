@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { Plus, Trash2, AlertCircle, Syringe, Activity, Pill, X, ChevronDown, ShieldAlert } from 'lucide-react';
+import { Plus, Trash2, AlertCircle, Syringe, Activity, Pill, X, ChevronDown } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -772,32 +772,6 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
             </p>
           )}
         </div>
-      </div>
-
-      {/* Alergias */}
-      <div className="rounded-lg border bg-card p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <ShieldAlert className="h-5 w-5 text-rose-500" />
-          <h3 className="font-semibold text-lg">Alergias</h3>
-        </div>
-        {patient.allergies ? (
-          <div className="flex flex-wrap gap-2">
-            {patient.allergies.split(',').map((allergy, index) => (
-              <span
-                key={index}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200 text-sm font-medium"
-              >
-                <ShieldAlert className="h-3.5 w-3.5" />
-                {allergy.trim()}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground flex items-center gap-2">
-            <AlertCircle className="h-4 w-4" />
-            Nenhuma alergia registrada
-          </p>
-        )}
       </div>
     </div>
   );
