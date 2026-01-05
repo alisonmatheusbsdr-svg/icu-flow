@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { Plus, Trash2, AlertCircle, Syringe, Activity, Pill, X, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, AlertCircle, Syringe, Activity, Pill, X, ChevronDown, Shield, Utensils } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { VasoactiveDrugCalculator } from './VasoactiveDrugCalculator';
 import { EditableDayBadge } from './EditableDayBadge';
-import type { PatientWithDetails } from '@/types/database';
+import type { PatientWithDetails, DietType } from '@/types/database';
 
 interface PatientClinicalDataProps {
   patient: PatientWithDetails;
@@ -170,6 +170,26 @@ const ATB_CATEGORIES = [
   { key: 'aminoglicosideo', label: 'Aminoglicosídeos', emoji: '💉' },
   { key: 'outro', label: 'Outros', emoji: '🧪' },
 ];
+
+// Prophylaxis types configuration
+const PROPHYLAXIS_TYPES: Record<string, { label: string; emoji: string }> = {
+  'PROT_GASTRICA': { label: 'Proteção Gástrica', emoji: '💊' },
+  'TEV': { label: 'Tromboembolismo Venoso', emoji: '🩸' },
+  'LPP': { label: 'Lesão por Pressão', emoji: '🛏️' },
+  'QUEDA': { label: 'Risco de Queda', emoji: '⚠️' },
+  'AGITACAO': { label: 'Risco de Agitação', emoji: '😤' },
+  'BRONCOASP': { label: 'Risco de Broncoaspiração', emoji: '🫁' },
+};
+
+// Diet types configuration
+const DIET_TYPES: Record<string, { label: string; emoji: string }> = {
+  'zero': { label: 'Dieta Zero', emoji: '🚫' },
+  'oral': { label: 'Dieta Oral', emoji: '🍽️' },
+  'sne': { label: 'Sonda Naso Enteral (SNE)', emoji: '🔄' },
+  'sng': { label: 'Sonda Naso Gástrica (SNG)', emoji: '🔄' },
+  'npt': { label: 'NPT', emoji: '💉' },
+  'gtt': { label: 'GTT', emoji: '🔘' },
+};
 
 export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataProps) {
   const [newDevice, setNewDevice] = useState('');
@@ -379,6 +399,50 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
       onUpdate();
     }
   };
+
+  // Add prophylaxis
+  const handleAddProphylaxis = async (type: string) => {
+    setIsLoading(true);
+    const { error } = await supabase.from('prophylaxis').insert({
+      patient_id: patient.id,
+      prophylaxis_type: type
+    });
+    if (error) toast.error('Erro ao adicionar profilaxia');
+    else {
+      toast.success('Profilaxia adicionada');
+      onUpdate();
+    }
+    setIsLoading(false);
+  };
+
+  // Remove prophylaxis
+  const handleRemoveProphylaxis = async (prophylaxisId: string) => {
+    setIsLoading(true);
+    await supabase.from('prophylaxis').update({ is_active: false }).eq('id', prophylaxisId);
+    toast.success('Profilaxia removida');
+    onUpdate();
+    setIsLoading(false);
+  };
+
+  // Update diet type
+  const handleUpdateDiet = async (dietType: DietType) => {
+    setIsLoading(true);
+    const { error } = await supabase
+      .from('patients')
+      .update({ diet_type: dietType })
+      .eq('id', patient.id);
+    
+    if (error) {
+      toast.error('Erro ao atualizar dieta');
+    } else {
+      toast.success('Dieta atualizada');
+      onUpdate();
+    }
+    setIsLoading(false);
+  };
+
+  // Get active prophylaxis types
+  const activeProphylaxisTypes = new Set(patient.prophylaxis?.map(p => p.prophylaxis_type) || []);
 
   return (
     <div className="space-y-4">
@@ -770,6 +834,143 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
               <AlertCircle className="h-4 w-4" />
               Nenhum antibiótico em uso
             </p>
+          )}
+        </div>
+      </div>
+
+      {/* Prophylaxis */}
+      <div className="section-card">
+        <div className="section-title justify-between">
+          <div className="flex items-center gap-2">
+            <Shield className="h-4 w-4 text-primary" />
+            Profilaxias
+          </div>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" className="h-7 w-7">
+                <Plus className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              {Object.entries(PROPHYLAXIS_TYPES)
+                .filter(([type]) => !activeProphylaxisTypes.has(type))
+                .map(([type, config]) => (
+                  <DropdownMenuItem
+                    key={type}
+                    onClick={() => handleAddProphylaxis(type)}
+                    className="cursor-pointer"
+                  >
+                    <span className="mr-2">{config.emoji}</span>
+                    {config.label}
+                  </DropdownMenuItem>
+                ))}
+              {Object.keys(PROPHYLAXIS_TYPES).every(type => activeProphylaxisTypes.has(type)) && (
+                <DropdownMenuItem disabled>
+                  Todas as profilaxias já estão ativas
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        
+        <div className="mt-3">
+          <TooltipProvider delayDuration={200}>
+            <div className="flex flex-wrap gap-2 items-center">
+              {patient.prophylaxis?.filter(p => p.is_active).map(prophylaxis => {
+                const config = PROPHYLAXIS_TYPES[prophylaxis.prophylaxis_type];
+                return (
+                  <Tooltip key={prophylaxis.id}>
+                    <TooltipTrigger asChild>
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-primary/10 border border-primary/30 text-primary text-sm">
+                        <span className="mr-0.5">{config?.emoji || '🛡️'}</span>
+                        <span className="font-medium">
+                          {prophylaxis.prophylaxis_type === 'PROT_GASTRICA' 
+                            ? 'Prot. Gástrica' 
+                            : prophylaxis.prophylaxis_type}
+                        </span>
+                        <button
+                          onClick={() => handleRemoveProphylaxis(prophylaxis.id)}
+                          disabled={isLoading}
+                          className="ml-0.5 p-0.5 rounded hover:bg-primary/20 transition-colors"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{config?.label || prophylaxis.prophylaxis_type}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })}
+
+              {/* Empty state */}
+              {(!patient.prophylaxis || patient.prophylaxis.filter(p => p.is_active).length === 0) && (
+                <span className="text-sm text-muted-foreground">Nenhuma profilaxia ativa</span>
+              )}
+            </div>
+          </TooltipProvider>
+        </div>
+      </div>
+
+      {/* Diet */}
+      <div className="section-card">
+        <div className="section-title justify-between">
+          <div className="flex items-center gap-2">
+            <Utensils className="h-4 w-4 text-amber-500" />
+            Dieta
+          </div>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-7 gap-1">
+                {patient.diet_type ? (
+                  <>
+                    <span>{DIET_TYPES[patient.diet_type]?.emoji}</span>
+                    <span className="text-xs">{DIET_TYPES[patient.diet_type]?.label}</span>
+                  </>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Selecionar</span>
+                )}
+                <ChevronDown className="h-3 w-3 ml-1" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              {Object.entries(DIET_TYPES).map(([type, config]) => (
+                <DropdownMenuItem
+                  key={type}
+                  onClick={() => handleUpdateDiet(type as DietType)}
+                  className={`cursor-pointer ${patient.diet_type === type ? 'bg-accent' : ''}`}
+                >
+                  <span className="mr-2">{config.emoji}</span>
+                  {config.label}
+                </DropdownMenuItem>
+              ))}
+              {patient.diet_type && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => handleUpdateDiet(null)}
+                    className="cursor-pointer text-muted-foreground"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Remover dieta
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        
+        <div className="mt-3">
+          {patient.diet_type ? (
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400">
+              <span>{DIET_TYPES[patient.diet_type]?.emoji}</span>
+              <span className="font-medium">{DIET_TYPES[patient.diet_type]?.label}</span>
+            </div>
+          ) : (
+            <span className="text-sm text-muted-foreground">Nenhuma dieta definida</span>
           )}
         </div>
       </div>

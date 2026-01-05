@@ -155,9 +155,11 @@ export type Database = {
         Row: {
           admission_date: string
           age: number
+          allergies: string | null
           bed_id: string | null
           comorbidities: string | null
           created_at: string
+          diet_type: string | null
           id: string
           initials: string
           is_active: boolean
@@ -172,9 +174,11 @@ export type Database = {
         Insert: {
           admission_date?: string
           age: number
+          allergies?: string | null
           bed_id?: string | null
           comorbidities?: string | null
           created_at?: string
+          diet_type?: string | null
           id?: string
           initials: string
           is_active?: boolean
@@ -189,9 +193,11 @@ export type Database = {
         Update: {
           admission_date?: string
           age?: number
+          allergies?: string | null
           bed_id?: string | null
           comorbidities?: string | null
           created_at?: string
+          diet_type?: string | null
           id?: string
           initials?: string
           is_active?: boolean
@@ -239,6 +245,38 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      prophylaxis: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          patient_id: string
+          prophylaxis_type: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          patient_id: string
+          prophylaxis_type: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          patient_id?: string
+          prophylaxis_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prophylaxis_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       therapeutic_plans: {
         Row: {
