@@ -36,21 +36,24 @@ export default function PatientDetails() {
     }
 
     // Fetch related data in parallel
-    const [devicesRes, drugsRes, antibioticsRes, plansRes, evolutionsRes] = await Promise.all([
+    const [devicesRes, drugsRes, antibioticsRes, plansRes, evolutionsRes, prophylaxisRes] = await Promise.all([
       supabase.from('invasive_devices').select('*').eq('patient_id', patientId).eq('is_active', true),
       supabase.from('vasoactive_drugs').select('*').eq('patient_id', patientId).eq('is_active', true),
       supabase.from('antibiotics').select('*').eq('patient_id', patientId).eq('is_active', true),
       supabase.from('therapeutic_plans').select('*').eq('patient_id', patientId).order('created_at', { ascending: false }).limit(1),
-      supabase.from('evolutions').select('*').eq('patient_id', patientId).order('created_at', { ascending: false })
+      supabase.from('evolutions').select('*').eq('patient_id', patientId).order('created_at', { ascending: false }),
+      supabase.from('prophylaxis').select('*').eq('patient_id', patientId).eq('is_active', true)
     ]);
 
     const patientWithDetails: PatientWithDetails = {
       ...patientData,
+      diet_type: (patientData.diet_type as PatientWithDetails['diet_type']) ?? null,
       invasive_devices: devicesRes.data || [],
       vasoactive_drugs: drugsRes.data || [],
       antibiotics: antibioticsRes.data || [],
       therapeutic_plans: plansRes.data || [],
-      evolutions: evolutionsRes.data || []
+      evolutions: evolutionsRes.data || [],
+      prophylaxis: prophylaxisRes.data || []
     };
 
     setPatient(patientWithDetails);

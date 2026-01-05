@@ -2,6 +2,7 @@ export type AppRole = 'admin' | 'diarista' | 'plantonista' | 'coordenador';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 export type RespiratoryStatus = 'ar_ambiente' | 'tot';
 export type PatientOutcome = 'alta' | 'obito' | 'transferencia' | 'alta_enfermaria' | 'transferencia_externa' | 'transferencia_interna';
+export type DietType = 'zero' | 'oral' | 'sne' | 'sng' | 'npt' | 'gtt' | null;
 
 export interface Profile {
   id: string;
@@ -49,6 +50,7 @@ export interface Patient {
   is_active: boolean;
   outcome: PatientOutcome | null;
   outcome_date: string | null;
+  diet_type: DietType;
   created_at: string;
   updated_at: string;
 }
@@ -99,6 +101,14 @@ export interface Evolution {
   created_at: string;
 }
 
+export interface Prophylaxis {
+  id: string;
+  patient_id: string;
+  prophylaxis_type: string;
+  is_active: boolean;
+  created_at: string;
+}
+
 // Extended types with relations
 export interface BedWithPatient extends Bed {
   patient?: PatientWithDetails | null;
@@ -110,6 +120,7 @@ export interface PatientWithDetails extends Patient {
   antibiotics?: Antibiotic[];
   therapeutic_plans?: TherapeuticPlan[];
   evolutions?: Evolution[];
+  prophylaxis?: Prophylaxis[];
 }
 
 export interface ProfileWithRole extends Profile {
