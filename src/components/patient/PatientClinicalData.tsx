@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { VasoactiveDrugCalculator } from './VasoactiveDrugCalculator';
 import { EditableDayBadge } from './EditableDayBadge';
+import { VenousAccessSection } from './VenousAccessSection';
 import type { PatientWithDetails, DietType } from '@/types/database';
 
 interface PatientClinicalDataProps {
@@ -575,9 +576,17 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
                 <span className="text-sm text-muted-foreground">Nenhum dispositivo</span>
               )}
             </div>
-          </TooltipProvider>
+        </TooltipProvider>
         </div>
       </div>
+
+      {/* Venous Access Section */}
+      <VenousAccessSection
+        patientId={patient.id}
+        venousAccess={patient.venous_access || []}
+        hasActiveVasoactiveDrugs={(patient.vasoactive_drugs?.filter(d => d.is_active).length || 0) > 0}
+        onUpdate={onUpdate}
+      />
 
       {/* Vasoactive Drugs */}
       <div className="section-card">

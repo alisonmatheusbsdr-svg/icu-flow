@@ -431,6 +431,50 @@ export type Database = {
           },
         ]
       }
+      venous_access: {
+        Row: {
+          access_type: string
+          created_at: string
+          id: string
+          insertion_date: string
+          insertion_site: string
+          is_active: boolean
+          lumen_count: string
+          notes: string | null
+          patient_id: string
+        }
+        Insert: {
+          access_type: string
+          created_at?: string
+          id?: string
+          insertion_date?: string
+          insertion_site: string
+          is_active?: boolean
+          lumen_count: string
+          notes?: string | null
+          patient_id: string
+        }
+        Update: {
+          access_type?: string
+          created_at?: string
+          id?: string
+          insertion_date?: string
+          insertion_site?: string
+          is_active?: boolean
+          lumen_count?: string
+          notes?: string | null
+          patient_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venous_access_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

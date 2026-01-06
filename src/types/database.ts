@@ -109,6 +109,18 @@ export interface Prophylaxis {
   created_at: string;
 }
 
+export interface VenousAccess {
+  id: string;
+  patient_id: string;
+  access_type: string;
+  insertion_site: string;
+  lumen_count: string;
+  insertion_date: string;
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
 // Extended types with relations
 export interface BedWithPatient extends Bed {
   patient?: PatientWithDetails | null;
@@ -121,8 +133,8 @@ export interface PatientWithDetails extends Patient {
   therapeutic_plans?: TherapeuticPlan[];
   evolutions?: Evolution[];
   prophylaxis?: Prophylaxis[];
+  venous_access?: VenousAccess[];
 }
-
 export interface ProfileWithRole extends Profile {
   user_roles?: UserRole[];
 }
