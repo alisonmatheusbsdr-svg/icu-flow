@@ -47,13 +47,14 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
       return;
     }
 
-    const [devicesRes, drugsRes, antibioticsRes, plansRes, evolutionsRes, prophylaxisRes] = await Promise.all([
+    const [devicesRes, drugsRes, antibioticsRes, plansRes, evolutionsRes, prophylaxisRes, venousAccessRes] = await Promise.all([
       supabase.from('invasive_devices').select('*').eq('patient_id', patientId).eq('is_active', true),
       supabase.from('vasoactive_drugs').select('*').eq('patient_id', patientId).eq('is_active', true),
       supabase.from('antibiotics').select('*').eq('patient_id', patientId).eq('is_active', true),
       supabase.from('therapeutic_plans').select('*').eq('patient_id', patientId).order('created_at', { ascending: false }).limit(1),
       supabase.from('evolutions').select('*').eq('patient_id', patientId).order('created_at', { ascending: false }),
-      supabase.from('prophylaxis').select('*').eq('patient_id', patientId).eq('is_active', true)
+      supabase.from('prophylaxis').select('*').eq('patient_id', patientId).eq('is_active', true),
+      supabase.from('venous_access').select('*').eq('patient_id', patientId).eq('is_active', true)
     ]);
 
     const patientWithDetails: PatientWithDetails = {
@@ -65,7 +66,8 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
       antibiotics: antibioticsRes.data || [],
       therapeutic_plans: plansRes.data || [],
       evolutions: evolutionsRes.data || [],
-      prophylaxis: prophylaxisRes.data || []
+      prophylaxis: prophylaxisRes.data || [],
+      venous_access: venousAccessRes.data || []
     };
 
     setPatient(patientWithDetails);
