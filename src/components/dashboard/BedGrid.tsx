@@ -11,8 +11,13 @@ interface BedGridProps {
   bedCount: number;
 }
 
+interface RespiratoryModality {
+  patient_id: string;
+  modality: string;
+}
+
 interface BedWithPatient extends Bed {
-  patient?: Patient | null;
+  patient?: (Patient & { respiratory_modality?: string }) | null;
 }
 
 export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
@@ -34,6 +39,8 @@ export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
       const occupiedBedIds = bedsData.filter(b => b.is_occupied).map(b => b.id);
       
       let patients: Patient[] = [];
+      let respiratoryModalities: RespiratoryModality[] = [];
+      
       if (occupiedBedIds.length > 0) {
         const { data } = await supabase
           .from('patients')
@@ -41,12 +48,30 @@ export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
           .in('bed_id', occupiedBedIds)
           .eq('is_active', true);
         patients = (data || []).map(p => ({ ...p, weight: p.weight ?? null })) as Patient[];
+        
+        // Fetch respiratory modalities for these patients
+        if (patients.length > 0) {
+          const patientIds = patients.map(p => p.id);
+          const { data: respData } = await supabase
+            .from('respiratory_support')
+            .select('patient_id, modality')
+            .in('patient_id', patientIds)
+            .eq('is_active', true);
+          respiratoryModalities = respData || [];
+        }
       }
 
-      const bedsWithPatients = bedsData.map(bed => ({
-        ...bed,
-        patient: patients.find(p => p.bed_id === bed.id) || null
-      }));
+      const bedsWithPatients = bedsData.map(bed => {
+        const patient = patients.find(p => p.bed_id === bed.id);
+        const respModality = patient 
+          ? respiratoryModalities.find(r => r.patient_id === patient.id)?.modality 
+          : undefined;
+        
+        return {
+          ...bed,
+          patient: patient ? { ...patient, respiratory_modality: respModality } : null
+        };
+      });
 
       setBeds(bedsWithPatients);
     }

@@ -10,13 +10,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { PatientWithDetails } from "@/types/database";
@@ -40,7 +33,6 @@ export function EditPatientDialog({
   const [weight, setWeight] = useState(patient.weight?.toString() || "");
   const [mainDiagnosis, setMainDiagnosis] = useState(patient.main_diagnosis || "");
   const [comorbidities, setComorbidities] = useState(patient.comorbidities || "");
-  const [respiratoryStatus, setRespiratoryStatus] = useState(patient.respiratory_status);
   const [isPalliative, setIsPalliative] = useState(patient.is_palliative);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -62,7 +54,6 @@ export function EditPatientDialog({
           weight: weight ? parseFloat(weight) : null,
           main_diagnosis: mainDiagnosis.trim() || null,
           comorbidities: comorbidities.trim() || null,
-          respiratory_status: respiratoryStatus,
           is_palliative: isPalliative,
         })
         .eq("id", patient.id);
@@ -147,19 +138,6 @@ export function EditPatientDialog({
               placeholder="Ex: HAS, DM, IRC"
               rows={2}
             />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="respiratoryStatus">Status Respiratório</Label>
-            <Select value={respiratoryStatus} onValueChange={(value: "ar_ambiente" | "tot") => setRespiratoryStatus(value)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ar_ambiente">Ar Ambiente</SelectItem>
-                <SelectItem value="tot">TOT (Intubado)</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
 
           <div className="flex items-center justify-between rounded-lg border p-3">

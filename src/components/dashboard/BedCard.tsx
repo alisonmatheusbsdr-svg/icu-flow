@@ -6,12 +6,26 @@ import { AdmitPatientForm } from './AdmitPatientForm';
 import { Wind, Heart, Plus } from 'lucide-react';
 import type { Bed, Patient } from '@/types/database';
 
+interface PatientWithModality extends Patient {
+  respiratory_modality?: string;
+}
+
 interface BedCardProps {
   bed: Bed;
-  patient?: Patient | null;
+  patient?: PatientWithModality | null;
   onUpdate: () => void;
   onPatientClick?: (patientId: string) => void;
 }
+
+const MODALITY_BADGES: Record<string, { badge: string; className: string }> = {
+  'ar_ambiente': { badge: 'AA', className: 'badge-aa' },
+  'cateter_nasal': { badge: 'O₂', className: 'bg-blue-500/20 text-blue-600 border-blue-500/30' },
+  'mascara_simples': { badge: 'O₂', className: 'bg-blue-500/20 text-blue-600 border-blue-500/30' },
+  'mascara_reservatorio': { badge: 'O₂', className: 'bg-yellow-500/20 text-yellow-600 border-yellow-500/30' },
+  'vni': { badge: 'VNI', className: 'bg-orange-500/20 text-orange-600 border-orange-500/30' },
+  'tot': { badge: 'TOT', className: 'badge-tot' },
+  'traqueostomia': { badge: 'TQT', className: 'bg-purple-500/20 text-purple-600 border-purple-500/30' },
+};
 
 export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps) {
   const [isAdmitOpen, setIsAdmitOpen] = useState(false);
@@ -59,11 +73,15 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
         <div className="text-sm text-muted-foreground mb-3">{patient.age} anos</div>
         
         <div className="flex flex-wrap gap-1">
-          {patient.respiratory_status === 'tot' ? (
-            <Badge className="badge-tot text-xs gap-1"><Wind className="h-3 w-3" />TOT</Badge>
-          ) : (
-            <Badge className="badge-aa text-xs gap-1"><Wind className="h-3 w-3" />AA</Badge>
-          )}
+          {(() => {
+            const modality = patient.respiratory_modality || 'ar_ambiente';
+            const config = MODALITY_BADGES[modality] || MODALITY_BADGES['ar_ambiente'];
+            return (
+              <Badge className={`text-xs gap-1 ${config.className}`}>
+                <Wind className="h-3 w-3" />{config.badge}
+              </Badge>
+            );
+          })()}
           {patient.is_palliative && (
             <Badge className="badge-pal text-xs gap-1"><Heart className="h-3 w-3" />PAL</Badge>
           )}

@@ -121,6 +121,29 @@ export interface VenousAccess {
   created_at: string;
 }
 
+export interface RespiratorySupport {
+  id: string;
+  patient_id: string;
+  modality: string;
+  spo2_target: number | null;
+  flow_rate: number | null;
+  fio2: number | null;
+  vni_type: string | null;
+  vni_tolerance: string | null;
+  intubation_date: string | null;
+  ventilator_mode: string | null;
+  peep: number | null;
+  volume_or_pressure: number | null;
+  is_sedated: boolean;
+  cannula_type: string | null;
+  cuff_status: string | null;
+  on_ventilation: boolean;
+  clinical_status: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 // Extended types with relations
 export interface BedWithPatient extends Bed {
   patient?: PatientWithDetails | null;
@@ -134,6 +157,7 @@ export interface PatientWithDetails extends Patient {
   evolutions?: Evolution[];
   prophylaxis?: Prophylaxis[];
   venous_access?: VenousAccess[];
+  respiratory_support?: RespiratorySupport | null;
 }
 export interface ProfileWithRole extends Profile {
   user_roles?: UserRole[];
