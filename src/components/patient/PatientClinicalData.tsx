@@ -21,6 +21,7 @@ import {
 import { VasoactiveDrugCalculator } from './VasoactiveDrugCalculator';
 import { EditableDayBadge } from './EditableDayBadge';
 import { VenousAccessSection } from './VenousAccessSection';
+import { RespiratorySection } from './RespiratorySection';
 import type { PatientWithDetails, DietType } from '@/types/database';
 
 interface PatientClinicalDataProps {
@@ -719,6 +720,13 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
           </TooltipProvider>
         </div>
       </div>
+
+      {/* Respiratory Support Section - After DVA */}
+      <RespiratorySection
+        patientId={patient.id}
+        respiratorySupport={patient.respiratory_support || null}
+        onUpdate={onUpdate}
+      />
 
       {/* Antibiotics / Infectology */}
       <div className="section-card">

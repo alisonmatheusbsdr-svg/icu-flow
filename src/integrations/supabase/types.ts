@@ -278,6 +278,83 @@ export type Database = {
           },
         ]
       }
+      respiratory_support: {
+        Row: {
+          cannula_type: string | null
+          clinical_status: string | null
+          created_at: string
+          cuff_status: string | null
+          fio2: number | null
+          flow_rate: number | null
+          id: string
+          intubation_date: string | null
+          is_active: boolean
+          is_sedated: boolean | null
+          modality: string
+          on_ventilation: boolean | null
+          patient_id: string
+          peep: number | null
+          spo2_target: number | null
+          updated_at: string
+          ventilator_mode: string | null
+          vni_tolerance: string | null
+          vni_type: string | null
+          volume_or_pressure: number | null
+        }
+        Insert: {
+          cannula_type?: string | null
+          clinical_status?: string | null
+          created_at?: string
+          cuff_status?: string | null
+          fio2?: number | null
+          flow_rate?: number | null
+          id?: string
+          intubation_date?: string | null
+          is_active?: boolean
+          is_sedated?: boolean | null
+          modality?: string
+          on_ventilation?: boolean | null
+          patient_id: string
+          peep?: number | null
+          spo2_target?: number | null
+          updated_at?: string
+          ventilator_mode?: string | null
+          vni_tolerance?: string | null
+          vni_type?: string | null
+          volume_or_pressure?: number | null
+        }
+        Update: {
+          cannula_type?: string | null
+          clinical_status?: string | null
+          created_at?: string
+          cuff_status?: string | null
+          fio2?: number | null
+          flow_rate?: number | null
+          id?: string
+          intubation_date?: string | null
+          is_active?: boolean
+          is_sedated?: boolean | null
+          modality?: string
+          on_ventilation?: boolean | null
+          patient_id?: string
+          peep?: number | null
+          spo2_target?: number | null
+          updated_at?: string
+          ventilator_mode?: string | null
+          vni_tolerance?: string | null
+          vni_type?: string | null
+          volume_or_pressure?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "respiratory_support_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       therapeutic_plans: {
         Row: {
           content: string

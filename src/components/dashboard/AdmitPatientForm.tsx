@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 
@@ -20,7 +19,6 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
   const [weight, setWeight] = useState('');
   const [mainDiagnosis, setMainDiagnosis] = useState('');
   const [comorbidities, setComorbidities] = useState('');
-  const [respiratoryStatus, setRespiratoryStatus] = useState<'ar_ambiente' | 'tot'>('ar_ambiente');
   const [isPalliative, setIsPalliative] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -39,7 +37,6 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
       weight: weight ? parseFloat(weight) : null,
       main_diagnosis: mainDiagnosis || null,
       comorbidities: comorbidities || null,
-      respiratory_status: respiratoryStatus,
       is_palliative: isPalliative
     });
 
@@ -81,17 +78,6 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
       <div className="space-y-2">
         <Label htmlFor="comorbidities">Comorbidades</Label>
         <Textarea id="comorbidities" placeholder="HAS, DM, DPOC..." value={comorbidities} onChange={(e) => setComorbidities(e.target.value)} />
-      </div>
-
-      <div className="space-y-2">
-        <Label>Status Respiratório</Label>
-        <Select value={respiratoryStatus} onValueChange={(v) => setRespiratoryStatus(v as 'ar_ambiente' | 'tot')}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ar_ambiente">Ar Ambiente</SelectItem>
-            <SelectItem value="tot">TOT (Ventilação Mecânica)</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
       <div className="flex items-center gap-2">
