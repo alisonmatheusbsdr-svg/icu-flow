@@ -319,7 +319,11 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
       toast.success(`${dvaName} atualizada`);
     }
     
-    setDvaInputs(prev => ({ ...prev, [dvaName]: '' }));
+    setDvaInputs(prev => {
+      const newInputs = { ...prev };
+      delete newInputs[dvaName];
+      return newInputs;
+    });
     onUpdate();
     setIsLoading(false);
   };
@@ -673,9 +677,20 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
                       value={dvaInputs[dva.drug_name] ?? dva.dose_ml_h}
                       onChange={(e) => setDvaInputs(prev => ({ ...prev, [dva.drug_name]: e.target.value }))}
                       onBlur={() => {
-                        const val = parseFloat(dvaInputs[dva.drug_name]?.toString() || dva.dose_ml_h.toString());
-                        if (dvaInputs[dva.drug_name] !== undefined) {
-                          handleUpdateDva(dva.drug_name, val);
+                        const inputValue = dvaInputs[dva.drug_name];
+                        // Only update if there's a value in the input AND it's different from current
+                        if (inputValue !== undefined && inputValue !== '') {
+                          const val = parseFloat(inputValue.toString());
+                          if (!isNaN(val) && val !== dva.dose_ml_h) {
+                            handleUpdateDva(dva.drug_name, val);
+                          } else {
+                            // Clear input if value is invalid or unchanged
+                            setDvaInputs(prev => {
+                              const newInputs = { ...prev };
+                              delete newInputs[dva.drug_name];
+                              return newInputs;
+                            });
+                          }
                         }
                       }}
                       className="w-14 h-6 text-xs text-center bg-background/50 border-0 p-1"
