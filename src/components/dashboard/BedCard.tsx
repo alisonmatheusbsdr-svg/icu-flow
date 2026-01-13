@@ -3,11 +3,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AdmitPatientForm } from './AdmitPatientForm';
-import { Wind, Heart, Plus } from 'lucide-react';
+import { Wind, Heart, Plus, Pill, Ban } from 'lucide-react';
 import type { Bed, Patient } from '@/types/database';
 
 interface PatientWithModality extends Patient {
   respiratory_modality?: string;
+  has_active_dva?: boolean;
 }
 
 interface BedCardProps {
@@ -82,8 +83,18 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
               </Badge>
             );
           })()}
+          {patient.has_active_dva && (
+            <Badge className="bg-red-500/20 text-red-600 border-red-500/30 text-xs gap-1">
+              <Pill className="h-3 w-3" />DVA
+            </Badge>
+          )}
+          {patient.diet_type === 'zero' && (
+            <Badge className="bg-slate-500/20 text-slate-600 border-slate-500/30 text-xs gap-1">
+              <Ban className="h-3 w-3" />ZERO
+            </Badge>
+          )}
           {patient.is_palliative && (
-            <Badge className="badge-pal text-xs gap-1"><Heart className="h-3 w-3" />PAL</Badge>
+            <Badge className="badge-pal text-xs gap-1"><Heart className="h-3 w-3" />CCPP</Badge>
           )}
         </div>
       </CardContent>
