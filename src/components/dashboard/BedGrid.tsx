@@ -16,8 +16,12 @@ interface RespiratoryModality {
   modality: string;
 }
 
+interface VasoactiveDrug {
+  patient_id: string;
+}
+
 interface BedWithPatient extends Bed {
-  patient?: (Patient & { respiratory_modality?: string }) | null;
+  patient?: (Patient & { respiratory_modality?: string; has_active_dva?: boolean }) | null;
 }
 
 export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
@@ -40,6 +44,7 @@ export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
       
       let patients: Patient[] = [];
       let respiratoryModalities: RespiratoryModality[] = [];
+      let vasoactiveDrugs: VasoactiveDrug[] = [];
       
       if (occupiedBedIds.length > 0) {
         const { data } = await supabase
@@ -49,17 +54,29 @@ export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
           .eq('is_active', true);
         patients = (data || []).map(p => ({ ...p, weight: p.weight ?? null })) as Patient[];
         
-        // Fetch respiratory modalities for these patients
+        // Fetch respiratory modalities and vasoactive drugs for these patients
         if (patients.length > 0) {
           const patientIds = patients.map(p => p.id);
-          const { data: respData } = await supabase
-            .from('respiratory_support')
-            .select('patient_id, modality')
-            .in('patient_id', patientIds)
-            .eq('is_active', true);
-          respiratoryModalities = respData || [];
+          
+          const [respResult, dvaResult] = await Promise.all([
+            supabase
+              .from('respiratory_support')
+              .select('patient_id, modality')
+              .in('patient_id', patientIds)
+              .eq('is_active', true),
+            supabase
+              .from('vasoactive_drugs')
+              .select('patient_id')
+              .in('patient_id', patientIds)
+              .eq('is_active', true)
+          ]);
+          
+          respiratoryModalities = respResult.data || [];
+          vasoactiveDrugs = dvaResult.data || [];
         }
       }
+
+      const patientsWithDva = new Set(vasoactiveDrugs.map(d => d.patient_id));
 
       const bedsWithPatients = bedsData.map(bed => {
         const patient = patients.find(p => p.bed_id === bed.id);
@@ -69,7 +86,11 @@ export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
         
         return {
           ...bed,
-          patient: patient ? { ...patient, respiratory_modality: respModality } : null
+          patient: patient ? { 
+            ...patient, 
+            respiratory_modality: respModality,
+            has_active_dva: patientsWithDva.has(patient.id)
+          } : null
         };
       });
 
