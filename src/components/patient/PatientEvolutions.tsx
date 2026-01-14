@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { Check, Clock, Save } from 'lucide-react';
+import { PatientTasks } from './PatientTasks';
 import type { PatientWithDetails, Profile } from '@/types/database';
 
 interface PatientEvolutionsProps {
@@ -124,6 +125,13 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate }: Patient
           </Button>
         </div>
       </div>
+
+      {/* Pending Tasks Section */}
+      <PatientTasks 
+        patient={patient} 
+        authorProfiles={authorProfiles} 
+        onUpdate={onUpdate} 
+      />
     </div>
   );
 }
