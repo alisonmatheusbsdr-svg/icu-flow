@@ -36,13 +36,14 @@ export default function PatientDetails() {
     }
 
     // Fetch related data in parallel
-    const [devicesRes, drugsRes, antibioticsRes, plansRes, evolutionsRes, prophylaxisRes] = await Promise.all([
+    const [devicesRes, drugsRes, antibioticsRes, plansRes, evolutionsRes, prophylaxisRes, tasksRes] = await Promise.all([
       supabase.from('invasive_devices').select('*').eq('patient_id', patientId).eq('is_active', true),
       supabase.from('vasoactive_drugs').select('*').eq('patient_id', patientId).eq('is_active', true),
       supabase.from('antibiotics').select('*').eq('patient_id', patientId).eq('is_active', true),
       supabase.from('therapeutic_plans').select('*').eq('patient_id', patientId).order('created_at', { ascending: false }).limit(1),
       supabase.from('evolutions').select('*').eq('patient_id', patientId).order('created_at', { ascending: false }),
-      supabase.from('prophylaxis').select('*').eq('patient_id', patientId).eq('is_active', true)
+      supabase.from('prophylaxis').select('*').eq('patient_id', patientId).eq('is_active', true),
+      supabase.from('patient_tasks').select('*').eq('patient_id', patientId)
     ]);
 
     const patientWithDetails: PatientWithDetails = {
@@ -53,15 +54,19 @@ export default function PatientDetails() {
       antibiotics: antibioticsRes.data || [],
       therapeutic_plans: plansRes.data || [],
       evolutions: evolutionsRes.data || [],
-      prophylaxis: prophylaxisRes.data || []
+      prophylaxis: prophylaxisRes.data || [],
+      patient_tasks: tasksRes.data || []
     };
 
     setPatient(patientWithDetails);
 
-    // Fetch author profiles for evolutions and plans
+    // Fetch author profiles for evolutions, plans, and tasks
     const authorIds = new Set<string>();
     plansRes.data?.forEach(p => authorIds.add(p.created_by));
     evolutionsRes.data?.forEach(e => authorIds.add(e.created_by));
+    tasksRes.data?.forEach(t => {
+      if (t.completed_by) authorIds.add(t.completed_by);
+    });
 
     if (authorIds.size > 0) {
       const { data: profiles } = await supabase

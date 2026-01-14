@@ -144,6 +144,17 @@ export interface RespiratorySupport {
   updated_at: string;
 }
 
+export interface PatientTask {
+  id: string;
+  patient_id: string;
+  content: string;
+  is_completed: boolean;
+  completed_at: string | null;
+  completed_by: string | null;
+  created_by: string;
+  created_at: string;
+}
+
 // Extended types with relations
 export interface BedWithPatient extends Bed {
   patient?: PatientWithDetails | null;
@@ -158,6 +169,7 @@ export interface PatientWithDetails extends Patient {
   prophylaxis?: Prophylaxis[];
   venous_access?: VenousAccess[];
   respiratory_support?: RespiratorySupport | null;
+  patient_tasks?: PatientTask[];
 }
 export interface ProfileWithRole extends Profile {
   user_roles?: UserRole[];
