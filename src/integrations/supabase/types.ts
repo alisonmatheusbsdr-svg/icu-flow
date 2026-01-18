@@ -151,6 +151,42 @@ export type Database = {
           },
         ]
       }
+      patient_exams: {
+        Row: {
+          content: string
+          created_at: string
+          created_by: string
+          exam_date: string
+          exam_name: string
+          exam_type: string
+          id: string
+          is_critical: boolean
+          patient_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          created_by: string
+          exam_date?: string
+          exam_name: string
+          exam_type: string
+          id?: string
+          is_critical?: boolean
+          patient_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          created_by?: string
+          exam_date?: string
+          exam_name?: string
+          exam_type?: string
+          id?: string
+          is_critical?: boolean
+          patient_id?: string
+        }
+        Relationships: []
+      }
       patient_tasks: {
         Row: {
           completed_at: string | null
