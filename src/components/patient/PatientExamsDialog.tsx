@@ -8,15 +8,18 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Loader2, Radiation, Microscope, AlertTriangle, Trash2 } from 'lucide-react';
+import { Loader2, Radiation, Microscope, AlertTriangle, Trash2, Bug, ClipboardList } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+
+type ExamType = 'imagem' | 'laboratorial' | 'cultura' | 'outros';
 
 interface PatientExam {
   id: string;
   patient_id: string;
-  exam_type: 'imagem' | 'laboratorial';
+  exam_type: ExamType;
   exam_name: string;
   exam_date: string;
   is_critical: boolean;
@@ -32,6 +35,15 @@ interface PatientExamsDialogProps {
   onUpdate: () => void;
 }
 
+const CULTURE_TYPES = [
+  'Hemocultura',
+  'Urocultura',
+  'Cultura de Secreção',
+  'LCR',
+  'Ponta de Cateter',
+  'Outra'
+];
+
 export function PatientExamsDialog({ patientId, isOpen, onClose, onUpdate }: PatientExamsDialogProps) {
   const { user } = useAuth();
   const [exams, setExams] = useState<PatientExam[]>([]);
@@ -39,8 +51,10 @@ export function PatientExamsDialog({ patientId, isOpen, onClose, onUpdate }: Pat
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Form state
-  const [examType, setExamType] = useState<'imagem' | 'laboratorial'>('laboratorial');
+  const [examType, setExamType] = useState<ExamType>('laboratorial');
   const [examName, setExamName] = useState('');
+  const [cultureType, setCultureType] = useState('');
+  const [customCultureType, setCustomCultureType] = useState('');
   const [examDate, setExamDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [isCritical, setIsCritical] = useState(false);
   const [content, setContent] = useState('');
@@ -70,15 +84,26 @@ export function PatientExamsDialog({ patientId, isOpen, onClose, onUpdate }: Pat
   const resetForm = () => {
     setExamType('laboratorial');
     setExamName('');
+    setCultureType('');
+    setCustomCultureType('');
     setExamDate(format(new Date(), 'yyyy-MM-dd'));
     setIsCritical(false);
     setContent('');
   };
 
+  const getExamNameForSubmit = (): string => {
+    if (examType === 'cultura') {
+      return cultureType === 'Outra' ? customCultureType.trim() : cultureType;
+    }
+    return examName.trim();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!examName.trim() || !content.trim()) {
+    const finalExamName = getExamNameForSubmit();
+    
+    if (!finalExamName || !content.trim()) {
       toast.error('Preencha todos os campos obrigatórios');
       return;
     }
@@ -93,7 +118,7 @@ export function PatientExamsDialog({ patientId, isOpen, onClose, onUpdate }: Pat
     const { error } = await supabase.from('patient_exams').insert({
       patient_id: patientId,
       exam_type: examType,
-      exam_name: examName.trim(),
+      exam_name: finalExamName,
       exam_date: examDate,
       is_critical: isCritical,
       content: content.trim(),
@@ -127,6 +152,27 @@ export function PatientExamsDialog({ patientId, isOpen, onClose, onUpdate }: Pat
     }
   };
 
+  const getExamIcon = (type: ExamType) => {
+    switch (type) {
+      case 'imagem':
+        return <Radiation className="h-4 w-4 text-orange-500 flex-shrink-0" />;
+      case 'laboratorial':
+        return <Microscope className="h-4 w-4 text-blue-500 flex-shrink-0" />;
+      case 'cultura':
+        return <Bug className="h-4 w-4 text-green-500 flex-shrink-0" />;
+      case 'outros':
+        return <ClipboardList className="h-4 w-4 text-purple-500 flex-shrink-0" />;
+    }
+  };
+
+  const getDateLabel = () => {
+    return examType === 'cultura' ? 'Data da Coleta' : 'Data de Realização';
+  };
+
+  const getNameLabel = () => {
+    return examType === 'cultura' ? 'Tipo de Cultura *' : 'Nome do Exame *';
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
@@ -142,8 +188,8 @@ export function PatientExamsDialog({ patientId, isOpen, onClose, onUpdate }: Pat
               <Label>Tipo de Exame</Label>
               <RadioGroup
                 value={examType}
-                onValueChange={(val) => setExamType(val as 'imagem' | 'laboratorial')}
-                className="flex gap-6"
+                onValueChange={(val) => setExamType(val as ExamType)}
+                className="grid grid-cols-2 gap-3"
               >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="imagem" id="imagem" />
@@ -159,22 +205,51 @@ export function PatientExamsDialog({ patientId, isOpen, onClose, onUpdate }: Pat
                     Laboratorial
                   </Label>
                 </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="cultura" id="cultura" />
+                  <Label htmlFor="cultura" className="flex items-center gap-2 cursor-pointer">
+                    <Bug className="h-4 w-4 text-green-500" />
+                    Cultura
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="outros" id="outros" />
+                  <Label htmlFor="outros" className="flex items-center gap-2 cursor-pointer">
+                    <ClipboardList className="h-4 w-4 text-purple-500" />
+                    Outros
+                  </Label>
+                </div>
               </RadioGroup>
             </div>
 
-            {/* Exam Name and Date */}
+            {/* Exam Name/Culture Type and Date */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="exam-name">Nome do Exame *</Label>
-                <Input
-                  id="exam-name"
-                  value={examName}
-                  onChange={(e) => setExamName(e.target.value)}
-                  placeholder="Ex: TC Crânio, Lactato..."
-                />
+                <Label htmlFor="exam-name">{getNameLabel()}</Label>
+                {examType === 'cultura' ? (
+                  <Select value={cultureType} onValueChange={setCultureType}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CULTURE_TYPES.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    id="exam-name"
+                    value={examName}
+                    onChange={(e) => setExamName(e.target.value)}
+                    placeholder={examType === 'outros' ? 'Ex: ECG, EEG...' : 'Ex: TC Crânio, Lactato...'}
+                  />
+                )}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="exam-date">Data de Realização</Label>
+                <Label htmlFor="exam-date">{getDateLabel()}</Label>
                 <Input
                   id="exam-date"
                   type="date"
@@ -183,6 +258,19 @@ export function PatientExamsDialog({ patientId, isOpen, onClose, onUpdate }: Pat
                 />
               </div>
             </div>
+
+            {/* Custom Culture Type (when "Outra" is selected) */}
+            {examType === 'cultura' && cultureType === 'Outra' && (
+              <div className="space-y-2">
+                <Label htmlFor="custom-culture">Especifique o tipo de cultura *</Label>
+                <Input
+                  id="custom-culture"
+                  value={customCultureType}
+                  onChange={(e) => setCustomCultureType(e.target.value)}
+                  placeholder="Digite o tipo de cultura..."
+                />
+              </div>
+            )}
 
             {/* Critical Checkbox */}
             <div className="flex items-center space-x-2">
@@ -199,12 +287,18 @@ export function PatientExamsDialog({ patientId, isOpen, onClose, onUpdate }: Pat
 
             {/* Content */}
             <div className="space-y-2">
-              <Label htmlFor="exam-content">Achado *</Label>
+              <Label htmlFor="exam-content">
+                {examType === 'cultura' ? 'Resultado/Achado *' : 'Achado *'}
+              </Label>
               <Textarea
                 id="exam-content"
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                placeholder="Descreva o achado relevante..."
+                placeholder={
+                  examType === 'cultura' 
+                    ? 'Ex: Positivo para S. aureus MRSA, sensível a Vancomicina...'
+                    : 'Descreva o achado relevante...'
+                }
                 rows={3}
               />
             </div>
@@ -238,11 +332,7 @@ export function PatientExamsDialog({ patientId, isOpen, onClose, onUpdate }: Pat
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2 flex-wrap">
-                        {exam.exam_type === 'imagem' ? (
-                          <Radiation className="h-4 w-4 text-orange-500 flex-shrink-0" />
-                        ) : (
-                          <Microscope className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                        )}
+                        {getExamIcon(exam.exam_type)}
                         {exam.is_critical && (
                           <AlertTriangle className="h-4 w-4 text-destructive flex-shrink-0" />
                         )}

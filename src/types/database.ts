@@ -158,7 +158,7 @@ export interface PatientTask {
 export interface PatientExam {
   id: string;
   patient_id: string;
-  exam_type: 'imagem' | 'laboratorial';
+  exam_type: 'imagem' | 'laboratorial' | 'cultura' | 'outros';
   exam_name: string;
   exam_date: string;
   is_critical: boolean;
