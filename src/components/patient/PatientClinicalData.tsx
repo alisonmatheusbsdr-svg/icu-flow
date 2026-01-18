@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { Plus, Trash2, AlertCircle, Syringe, Activity, Pill, X, ChevronDown, Shield, Utensils } from 'lucide-react';
+import { Plus, Trash2, AlertCircle, Syringe, Activity, Pill, X, ChevronDown, Shield, Utensils, AlertTriangle, CheckCircle } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -32,6 +32,7 @@ interface PatientClinicalDataProps {
 // Standard devices with labels
 const DEVICE_LABELS: Record<string, string> = {
   'TOT': 'Tubo Orotraqueal',
+  'TQT': 'Traqueostomia',
   'CVD': 'Cateter Venoso Duplo-lúmen',
   'CVC': 'Cateter Venoso Central',
   'PAI': 'Pressão Arterial Invasiva',
@@ -40,6 +41,93 @@ const DEVICE_LABELS: Record<string, string> = {
 };
 
 const STANDARD_DEVICES = Object.keys(DEVICE_LABELS);
+
+// Device alert thresholds (in days) with messages
+// ok: green, warning: yellow, danger: red
+const DEVICE_THRESHOLDS: Record<string, { 
+  ok: number; 
+  warning: number; 
+  danger: number; 
+  message: { warning: string; danger: string } 
+}> = {
+  'SVD': { 
+    ok: 21, 
+    warning: 28, 
+    danger: 30,
+    message: { 
+      warning: 'Considerar remoção - avaliar indicação', 
+      danger: 'Excedeu 30 dias - risco de ITU' 
+    }
+  },
+  'SNE': { 
+    ok: 21, 
+    warning: 28, 
+    danger: 30,
+    message: { 
+      warning: 'Avaliar integridade da sonda', 
+      danger: 'Considerar troca' 
+    }
+  },
+  'PAI': { 
+    ok: 3, 
+    warning: 4, 
+    danger: 5,
+    message: { 
+      warning: 'Trocar sistema em breve (96h)', 
+      danger: 'Excedeu 96h - trocar sistema' 
+    }
+  },
+  'TOT': { 
+    ok: 10, 
+    warning: 14, 
+    danger: 15,
+    message: { 
+      warning: 'Considerar traqueostomia', 
+      danger: 'Recomendado traqueostomia após 15 dias' 
+    }
+  },
+  'TQT': { ok: -1, warning: -1, danger: -1, message: { warning: '', danger: '' } }, // No limit
+  'CVC': { ok: -1, warning: -1, danger: -1, message: { warning: '', danger: '' } }, // Managed in VenousAccess
+  'CVD': { ok: -1, warning: -1, danger: -1, message: { warning: '', danger: '' } }, // Managed in VenousAccess
+};
+
+// Alert styles for consistent colors
+const ALERT_STYLES = {
+  ok: {
+    bg: 'hsl(142, 71%, 45%, 0.15)',
+    border: 'hsl(142, 71%, 45%, 0.4)',
+    text: 'hsl(142, 71%, 35%)',
+    icon: 'text-green-600'
+  },
+  warning: {
+    bg: 'hsl(45, 93%, 47%, 0.15)',
+    border: 'hsl(45, 93%, 47%, 0.5)',
+    text: 'hsl(45, 93%, 35%)',
+    icon: 'text-amber-500'
+  },
+  danger: {
+    bg: 'hsl(0, 72%, 51%, 0.15)',
+    border: 'hsl(0, 72%, 51%, 0.5)',
+    text: 'hsl(0, 72%, 45%)',
+    icon: 'text-red-500'
+  }
+};
+
+// Get alert level for a device
+const getDeviceAlertLevel = (deviceType: string, days: number): 'ok' | 'warning' | 'danger' => {
+  const thresholds = DEVICE_THRESHOLDS[deviceType.toUpperCase()];
+  if (!thresholds || thresholds.danger === -1) return 'ok';
+  if (days >= thresholds.danger) return 'danger';
+  if (days >= thresholds.warning) return 'warning';
+  return 'ok';
+};
+
+// Get alert message for a device
+const getDeviceAlertMessage = (deviceType: string, level: 'ok' | 'warning' | 'danger'): string | null => {
+  if (level === 'ok') return null;
+  const thresholds = DEVICE_THRESHOLDS[deviceType.toUpperCase()];
+  return thresholds?.message[level] || null;
+};
 
 // Vasoactive drugs configuration
 interface DvaConfig {
@@ -527,30 +615,57 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
               {/* Standard active devices */}
               {STANDARD_DEVICES.filter(device => activeDeviceTypes.has(device)).map(device => {
                 const deviceData = patient.invasive_devices?.find(d => d.device_type.toUpperCase() === device);
+                const days = deviceData ? getDeviceDays(deviceData.insertion_date) : 0;
+                const alertLevel = getDeviceAlertLevel(device, days);
+                const alertMessage = getDeviceAlertMessage(device, alertLevel);
+                const styles = ALERT_STYLES[alertLevel];
+                
                 return (
                   <Tooltip key={device}>
                     <TooltipTrigger asChild>
-                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm">
+                      <div 
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-sm"
+                        style={{
+                          backgroundColor: styles.bg,
+                          borderColor: styles.border,
+                          borderWidth: '1px',
+                          color: styles.text
+                        }}
+                      >
                         <span className="font-medium">{device}</span>
                         {deviceData && (
                           <EditableDayBadge
-                            days={getDeviceDays(deviceData.insertion_date)}
+                            days={days}
                             startDate={new Date(deviceData.insertion_date)}
                             onDateChange={(date) => handleUpdateDeviceDate(deviceData.id, date)}
                             className="text-xs opacity-80"
                           />
                         )}
+                        {alertLevel === 'warning' && (
+                          <AlertTriangle className={`h-3.5 w-3.5 ${styles.icon}`} />
+                        )}
+                        {alertLevel === 'danger' && (
+                          <AlertCircle className={`h-3.5 w-3.5 ${styles.icon}`} />
+                        )}
                         <button
                           onClick={() => deviceData && handleRemoveDevice(deviceData.id)}
                           disabled={isLoading}
-                          className="ml-0.5 p-0.5 rounded hover:bg-destructive/20 transition-colors"
+                          className="ml-0.5 p-0.5 rounded hover:bg-foreground/10 transition-colors"
                         >
                           <X className="h-3 w-3" />
                         </button>
                       </div>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>{DEVICE_LABELS[device]}</p>
+                      <p className="font-medium">{DEVICE_LABELS[device]}</p>
+                      {deviceData && (
+                        <p className="text-xs">Inserção: {new Date(deviceData.insertion_date).toLocaleDateString('pt-BR')}</p>
+                      )}
+                      {alertMessage && (
+                        <p className={`text-xs mt-1 ${styles.icon}`}>
+                          {alertLevel === 'warning' ? '⚠️' : '🚨'} {alertMessage}
+                        </p>
+                      )}
                     </TooltipContent>
                   </Tooltip>
                 );

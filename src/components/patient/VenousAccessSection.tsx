@@ -58,17 +58,61 @@ export const LUMEN_COUNTS: Record<string, string> = {
   'triplo': 'Triplo',
 };
 
-// Alert thresholds in days
-const ALERT_THRESHOLDS: Record<string, { warning: number; danger: number }> = {
-  'periferico': { warning: 3, danger: 4 },
-  'central_nao_tunelizado': { warning: 7, danger: 10 },
-  'central_tunelizado': { warning: 14, danger: 21 },
-  'picc': { warning: 14, danger: 21 },
-  'hemodialise': { warning: 7, danger: 14 },
+// Alert thresholds in days (ok: green, warning: yellow, danger: red)
+const ALERT_THRESHOLDS: Record<string, { ok: number; warning: number; danger: number; message: { warning: string; danger: string } }> = {
+  'periferico': { 
+    ok: 3, warning: 4, danger: 5,
+    message: { warning: 'Trocar em 24h (96h)', danger: 'Trocar acesso (excedeu 96h)' }
+  },
+  'central_nao_tunelizado': { 
+    ok: 5, warning: 7, danger: 10,
+    message: { warning: 'Reavaliar necessidade', danger: 'Considerar troca' }
+  },
+  'central_tunelizado': { 
+    ok: -1, warning: -1, danger: -1,
+    message: { warning: '', danger: '' } // No routine limit
+  },
+  'picc': { 
+    ok: 14, warning: 21, danger: 28,
+    message: { warning: 'Avaliar funcionamento', danger: 'Considerar troca' }
+  },
+  'hemodialise': { 
+    ok: 5, warning: 7, danger: 14,
+    message: { warning: 'Reavaliar necessidade', danger: 'Considerar troca' }
+  },
+  'port_a_cath': { 
+    ok: -1, warning: -1, danger: -1,
+    message: { warning: '', danger: '' } // No routine limit
+  },
 };
 
-// Femoral has stricter thresholds
-const FEMORAL_THRESHOLDS = { warning: 3, danger: 5 };
+// Femoral has stricter thresholds (72h high risk)
+const FEMORAL_THRESHOLDS = { 
+  ok: 2, warning: 3, danger: 5,
+  message: { warning: 'Trocar em 24h (72h) - alto risco', danger: 'Trocar acesso femoral - alto risco de infecção' }
+};
+
+// Alert styles for consistent colors
+const ALERT_STYLES = {
+  ok: {
+    bg: 'hsl(142, 71%, 45%, 0.15)',
+    border: 'hsl(142, 71%, 45%, 0.4)',
+    text: 'hsl(142, 71%, 35%)',
+    icon: 'text-green-600'
+  },
+  warning: {
+    bg: 'hsl(45, 93%, 47%, 0.15)',
+    border: 'hsl(45, 93%, 47%, 0.5)',
+    text: 'hsl(45, 93%, 35%)',
+    icon: 'text-amber-500'
+  },
+  danger: {
+    bg: 'hsl(0, 72%, 51%, 0.15)',
+    border: 'hsl(0, 72%, 51%, 0.5)',
+    text: 'hsl(0, 72%, 45%)',
+    icon: 'text-red-500'
+  }
+};
 
 export function VenousAccessSection({ 
   patientId, 
@@ -83,22 +127,33 @@ export function VenousAccessSection({
     return Math.ceil((new Date().getTime() - new Date(insertionDate).getTime()) / (1000 * 60 * 60 * 24));
   };
 
-  const getAlertLevel = (access: VenousAccess): 'none' | 'warning' | 'danger' => {
+  const getAlertLevel = (access: VenousAccess): 'ok' | 'warning' | 'danger' => {
     const days = getDays(access.insertion_date);
     
     // Femoral has stricter thresholds
     if (access.insertion_site.includes('femoral')) {
       if (days >= FEMORAL_THRESHOLDS.danger) return 'danger';
       if (days >= FEMORAL_THRESHOLDS.warning) return 'warning';
-      return 'none';
+      return 'ok';
     }
     
     const thresholds = ALERT_THRESHOLDS[access.access_type];
-    if (!thresholds) return 'none';
+    if (!thresholds || thresholds.danger === -1) return 'ok';
     
     if (days >= thresholds.danger) return 'danger';
     if (days >= thresholds.warning) return 'warning';
-    return 'none';
+    return 'ok';
+  };
+
+  const getAlertMessage = (access: VenousAccess, level: 'ok' | 'warning' | 'danger'): string | null => {
+    if (level === 'ok') return null;
+    
+    if (access.insertion_site.includes('femoral')) {
+      return FEMORAL_THRESHOLDS.message[level];
+    }
+    
+    const thresholds = ALERT_THRESHOLDS[access.access_type];
+    return thresholds?.message[level] || null;
   };
 
   const handleRemove = async (accessId: string) => {
@@ -172,8 +227,9 @@ export function VenousAccessSection({
               const lumenLabel = LUMEN_COUNTS[access.lumen_count];
               const days = getDays(access.insertion_date);
               const alertLevel = getAlertLevel(access);
+              const alertMessage = getAlertMessage(access, alertLevel);
+              const styles = ALERT_STYLES[alertLevel];
               
-              const badgeColor = typeConfig?.color || 'hsl(var(--muted-foreground))';
               const isPeripheralWithDva = hasActiveVasoactiveDrugs && access.access_type === 'periferico';
               
               return (
@@ -182,22 +238,10 @@ export function VenousAccessSection({
                     <div
                       className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-sm"
                       style={{
-                        backgroundColor: alertLevel === 'danger' 
-                          ? 'hsl(0, 72%, 51%, 0.15)' 
-                          : alertLevel === 'warning' 
-                            ? 'hsl(45, 93%, 47%, 0.15)' 
-                            : `${badgeColor}15`,
-                        borderColor: alertLevel === 'danger' 
-                          ? 'hsl(0, 72%, 51%, 0.5)' 
-                          : alertLevel === 'warning' 
-                            ? 'hsl(45, 93%, 47%, 0.5)' 
-                            : `${badgeColor}40`,
+                        backgroundColor: styles.bg,
+                        borderColor: styles.border,
                         borderWidth: '1px',
-                        color: alertLevel === 'danger' 
-                          ? 'hsl(0, 72%, 45%)' 
-                          : alertLevel === 'warning' 
-                            ? 'hsl(45, 93%, 35%)' 
-                            : badgeColor
+                        color: styles.text
                       }}
                     >
                       <span className="font-medium">{typeConfig?.shortLabel || access.access_type}</span>
@@ -209,10 +253,13 @@ export function VenousAccessSection({
                         onDateChange={(date) => handleUpdateDate(access.id, date)}
                         className="text-xs opacity-80"
                       />
-                      {alertLevel !== 'none' && (
-                        <AlertTriangle className="h-3.5 w-3.5" />
+                      {alertLevel === 'warning' && (
+                        <AlertTriangle className={`h-3.5 w-3.5 ${styles.icon}`} />
                       )}
-                      {isPeripheralWithDva && alertLevel === 'none' && (
+                      {alertLevel === 'danger' && (
+                        <AlertTriangle className={`h-3.5 w-3.5 ${styles.icon}`} />
+                      )}
+                      {isPeripheralWithDva && alertLevel === 'ok' && (
                         <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
                       )}
                       <button
@@ -228,11 +275,10 @@ export function VenousAccessSection({
                     <p className="font-medium">{typeConfig?.label}</p>
                     <p className="text-xs">{siteConfig?.label} - {lumenLabel} lúmen</p>
                     <p className="text-xs">Inserção: {new Date(access.insertion_date).toLocaleDateString('pt-BR')}</p>
-                    {alertLevel === 'warning' && (
-                      <p className="text-xs text-amber-500 mt-1">⚠️ Considerar troca</p>
-                    )}
-                    {alertLevel === 'danger' && (
-                      <p className="text-xs text-red-500 mt-1">🚨 Recomendado trocar</p>
+                    {alertMessage && (
+                      <p className={`text-xs mt-1 ${styles.icon}`}>
+                        {alertLevel === 'warning' ? '⚠️' : '🚨'} {alertMessage}
+                      </p>
                     )}
                     {isPeripheralWithDva && (
                       <p className="text-xs text-amber-500 mt-1">⚠️ DVA em uso - preferir acesso central</p>
