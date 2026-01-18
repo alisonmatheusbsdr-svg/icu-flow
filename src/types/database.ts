@@ -155,6 +155,18 @@ export interface PatientTask {
   created_at: string;
 }
 
+export interface PatientExam {
+  id: string;
+  patient_id: string;
+  exam_type: 'imagem' | 'laboratorial';
+  exam_name: string;
+  exam_date: string;
+  is_critical: boolean;
+  content: string;
+  created_by: string;
+  created_at: string;
+}
+
 // Extended types with relations
 export interface BedWithPatient extends Bed {
   patient?: PatientWithDetails | null;
@@ -165,6 +177,7 @@ export interface PatientWithDetails extends Patient {
   vasoactive_drugs?: VasoactiveDrug[];
   antibiotics?: Antibiotic[];
   therapeutic_plans?: TherapeuticPlan[];
+  patient_exams?: PatientExam[];
   evolutions?: Evolution[];
   prophylaxis?: Prophylaxis[];
   venous_access?: VenousAccess[];

@@ -3,12 +3,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Edit, Loader2, LogOut, PenLine } from 'lucide-react';
+import { ClipboardList, Edit, Loader2, LogOut, PenLine } from 'lucide-react';
 import { TherapeuticPlan } from './TherapeuticPlan';
 import { PatientClinicalData } from './PatientClinicalData';
 import { PatientEvolutions } from './PatientEvolutions';
 import { PatientDischargeDialog } from './PatientDischargeDialog';
 import { EditPatientDialog } from './EditPatientDialog';
+import { PatientExamsDialog } from './PatientExamsDialog';
 import type { PatientWithDetails, Profile } from '@/types/database';
 
 interface PatientModalProps {
@@ -25,6 +26,7 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
   const [authorProfiles, setAuthorProfiles] = useState<Record<string, Profile>>({});
   const [isDischargeDialogOpen, setIsDischargeDialogOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isExamsDialogOpen, setIsExamsDialogOpen] = useState(false);
 
   const fetchPatient = async (isRefresh = false) => {
     if (!patientId) return;
@@ -152,6 +154,15 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
                 <PenLine className="h-4 w-4" />
                 Evoluir
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsExamsDialogOpen(true)}
+                className="flex items-center gap-2"
+              >
+                <ClipboardList className="h-4 w-4" />
+                Exames
+              </Button>
               {patient.is_active && (
                 <Button
                   variant="outline"
@@ -241,6 +252,16 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
             isOpen={isEditOpen}
             onClose={() => setIsEditOpen(false)}
             onSuccess={() => fetchPatient(true)}
+          />
+        )}
+
+        {/* Exams Dialog */}
+        {patient && (
+          <PatientExamsDialog
+            patientId={patient.id}
+            isOpen={isExamsDialogOpen}
+            onClose={() => setIsExamsDialogOpen(false)}
+            onUpdate={() => fetchPatient(true)}
           />
         )}
       </DialogContent>
