@@ -10,7 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Loader2, Radiation, Microscope, AlertTriangle, Trash2, Bug, ClipboardList } from 'lucide-react';
+import { Loader2, Radiation, Microscope, AlertTriangle, Trash2, TestTube, ClipboardList } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -50,6 +50,10 @@ export function PatientExamsDialog({ patientId, isOpen, onClose, onUpdate }: Pat
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
+  // Filter state
+  const [typeFilter, setTypeFilter] = useState<ExamType | 'all'>('all');
+  const [criticalOnly, setCriticalOnly] = useState(false);
+  
   // Form state
   const [examType, setExamType] = useState<ExamType>('laboratorial');
   const [examName, setExamName] = useState('');
@@ -58,6 +62,15 @@ export function PatientExamsDialog({ patientId, isOpen, onClose, onUpdate }: Pat
   const [examDate, setExamDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [isCritical, setIsCritical] = useState(false);
   const [content, setContent] = useState('');
+
+  // Filtered exams
+  const filteredExams = exams.filter(exam => {
+    if (typeFilter !== 'all' && exam.exam_type !== typeFilter) return false;
+    if (criticalOnly && !exam.is_critical) return false;
+    return true;
+  });
+
+  const getExamCount = (type: ExamType) => exams.filter(e => e.exam_type === type).length;
 
   const fetchExams = async () => {
     setIsLoading(true);
@@ -159,7 +172,7 @@ export function PatientExamsDialog({ patientId, isOpen, onClose, onUpdate }: Pat
       case 'laboratorial':
         return <Microscope className="h-4 w-4 text-blue-500 flex-shrink-0" />;
       case 'cultura':
-        return <Bug className="h-4 w-4 text-green-500 flex-shrink-0" />;
+        return <TestTube className="h-4 w-4 text-green-500 flex-shrink-0" />;
       case 'outros':
         return <ClipboardList className="h-4 w-4 text-purple-500 flex-shrink-0" />;
     }
@@ -208,7 +221,7 @@ export function PatientExamsDialog({ patientId, isOpen, onClose, onUpdate }: Pat
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="cultura" id="cultura" />
                   <Label htmlFor="cultura" className="flex items-center gap-2 cursor-pointer">
-                    <Bug className="h-4 w-4 text-green-500" />
+                    <TestTube className="h-4 w-4 text-green-500" />
                     Cultura
                   </Label>
                 </div>
@@ -313,6 +326,68 @@ export function PatientExamsDialog({ patientId, isOpen, onClose, onUpdate }: Pat
           <div className="border-t pt-4">
             <h3 className="font-semibold text-sm text-muted-foreground mb-3">EXAMES REGISTRADOS</h3>
             
+            {/* Filters */}
+            <div className="space-y-3 mb-4">
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={typeFilter === 'all' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setTypeFilter('all')}
+                  className="h-8"
+                >
+                  Todos ({exams.length})
+                </Button>
+                <Button
+                  variant={typeFilter === 'imagem' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setTypeFilter('imagem')}
+                  className="h-8"
+                >
+                  <Radiation className="h-3 w-3 mr-1 text-orange-500" />
+                  Imagem ({getExamCount('imagem')})
+                </Button>
+                <Button
+                  variant={typeFilter === 'laboratorial' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setTypeFilter('laboratorial')}
+                  className="h-8"
+                >
+                  <Microscope className="h-3 w-3 mr-1 text-blue-500" />
+                  Lab ({getExamCount('laboratorial')})
+                </Button>
+                <Button
+                  variant={typeFilter === 'cultura' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setTypeFilter('cultura')}
+                  className="h-8"
+                >
+                  <TestTube className="h-3 w-3 mr-1 text-green-500" />
+                  Cultura ({getExamCount('cultura')})
+                </Button>
+                <Button
+                  variant={typeFilter === 'outros' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setTypeFilter('outros')}
+                  className="h-8"
+                >
+                  <ClipboardList className="h-3 w-3 mr-1 text-purple-500" />
+                  Outros ({getExamCount('outros')})
+                </Button>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="critical-filter"
+                  checked={criticalOnly}
+                  onCheckedChange={(checked) => setCriticalOnly(checked === true)}
+                />
+                <Label htmlFor="critical-filter" className="text-sm cursor-pointer flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3 text-destructive" />
+                  Apenas resultados críticos
+                </Label>
+              </div>
+            </div>
+            
             {isLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -321,9 +396,13 @@ export function PatientExamsDialog({ patientId, isOpen, onClose, onUpdate }: Pat
               <p className="text-sm text-muted-foreground text-center py-8">
                 Nenhum exame registrado
               </p>
+            ) : filteredExams.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                Nenhum exame encontrado com os filtros selecionados
+              </p>
             ) : (
               <div className="space-y-3">
-                {exams.map((exam) => (
+                {filteredExams.map((exam) => (
                   <div
                     key={exam.id}
                     className={`p-3 rounded-lg border ${
