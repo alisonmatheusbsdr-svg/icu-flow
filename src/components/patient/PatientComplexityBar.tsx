@@ -38,12 +38,18 @@ function getProbabilityConfig(probability: number) {
 // Detect absolute blockers (TOT or active DVA)
 function detectBlockers(
   respiratorySupport: RespiratorySupport | null,
-  drugs: VasoactiveDrug[] | undefined
+  drugs: VasoactiveDrug[] | undefined,
+  invasiveDevices: { device_type: string; is_active: boolean }[] | undefined
 ): { isBlocked: boolean; reasons: string[] } {
   const reasons: string[] = [];
   
-  // TOT = absolute blocker
-  if (respiratorySupport?.modality === 'tot') {
+  // TOT = absolute blocker (via respiratory support OR invasive device)
+  const hasTotInRespiratory = respiratorySupport?.modality === 'tot';
+  const hasTotDevice = invasiveDevices?.some(
+    d => d.is_active && d.device_type.toUpperCase() === 'TOT'
+  );
+  
+  if (hasTotInRespiratory || hasTotDevice) {
     reasons.push('Intubado');
   }
   
@@ -177,7 +183,7 @@ export function PatientComplexityBar({ patient, respiratorySupport, precautions 
   }
 
   // Check for absolute blockers (TOT or DVA)
-  const { isBlocked, reasons } = detectBlockers(respiratorySupport, patient.vasoactive_drugs);
+  const { isBlocked, reasons } = detectBlockers(respiratorySupport, patient.vasoactive_drugs, patient.invasive_devices);
   
   if (isBlocked) {
     const config = PROBABILITY_CONFIG.blocked;
