@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -303,16 +304,14 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
   // Get active device types
   const activeDeviceTypes = new Set(patient.invasive_devices?.map(d => d.device_type.toUpperCase()) || []);
 
-  // Get available devices (filtering out active and mutually exclusive ones)
-  const getAvailableDevices = () => {
-    return STANDARD_DEVICES.filter(device => {
-      // Already active - don't show
-      if (activeDeviceTypes.has(device)) return false;
-      // Check if mutually exclusive device is active
-      const exclusiveDevice = MUTUALLY_EXCLUSIVE_DEVICES[device];
-      if (exclusiveDevice && activeDeviceTypes.has(exclusiveDevice)) return false;
-      return true;
-    });
+  // Get available devices with their disabled status
+  const getDevicesWithStatus = () => {
+    return STANDARD_DEVICES.filter(device => !activeDeviceTypes.has(device))
+      .map(device => {
+        const exclusiveDevice = MUTUALLY_EXCLUSIVE_DEVICES[device];
+        const isDisabled = !!(exclusiveDevice && activeDeviceTypes.has(exclusiveDevice));
+        return { device, isDisabled };
+      });
   };
 
   // Get active DVA by name
@@ -592,14 +591,24 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              {getAvailableDevices().map(device => (
+              {getDevicesWithStatus().map(({ device, isDisabled }) => (
                 <DropdownMenuItem
                   key={device}
-                  onClick={() => handleAddDevice(device)}
-                  className="cursor-pointer"
+                  onClick={() => !isDisabled && handleAddDevice(device)}
+                  disabled={isDisabled}
+                  className={cn(
+                    isDisabled 
+                      ? "opacity-50 cursor-not-allowed text-gray-400" 
+                      : "cursor-pointer"
+                  )}
                 >
-                  <span className="font-medium">{device}</span>
-                  <span className="text-muted-foreground ml-2 text-xs">
+                  <span className={cn("font-medium", isDisabled && "text-gray-400")}>
+                    {device}
+                  </span>
+                  <span className={cn(
+                    "ml-2 text-xs",
+                    isDisabled ? "text-gray-300" : "text-muted-foreground"
+                  )}>
                     {DEVICE_LABELS[device]}
                   </span>
                 </DropdownMenuItem>
