@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { Check, Clock, Save } from 'lucide-react';
 import { PatientTasks } from './PatientTasks';
+import { PatientPrecautions } from './PatientPrecautions';
 import type { PatientWithDetails, Profile } from '@/types/database';
 
 interface PatientEvolutionsProps {
@@ -132,6 +133,14 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate }: Patient
         authorProfiles={authorProfiles} 
         onUpdate={onUpdate} 
       />
+
+      {/* Precautions Section */}
+      <div className="section-card">
+        <PatientPrecautions 
+          patient={patient} 
+          onUpdate={onUpdate} 
+        />
+      </div>
     </div>
   );
 }

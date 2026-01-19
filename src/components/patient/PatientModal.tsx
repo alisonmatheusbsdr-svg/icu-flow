@@ -49,7 +49,7 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
       return;
     }
 
-    const [devicesRes, drugsRes, antibioticsRes, plansRes, evolutionsRes, prophylaxisRes, venousAccessRes, respiratorySupportRes, tasksRes] = await Promise.all([
+    const [devicesRes, drugsRes, antibioticsRes, plansRes, evolutionsRes, prophylaxisRes, venousAccessRes, respiratorySupportRes, tasksRes, precautionsRes] = await Promise.all([
       supabase.from('invasive_devices').select('*').eq('patient_id', patientId).eq('is_active', true),
       supabase.from('vasoactive_drugs').select('*').eq('patient_id', patientId).eq('is_active', true),
       supabase.from('antibiotics').select('*').eq('patient_id', patientId).eq('is_active', true),
@@ -58,7 +58,8 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
       supabase.from('prophylaxis').select('*').eq('patient_id', patientId).eq('is_active', true),
       supabase.from('venous_access').select('*').eq('patient_id', patientId).eq('is_active', true),
       supabase.from('respiratory_support').select('*').eq('patient_id', patientId).eq('is_active', true).order('created_at', { ascending: false }).limit(1),
-      supabase.from('patient_tasks').select('*').eq('patient_id', patientId)
+      supabase.from('patient_tasks').select('*').eq('patient_id', patientId),
+      supabase.from('patient_precautions').select('*').eq('patient_id', patientId).eq('is_active', true)
     ]);
 
     const patientWithDetails: PatientWithDetails = {
@@ -73,7 +74,8 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
       prophylaxis: prophylaxisRes.data || [],
       venous_access: venousAccessRes.data || [],
       respiratory_support: respiratorySupportRes.data?.[0] || null,
-      patient_tasks: tasksRes.data || []
+      patient_tasks: tasksRes.data || [],
+      patient_precautions: precautionsRes.data || []
     };
 
     setPatient(patientWithDetails);
