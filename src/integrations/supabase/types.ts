@@ -187,6 +187,47 @@ export type Database = {
         }
         Relationships: []
       }
+      patient_precautions: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          is_active: boolean
+          notes: string | null
+          patient_id: string
+          precaution_type: string
+          risk_level: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          patient_id: string
+          precaution_type: string
+          risk_level?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          patient_id?: string
+          precaution_type?: string
+          risk_level?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "patient_precautions_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       patient_tasks: {
         Row: {
           completed_at: string | null

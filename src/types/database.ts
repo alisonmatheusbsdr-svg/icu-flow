@@ -155,6 +155,17 @@ export interface PatientTask {
   created_at: string;
 }
 
+export interface PatientPrecaution {
+  id: string;
+  patient_id: string;
+  precaution_type: string;
+  risk_level: string | null;
+  is_active: boolean;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+}
+
 export interface PatientExam {
   id: string;
   patient_id: string;
@@ -183,6 +194,7 @@ export interface PatientWithDetails extends Patient {
   venous_access?: VenousAccess[];
   respiratory_support?: RespiratorySupport | null;
   patient_tasks?: PatientTask[];
+  patient_precautions?: PatientPrecaution[];
 }
 export interface ProfileWithRole extends Profile {
   user_roles?: UserRole[];
