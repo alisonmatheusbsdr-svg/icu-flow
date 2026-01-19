@@ -78,7 +78,7 @@ const DEVICE_THRESHOLDS: Record<string, {
     }
   },
   'TOT': { 
-    ok: 10, 
+    ok: 7,
     warning: 14, 
     danger: 15,
     message: { 
