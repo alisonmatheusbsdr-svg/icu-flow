@@ -70,6 +70,8 @@ export interface VasoactiveDrug {
   patient_id: string;
   drug_name: string;
   dose_ml_h: number;
+  concentration_ug_ml: number | null;
+  start_date: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
