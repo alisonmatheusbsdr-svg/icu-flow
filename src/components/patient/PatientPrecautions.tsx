@@ -4,21 +4,20 @@ import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { PatientWithDetails } from '@/types/database';
-import { AlertTriangle, Plus, X, ChevronRight } from 'lucide-react';
+import { AlertTriangle, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
-} from '@/components/ui/dropdown-menu';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 interface PatientPrecautionsProps {
   patient: PatientWithDetails;
@@ -94,12 +93,12 @@ const getBadgeStyle = (type: string, level?: string | null) => {
 const getLevelBadgeStyle = (level: string) => {
   switch (level) {
     case 'baixo':
-      return 'bg-green-100 text-green-800';
+      return 'bg-green-100 text-green-800 border-green-200';
     case 'medio':
-      return 'bg-yellow-100 text-yellow-800';
+      return 'bg-yellow-100 text-yellow-800 border-yellow-200';
     case 'alto':
     case 'muito_alto':
-      return 'bg-red-100 text-red-800';
+      return 'bg-red-100 text-red-800 border-red-200';
     default:
       return 'bg-muted text-muted-foreground';
   }
@@ -127,7 +126,7 @@ const getPrecautionLabel = (type: string, level?: string | null, notes?: string 
 export const PatientPrecautions = ({ patient, onUpdate }: PatientPrecautionsProps) => {
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [pendingSelections, setPendingSelections] = useState<PendingPrecaution[]>([]);
   const [otherText, setOtherText] = useState('');
 
@@ -135,14 +134,6 @@ export const PatientPrecautions = ({ patient, onUpdate }: PatientPrecautionsProp
 
   const getPrecautionByType = (type: string) => {
     return activePrecautions.find(p => p.precaution_type === type);
-  };
-
-  const isPendingSelected = (type: string, level?: string) => {
-    return pendingSelections.some(p => p.type === type && (!level || p.level === level));
-  };
-
-  const isActiveOrPending = (type: string) => {
-    return !!getPrecautionByType(type) || pendingSelections.some(p => p.type === type);
   };
 
   const togglePendingSelection = (type: string, level?: string) => {
@@ -180,6 +171,12 @@ export const PatientPrecautions = ({ patient, onUpdate }: PatientPrecautionsProp
     setOtherText('');
   };
 
+  const removeOtherFromPending = (notes: string) => {
+    setPendingSelections(prev => 
+      prev.filter(p => !(p.type === 'OUTROS' && p.notes === notes))
+    );
+  };
+
   const handleSaveBatch = async () => {
     if (!user || pendingSelections.length === 0) return;
     setIsLoading(true);
@@ -198,7 +195,7 @@ export const PatientPrecautions = ({ patient, onUpdate }: PatientPrecautionsProp
       if (error) throw error;
 
       setPendingSelections([]);
-      setDropdownOpen(false);
+      setDialogOpen(false);
       onUpdate();
       toast.success(`${inserts.length} ${inserts.length === 1 ? 'precaução adicionada' : 'precauções adicionadas'}`);
     } catch (error) {
@@ -223,9 +220,17 @@ export const PatientPrecautions = ({ patient, onUpdate }: PatientPrecautionsProp
     }
   };
 
+  const handleOpenChange = (open: boolean) => {
+    setDialogOpen(open);
+    if (!open) {
+      setPendingSelections([]);
+      setOtherText('');
+    }
+  };
+
   return (
     <div className={cn("space-y-3", isLoading && "opacity-50 pointer-events-none")}>
-      {/* Header with dropdown */}
+      {/* Header with dialog trigger */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 text-amber-500" />
@@ -234,201 +239,212 @@ export const PatientPrecautions = ({ patient, onUpdate }: PatientPrecautionsProp
           </h3>
         </div>
 
-        <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
-          <DropdownMenuTrigger asChild>
+        <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
+          <DialogTrigger asChild>
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
               <Plus className="h-4 w-4" />
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-72" align="end">
-            {/* Leveled Risks */}
-            <DropdownMenuLabel className="text-xs text-muted-foreground">
-              Riscos com Níveis
-            </DropdownMenuLabel>
-            {LEVELED_PRECAUTIONS.map(({ type, label, icon }) => {
-              const isActive = !!getPrecautionByType(type);
-              const pendingLevel = pendingSelections.find(p => p.type === type)?.level;
-              
-              return (
-                <DropdownMenuSub key={type}>
-                  <DropdownMenuSubTrigger 
-                    className={cn(
-                      "gap-2",
-                      isActive && "opacity-50"
-                    )}
-                    disabled={isActive}
-                  >
-                    <span>{icon}</span>
-                    <span className="flex-1">{label}</span>
-                    {pendingLevel && (
-                      <span className={cn("px-1.5 py-0.5 rounded text-xs", getLevelBadgeStyle(pendingLevel))}>
-                        {RISK_LEVELS.find(l => l.value === pendingLevel)?.label}
-                      </span>
-                    )}
-                    {isActive && <span className="text-xs text-muted-foreground">(ativo)</span>}
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    {RISK_LEVELS.map(({ value, label: levelLabel }) => (
-                      <DropdownMenuItem
-                        key={value}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          togglePendingSelection(type, value);
-                        }}
-                        className="gap-2"
+          </DialogTrigger>
+          <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Adicionar Precauções</DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-6 py-4">
+              {/* Leveled Risks */}
+              <div className="space-y-3">
+                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Riscos com Níveis
+                </Label>
+                <div className="space-y-3">
+                  {LEVELED_PRECAUTIONS.map(({ type, label, icon }) => {
+                    const isActive = !!getPrecautionByType(type);
+                    const selectedLevel = pendingSelections.find(p => p.type === type)?.level || '';
+                    
+                    return (
+                      <div 
+                        key={type} 
+                        className={cn(
+                          "p-3 border rounded-lg space-y-2",
+                          isActive && "opacity-50 bg-muted"
+                        )}
+                      >
+                        <div className="flex items-center justify-between">
+                          <Label className="flex items-center gap-2 font-medium">
+                            <span>{icon}</span> {label}
+                          </Label>
+                          {isActive && (
+                            <span className="text-xs text-muted-foreground">(já ativo)</span>
+                          )}
+                        </div>
+                        {!isActive && (
+                          <RadioGroup 
+                            value={selectedLevel}
+                            onValueChange={(value) => togglePendingSelection(type, value)}
+                            className="flex flex-wrap gap-2"
+                          >
+                            {RISK_LEVELS.map(({ value, label: levelLabel }) => (
+                              <div key={value} className="flex items-center gap-1.5">
+                                <RadioGroupItem value={value} id={`${type}-${value}`} />
+                                <Label 
+                                  htmlFor={`${type}-${value}`} 
+                                  className={cn(
+                                    "cursor-pointer px-2 py-0.5 rounded text-xs border transition-colors",
+                                    selectedLevel === value 
+                                      ? getLevelBadgeStyle(value)
+                                      : "bg-background hover:bg-muted"
+                                  )}
+                                >
+                                  {levelLabel}
+                                </Label>
+                              </div>
+                            ))}
+                          </RadioGroup>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Binary Risks */}
+              <div className="space-y-3">
+                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Riscos
+                </Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {BINARY_RISKS.map(({ type, label }) => {
+                    const isActive = !!getPrecautionByType(type);
+                    const isPending = pendingSelections.some(p => p.type === type);
+                    
+                    return (
+                      <div 
+                        key={type} 
+                        className={cn(
+                          "flex items-center gap-2 p-2 border rounded-lg cursor-pointer transition-colors",
+                          isActive && "opacity-50 cursor-not-allowed bg-muted",
+                          isPending && !isActive && "border-amber-300 bg-amber-50"
+                        )}
+                        onClick={() => !isActive && toggleBinaryPending(type)}
                       >
                         <Checkbox 
-                          checked={isPendingSelected(type, value)} 
+                          checked={isPending} 
+                          disabled={isActive}
                           className="pointer-events-none"
                         />
-                        <span className={cn("px-2 py-0.5 rounded text-xs flex-1", getLevelBadgeStyle(value))}>
-                          {levelLabel}
-                        </span>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-              );
-            })}
-
-            <DropdownMenuSeparator />
-
-            {/* Binary Risks */}
-            <DropdownMenuLabel className="text-xs text-muted-foreground">
-              Riscos
-            </DropdownMenuLabel>
-            {BINARY_RISKS.map(({ type, label }) => {
-              const isActive = !!getPrecautionByType(type);
-              const isPending = pendingSelections.some(p => p.type === type);
-              
-              return (
-                <DropdownMenuItem
-                  key={type}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (!isActive) toggleBinaryPending(type);
-                  }}
-                  className={cn("gap-2", isActive && "opacity-50")}
-                  disabled={isActive}
-                >
-                  <Checkbox 
-                    checked={isPending} 
-                    className="pointer-events-none"
-                  />
-                  <span className="flex-1">{label}</span>
-                  {isActive && <span className="text-xs text-muted-foreground">(ativo)</span>}
-                </DropdownMenuItem>
-              );
-            })}
-
-            <DropdownMenuSeparator />
-
-            {/* Isolation Precautions */}
-            <DropdownMenuLabel className="text-xs text-muted-foreground">
-              Isolamento / Contato
-            </DropdownMenuLabel>
-            {ISOLATION_PRECAUTIONS.map(({ type, label }) => {
-              const isActive = !!getPrecautionByType(type);
-              const isPending = pendingSelections.some(p => p.type === type);
-              
-              return (
-                <DropdownMenuItem
-                  key={type}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (!isActive) toggleBinaryPending(type);
-                  }}
-                  className={cn("gap-2", isActive && "opacity-50")}
-                  disabled={isActive}
-                >
-                  <Checkbox 
-                    checked={isPending} 
-                    className="pointer-events-none"
-                  />
-                  <span className="flex-1">{label}</span>
-                  {isActive && <span className="text-xs text-muted-foreground">(ativo)</span>}
-                </DropdownMenuItem>
-              );
-            })}
-
-            <DropdownMenuSeparator />
-
-            {/* Other input */}
-            <div className="p-2">
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Outro..."
-                  value={otherText}
-                  onChange={(e) => setOtherText(e.target.value)}
-                  className="h-8 text-sm"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      addOtherToPending();
-                    }
-                  }}
-                />
-                <Button 
-                  size="sm" 
-                  variant="outline"
-                  className="h-8 px-2"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    addOtherToPending();
-                  }}
-                  disabled={!otherText.trim()}
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-              {/* Show pending "outros" */}
-              {pendingSelections.filter(p => p.type === 'OUTROS').length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {pendingSelections
-                    .filter(p => p.type === 'OUTROS')
-                    .map((p, idx) => (
-                      <span
-                        key={idx}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-muted rounded text-xs"
-                      >
-                        {p.notes}
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            setPendingSelections(prev => 
-                              prev.filter((_, i) => !(prev[i].type === 'OUTROS' && prev[i].notes === p.notes))
-                            );
-                          }}
-                          className="hover:text-destructive"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </span>
-                    ))}
+                        <Label className={cn("cursor-pointer text-sm", isActive && "cursor-not-allowed")}>
+                          {label}
+                        </Label>
+                        {isActive && (
+                          <span className="text-xs text-muted-foreground ml-auto">(ativo)</span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              )}
-            </div>
+              </div>
 
-            {/* Save button */}
-            {pendingSelections.length > 0 && (
-              <>
-                <DropdownMenuSeparator />
-                <div className="p-2">
-                  <Button 
-                    className="w-full" 
-                    size="sm"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleSaveBatch();
+              {/* Isolation Precautions */}
+              <div className="space-y-3">
+                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Isolamento / Contato
+                </Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {ISOLATION_PRECAUTIONS.map(({ type, label }) => {
+                    const isActive = !!getPrecautionByType(type);
+                    const isPending = pendingSelections.some(p => p.type === type);
+                    
+                    return (
+                      <div 
+                        key={type} 
+                        className={cn(
+                          "flex items-center gap-2 p-2 border rounded-lg cursor-pointer transition-colors",
+                          isActive && "opacity-50 cursor-not-allowed bg-muted",
+                          isPending && !isActive && "border-purple-300 bg-purple-50"
+                        )}
+                        onClick={() => !isActive && toggleBinaryPending(type)}
+                      >
+                        <Checkbox 
+                          checked={isPending} 
+                          disabled={isActive}
+                          className="pointer-events-none"
+                        />
+                        <Label className={cn("cursor-pointer text-sm", isActive && "cursor-not-allowed")}>
+                          {label}
+                        </Label>
+                        {isActive && (
+                          <span className="text-xs text-muted-foreground ml-auto">(ativo)</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Other input */}
+              <div className="space-y-3">
+                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Outros
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Adicionar outra precaução..."
+                    value={otherText}
+                    onChange={(e) => setOtherText(e.target.value)}
+                    className="text-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addOtherToPending();
+                      }
                     }}
+                  />
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={addOtherToPending}
+                    disabled={!otherText.trim()}
                   >
-                    Salvar ({pendingSelections.length} {pendingSelections.length === 1 ? 'item' : 'itens'})
+                    <Plus className="h-4 w-4" />
                   </Button>
                 </div>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+                {/* Show pending "outros" */}
+                {pendingSelections.filter(p => p.type === 'OUTROS').length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {pendingSelections
+                      .filter(p => p.type === 'OUTROS')
+                      .map((p, idx) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-muted rounded-md text-sm"
+                        >
+                          {p.notes}
+                          <button
+                            onClick={() => removeOtherFromPending(p.notes!)}
+                            className="hover:text-destructive transition-colors"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </span>
+                      ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => handleOpenChange(false)}>
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handleSaveBatch}
+                disabled={pendingSelections.length === 0 || isLoading}
+              >
+                Salvar ({pendingSelections.length} {pendingSelections.length === 1 ? 'item' : 'itens'})
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Active precautions as badges */}
