@@ -10,7 +10,8 @@ import { PatientEvolutions } from './PatientEvolutions';
 import { PatientDischargeDialog } from './PatientDischargeDialog';
 import { EditPatientDialog } from './EditPatientDialog';
 import { PatientExamsDialog } from './PatientExamsDialog';
-import type { PatientWithDetails, Profile } from '@/types/database';
+import { PatientComplexityBar } from './PatientComplexityBar';
+import type { PatientWithDetails, Profile, RespiratorySupport, PatientPrecaution } from '@/types/database';
 
 interface PatientModalProps {
   patientId: string | null;
@@ -196,6 +197,15 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
                 <Badge className="badge-pal">PAL</Badge>
               )}
             </div>
+          )}
+
+          {/* Complexity Bar */}
+          {patient && (
+            <PatientComplexityBar 
+              patient={patient}
+              respiratorySupport={patient.respiratory_support as RespiratorySupport | null}
+              precautions={(patient.patient_precautions as PatientPrecaution[]) || []}
+            />
           )}
         </div>
 
