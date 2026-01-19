@@ -42,6 +42,12 @@ const DEVICE_LABELS: Record<string, string> = {
 
 const STANDARD_DEVICES = Object.keys(DEVICE_LABELS);
 
+// Mutually exclusive devices - adding one removes the other
+const MUTUALLY_EXCLUSIVE_DEVICES: Record<string, string> = {
+  'TOT': 'TQT',
+  'TQT': 'TOT'
+};
+
 // Device alert thresholds (in days) with messages
 // ok: green, warning: yellow, danger: red
 const DEVICE_THRESHOLDS: Record<string, { 
@@ -297,6 +303,18 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
   // Get active device types
   const activeDeviceTypes = new Set(patient.invasive_devices?.map(d => d.device_type.toUpperCase()) || []);
 
+  // Get available devices (filtering out active and mutually exclusive ones)
+  const getAvailableDevices = () => {
+    return STANDARD_DEVICES.filter(device => {
+      // Already active - don't show
+      if (activeDeviceTypes.has(device)) return false;
+      // Check if mutually exclusive device is active
+      const exclusiveDevice = MUTUALLY_EXCLUSIVE_DEVICES[device];
+      if (exclusiveDevice && activeDeviceTypes.has(exclusiveDevice)) return false;
+      return true;
+    });
+  };
+
   // Get active DVA by name
   const getDvaByName = (name: string) => {
     return patient.vasoactive_drugs?.find(d => 
@@ -308,9 +326,27 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
   const handleAddDevice = async (deviceType: string) => {
     if (!deviceType.trim()) return;
     setIsLoading(true);
+    
+    const normalizedType = deviceType.toUpperCase();
+    
+    // Check for mutually exclusive device and remove it
+    const exclusiveDevice = MUTUALLY_EXCLUSIVE_DEVICES[normalizedType];
+    if (exclusiveDevice) {
+      const existingExclusive = patient.invasive_devices?.find(
+        d => d.device_type.toUpperCase() === exclusiveDevice && d.is_active !== false
+      );
+      if (existingExclusive) {
+        await supabase
+          .from('invasive_devices')
+          .update({ is_active: false })
+          .eq('id', existingExclusive.id);
+        toast.info(`${exclusiveDevice} removido automaticamente`);
+      }
+    }
+    
     const { error } = await supabase.from('invasive_devices').insert({
       patient_id: patient.id,
-      device_type: deviceType.toUpperCase(),
+      device_type: normalizedType,
       insertion_date: new Date().toISOString().split('T')[0]
     });
     if (error) toast.error('Erro ao adicionar dispositivo');
@@ -556,7 +592,7 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              {STANDARD_DEVICES.filter(device => !activeDeviceTypes.has(device)).map(device => (
+              {getAvailableDevices().map(device => (
                 <DropdownMenuItem
                   key={device}
                   onClick={() => handleAddDevice(device)}
