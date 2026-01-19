@@ -18,6 +18,11 @@ import {
   DialogTrigger,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 
 interface PatientPrecautionsProps {
   patient: PatientWithDetails;
@@ -129,6 +134,7 @@ export const PatientPrecautions = ({ patient, onUpdate }: PatientPrecautionsProp
   const [dialogOpen, setDialogOpen] = useState(false);
   const [pendingSelections, setPendingSelections] = useState<PendingPrecaution[]>([]);
   const [otherText, setOtherText] = useState('');
+  const [editingPrecautionId, setEditingPrecautionId] = useState<string | null>(null);
 
   const activePrecautions = patient.patient_precautions?.filter(p => p.is_active) || [];
 
@@ -218,6 +224,30 @@ export const PatientPrecautions = ({ patient, onUpdate }: PatientPrecautionsProp
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleUpdateRiskLevel = async (id: string, newLevel: string) => {
+    setIsLoading(true);
+    try {
+      const { error } = await supabase
+        .from('patient_precautions')
+        .update({ risk_level: newLevel })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setEditingPrecautionId(null);
+      onUpdate();
+      toast.success('Nível de risco atualizado');
+    } catch (error) {
+      toast.error('Erro ao atualizar nível de risco');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const isLeveledPrecaution = (type: string) => {
+    return LEVELED_PRECAUTIONS.some(p => p.type === type);
   };
 
   const handleOpenChange = (open: boolean) => {
@@ -450,23 +480,69 @@ export const PatientPrecautions = ({ patient, onUpdate }: PatientPrecautionsProp
       {/* Active precautions as badges */}
       {activePrecautions.length > 0 ? (
         <div className="flex flex-wrap gap-2">
-          {activePrecautions.map((precaution) => (
-            <div
-              key={precaution.id}
-              className={cn(
-                "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-sm font-medium transition-colors",
-                getBadgeStyle(precaution.precaution_type, precaution.risk_level)
-              )}
-            >
-              <span>{getPrecautionLabel(precaution.precaution_type, precaution.risk_level, precaution.notes)}</span>
-              <button
-                onClick={() => handleRemovePrecaution(precaution.id)}
-                className="hover:text-destructive transition-colors"
+          {activePrecautions.map((precaution) => {
+            const canEditLevel = isLeveledPrecaution(precaution.precaution_type);
+            
+            return (
+              <div
+                key={precaution.id}
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-sm font-medium transition-colors",
+                  getBadgeStyle(precaution.precaution_type, precaution.risk_level)
+                )}
               >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
+                {canEditLevel ? (
+                  <Popover 
+                    open={editingPrecautionId === precaution.id} 
+                    onOpenChange={(open) => setEditingPrecautionId(open ? precaution.id : null)}
+                  >
+                    <PopoverTrigger asChild>
+                      <button className="hover:underline cursor-pointer">
+                        {getPrecautionLabel(precaution.precaution_type, precaution.risk_level, precaution.notes)}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-3" align="start">
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Alterar nível de risco
+                        </Label>
+                        <RadioGroup 
+                          value={precaution.risk_level || ''}
+                          onValueChange={(value) => handleUpdateRiskLevel(precaution.id, value)}
+                          className="flex flex-wrap gap-2"
+                        >
+                          {RISK_LEVELS.map(({ value, label }) => (
+                            <div key={value} className="flex items-center gap-1.5">
+                              <RadioGroupItem value={value} id={`edit-${precaution.id}-${value}`} />
+                              <Label 
+                                htmlFor={`edit-${precaution.id}-${value}`} 
+                                className={cn(
+                                  "cursor-pointer px-2 py-0.5 rounded text-xs border transition-colors",
+                                  precaution.risk_level === value 
+                                    ? getLevelBadgeStyle(value)
+                                    : "bg-background hover:bg-muted"
+                                )}
+                              >
+                                {label}
+                              </Label>
+                            </div>
+                          ))}
+                        </RadioGroup>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  <span>{getPrecautionLabel(precaution.precaution_type, precaution.risk_level, precaution.notes)}</span>
+                )}
+                <button
+                  onClick={() => handleRemovePrecaution(precaution.id)}
+                  className="hover:text-destructive transition-colors"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            );
+          })}
         </div>
       ) : (
         <p className="text-sm text-muted-foreground italic">Nenhuma precaução registrada</p>
