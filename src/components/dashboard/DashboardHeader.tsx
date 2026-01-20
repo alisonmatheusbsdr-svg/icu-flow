@@ -1,16 +1,32 @@
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useUnit } from '@/hooks/useUnit';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Activity, LogOut, Settings, Printer, Home, Lock } from 'lucide-react';
+import { Activity, LogOut, Settings, Printer, Home, Lock, Clock } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+
+function formatDuration(startedAt: string): string {
+  const start = new Date(startedAt).getTime();
+  const now = Date.now();
+  const diffMs = now - start;
+  
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+  
+  if (hours > 0) {
+    return `${hours}h ${minutes}min`;
+  }
+  return `${minutes}min`;
+}
 
 export function DashboardHeader() {
   const navigate = useNavigate();
   const location = useLocation();
   const { profile, roles, signOut, hasRole } = useAuth();
   const { units, selectedUnit, selectUnit, canSwitchUnits, activeSession } = useUnit();
+  const [sessionDuration, setSessionDuration] = useState<string>('');
   
   const isOnAdmin = location.pathname === '/admin';
 
@@ -20,6 +36,24 @@ export function DashboardHeader() {
     plantonista: 'Plantonista',
     coordenador: 'Coordenador'
   };
+
+  // Update session duration every minute
+  useEffect(() => {
+    if (!activeSession?.started_at) {
+      setSessionDuration('');
+      return;
+    }
+
+    // Initial update
+    setSessionDuration(formatDuration(activeSession.started_at));
+
+    // Update every minute
+    const interval = setInterval(() => {
+      setSessionDuration(formatDuration(activeSession.started_at));
+    }, 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [activeSession?.started_at]);
 
   const handleLogout = async () => {
     await signOut();
@@ -62,6 +96,14 @@ export function DashboardHeader() {
                 {selectedUnit.name}
               </Badge>
             )
+          )}
+
+          {/* Session duration indicator */}
+          {activeSession && sessionDuration && (
+            <Badge variant="outline" className="gap-1.5 px-2.5 py-1 text-xs font-normal text-muted-foreground">
+              <Clock className="h-3 w-3" />
+              {sessionDuration}
+            </Badge>
           )}
         </div>
 
