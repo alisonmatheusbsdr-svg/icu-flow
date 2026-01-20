@@ -13,7 +13,7 @@ import type { AppRole } from '@/types/database';
 
 export default function Auth() {
   const navigate = useNavigate();
-  const { signIn, signUp, user } = useAuth();
+  const { signIn, signUp, user, hasRole, rolesLoaded } = useAuth();
   
   const [isLoading, setIsLoading] = useState(false);
   
@@ -29,8 +29,12 @@ export default function Auth() {
   const [signupRole, setSignupRole] = useState<AppRole>('plantonista');
 
   // Redirect if already logged in
-  if (user) {
-    navigate('/dashboard');
+  if (user && rolesLoaded) {
+    if (hasRole('admin')) {
+      navigate('/admin');
+    } else {
+      navigate('/dashboard');
+    }
     return null;
   }
 
@@ -51,10 +55,8 @@ export default function Auth() {
       } else {
         toast.error('Erro ao fazer login: ' + error.message);
       }
-    } else {
-      toast.success('Login realizado com sucesso!');
-      navigate('/dashboard');
     }
+    // Navigation is handled by the redirect logic above after auth state changes
   };
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -81,7 +83,7 @@ export default function Auth() {
       }
     } else {
       toast.success('Conta criada! Aguarde aprovação do administrador.');
-      navigate('/dashboard');
+      // Navigation will be handled by redirect logic after auth state changes
     }
   };
 
