@@ -9,14 +9,23 @@ import { Loader2 } from 'lucide-react';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { user, isLoading: authLoading, isApproved, profile } = useAuth();
-  const { selectedUnit, isLoading: unitLoading } = useUnit();
+  const { user, isLoading: authLoading, isApproved, profile, hasRole } = useAuth();
+  const { selectedUnit, isLoading: unitLoading, activeSession, canSwitchUnits } = useUnit();
+
+  // Check if user needs to select a unit first (plantonistas without active session)
+  const needsUnitSelection = !activeSession && !canSwitchUnits;
 
   useEffect(() => {
     if (!authLoading && !user) {
       navigate('/auth');
+      return;
     }
-  }, [user, authLoading, navigate]);
+
+    // Redirect plantonistas without active session to unit selection
+    if (!authLoading && !unitLoading && isApproved && needsUnitSelection) {
+      navigate('/select-unit');
+    }
+  }, [user, authLoading, unitLoading, isApproved, needsUnitSelection, navigate]);
 
   if (authLoading || unitLoading) {
     return (
@@ -36,6 +45,11 @@ export default function Dashboard() {
   // Show pending approval screen
   if (!isApproved) {
     return <PendingApproval profile={profile} />;
+  }
+
+  // Redirect plantonistas to unit selection
+  if (needsUnitSelection) {
+    return null;
   }
 
   return (
