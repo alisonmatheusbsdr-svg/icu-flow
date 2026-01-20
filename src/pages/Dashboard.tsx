@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useUnit } from '@/hooks/useUnit';
@@ -7,13 +7,40 @@ import { BedGrid } from '@/components/dashboard/BedGrid';
 import { PendingApproval } from '@/components/dashboard/PendingApproval';
 import { Loader2 } from 'lucide-react';
 
+const ACTIVITY_DEBOUNCE_MS = 60 * 1000; // 1 minute debounce
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user, isLoading: authLoading, isApproved, profile, hasRole } = useAuth();
-  const { selectedUnit, isLoading: unitLoading, activeSession, canSwitchUnits } = useUnit();
+  const { selectedUnit, isLoading: unitLoading, activeSession, canSwitchUnits, updateActivity } = useUnit();
+  const lastActivityUpdate = useRef<number>(0);
 
   // Check if user needs to select a unit first (plantonistas without active session)
   const needsUnitSelection = !activeSession && !canSwitchUnits;
+
+  // Debounced activity handler
+  const handleUserActivity = useCallback(() => {
+    const now = Date.now();
+    if (now - lastActivityUpdate.current >= ACTIVITY_DEBOUNCE_MS) {
+      lastActivityUpdate.current = now;
+      updateActivity();
+    }
+  }, [updateActivity]);
+
+  // Listen for user activity to reset inactivity countdown
+  useEffect(() => {
+    if (!activeSession) return;
+
+    window.addEventListener('click', handleUserActivity);
+    window.addEventListener('keypress', handleUserActivity);
+    window.addEventListener('scroll', handleUserActivity);
+
+    return () => {
+      window.removeEventListener('click', handleUserActivity);
+      window.removeEventListener('keypress', handleUserActivity);
+      window.removeEventListener('scroll', handleUserActivity);
+    };
+  }, [activeSession, handleUserActivity]);
 
   useEffect(() => {
     if (!authLoading && !user) {
