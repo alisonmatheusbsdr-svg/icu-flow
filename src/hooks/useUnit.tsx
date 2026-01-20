@@ -37,14 +37,15 @@ const HEARTBEAT_INTERVAL = 5 * 60 * 1000; // 5 minutes
 const PRIVILEGED_ROLES = ['admin', 'coordenador', 'diarista'];
 
 export function UnitProvider({ children }: { children: ReactNode }) {
-  const { user, isApproved, roles } = useAuth();
+  const { user, isApproved, roles, rolesLoaded } = useAuth();
   const [units, setUnits] = useState<Unit[]>([]);
   const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null);
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Check if user has privileged role (can switch units, doesn't block)
-  const canSwitchUnits = roles.some(r => PRIVILEGED_ROLES.includes(r));
+  // Only evaluate after roles are loaded to prevent incorrect defaults
+  const canSwitchUnits = rolesLoaded && roles.some(r => PRIVILEGED_ROLES.includes(r));
   const isSessionBlocking = activeSession?.is_blocking ?? false;
 
   // Fetch units
@@ -236,7 +237,7 @@ export function UnitProvider({ children }: { children: ReactNode }) {
     <UnitContext.Provider value={{
       units,
       selectedUnit,
-      isLoading,
+      isLoading: isLoading || !rolesLoaded,
       activeSession,
       isSessionBlocking,
       canSwitchUnits,
