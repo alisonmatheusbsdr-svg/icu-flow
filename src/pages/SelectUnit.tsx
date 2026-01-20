@@ -42,10 +42,17 @@ export default function SelectUnit() {
       return;
     }
 
+    // Redirect to dashboard if has active session
     if (!authLoading && !unitsLoading && activeSession) {
       navigate('/dashboard');
+      return;
     }
-  }, [user, authLoading, unitsLoading, activeSession, navigate]);
+
+    // Privileged users can go directly to dashboard without selecting a unit
+    if (!authLoading && !unitsLoading && canBypassSelection && !activeSession) {
+      navigate('/dashboard');
+    }
+  }, [user, authLoading, unitsLoading, activeSession, canBypassSelection, navigate]);
 
   // Fetch unit occupancy status
   useEffect(() => {

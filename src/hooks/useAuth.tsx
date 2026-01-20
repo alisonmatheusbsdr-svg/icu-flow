@@ -18,6 +18,7 @@ interface AuthContextType {
   profile: Profile | null;
   roles: AppRole[];
   isLoading: boolean;
+  rolesLoaded: boolean;
   isApproved: boolean;
   hasRole: (role: AppRole) => boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
@@ -34,6 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [rolesLoaded, setRolesLoaded] = useState(false);
 
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase
@@ -48,6 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const fetchRoles = async (userId: string) => {
+    setRolesLoaded(false);
     const { data, error } = await supabase
       .from('user_roles')
       .select('role')
@@ -56,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!error && data) {
       setRoles(data.map(r => r.role as AppRole));
     }
+    setRolesLoaded(true);
   };
 
   const refreshProfile = async () => {
@@ -80,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setProfile(null);
           setRoles([]);
+          setRolesLoaded(true);
         }
       }
     );
@@ -95,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           fetchRoles(session.user.id)
         ]).finally(() => setIsLoading(false));
       } else {
+        setRolesLoaded(true);
         setIsLoading(false);
       }
     });
@@ -139,6 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
     setProfile(null);
     setRoles([]);
+    setRolesLoaded(false);
   };
 
   const hasRole = (role: AppRole) => roles.includes(role);
@@ -151,6 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       roles,
       isLoading,
+      rolesLoaded,
       isApproved,
       hasRole,
       signIn,
