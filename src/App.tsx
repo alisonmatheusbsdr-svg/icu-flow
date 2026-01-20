@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { UnitProvider } from "@/hooks/useUnit";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
+import SelectUnit from "./pages/SelectUnit";
 import Admin from "./pages/Admin";
 import PatientDetails from "./pages/PatientDetails";
 import NotFound from "./pages/NotFound";
@@ -24,6 +25,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Auth />} />
               <Route path="/auth" element={<Auth />} />
+              <Route path="/select-unit" element={<SelectUnit />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/admin" element={<Admin />} />
               <Route path="/patient/:patientId" element={<PatientDetails />} />

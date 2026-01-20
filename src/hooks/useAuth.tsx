@@ -131,6 +131,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    // Clear active session before signing out
+    if (user) {
+      await supabase.from('active_sessions').delete().eq('user_id', user.id);
+    }
+    
     await supabase.auth.signOut();
     setProfile(null);
     setRoles([]);

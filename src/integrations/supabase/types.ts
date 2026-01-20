@@ -14,6 +14,44 @@ export type Database = {
   }
   public: {
     Tables: {
+      active_sessions: {
+        Row: {
+          created_at: string
+          id: string
+          is_blocking: boolean
+          last_activity: string
+          started_at: string
+          unit_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_blocking?: boolean
+          last_activity?: string
+          started_at?: string
+          unit_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_blocking?: boolean
+          last_activity?: string
+          started_at?: string
+          unit_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "active_sessions_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       antibiotics: {
         Row: {
           antibiotic_name: string
@@ -675,6 +713,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cleanup_expired_sessions: { Args: never; Returns: undefined }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -687,6 +726,7 @@ export type Database = {
         Returns: boolean
       }
       is_approved: { Args: { _user_id: string }; Returns: boolean }
+      is_unit_available: { Args: { _unit_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "diarista" | "plantonista" | "coordenador"

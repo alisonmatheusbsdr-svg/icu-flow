@@ -2,14 +2,15 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUnit } from '@/hooks/useUnit';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Activity, LogOut, Settings, Printer, Home } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Activity, LogOut, Settings, Printer, Home, Lock } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 export function DashboardHeader() {
   const navigate = useNavigate();
   const location = useLocation();
   const { profile, roles, signOut, hasRole } = useAuth();
-  const { units, selectedUnit, selectUnit } = useUnit();
+  const { units, selectedUnit, selectUnit, canSwitchUnits, activeSession } = useUnit();
   
   const isOnAdmin = location.pathname === '/admin';
 
@@ -18,6 +19,11 @@ export function DashboardHeader() {
     diarista: 'Diarista',
     plantonista: 'Plantonista',
     coordenador: 'Coordenador'
+  };
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/auth');
   };
 
   return (
@@ -34,20 +40,28 @@ export function DashboardHeader() {
             <span className="font-semibold text-foreground">UTI Handoff Pro</span>
           </button>
 
+          {/* Show dropdown for privileged users, fixed badge for plantonistas */}
           {units.length > 0 && (
-            <Select value={selectedUnit?.id} onValueChange={(id) => {
-              const unit = units.find(u => u.id === id);
-              if (unit) selectUnit(unit);
-            }}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Selecione a UTI" />
-              </SelectTrigger>
-              <SelectContent>
-                {units.map(unit => (
-                  <SelectItem key={unit.id} value={unit.id}>{unit.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            canSwitchUnits ? (
+              <Select value={selectedUnit?.id} onValueChange={(id) => {
+                const unit = units.find(u => u.id === id);
+                if (unit) selectUnit(unit);
+              }}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Selecione a UTI" />
+                </SelectTrigger>
+                <SelectContent>
+                  {units.map(unit => (
+                    <SelectItem key={unit.id} value={unit.id}>{unit.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : selectedUnit && (
+              <Badge variant="secondary" className="gap-1.5 px-3 py-1.5 text-sm">
+                <Lock className="h-3 w-3" />
+                {selectedUnit.name}
+              </Badge>
+            )
           )}
         </div>
 
@@ -78,7 +92,7 @@ export function DashboardHeader() {
             </span>
           </div>
 
-          <Button variant="ghost" size="icon" onClick={signOut}>
+          <Button variant="ghost" size="icon" onClick={handleLogout}>
             <LogOut className="h-4 w-4" />
           </Button>
         </div>
