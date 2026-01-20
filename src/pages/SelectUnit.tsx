@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useUnit } from '@/hooks/useUnit';
 import { supabase } from '@/integrations/supabase/client';
@@ -25,12 +25,17 @@ interface UnitWithStatus {
 
 export default function SelectUnit() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, isLoading: authLoading, isApproved, profile, signOut, hasRole, roles } = useAuth();
   const { units, isLoading: unitsLoading, startSession, activeSession } = useUnit();
   const [unitsWithStatus, setUnitsWithStatus] = useState<UnitWithStatus[]>([]);
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
   const [isStartingSession, setIsStartingSession] = useState<string | null>(null);
   const [isReleasingSession, setIsReleasingSession] = useState<string | null>(null);
+
+  // Check if in assistencial mode (admin accessing UTI selector)
+  const searchParams = new URLSearchParams(location.search);
+  const isAssistencialMode = searchParams.get('mode') === 'assistencial';
 
   // Check if user can bypass unit selection (privileged roles)
   const canBypassSelection = hasRole('admin') || hasRole('coordenador') || hasRole('diarista');
@@ -49,10 +54,11 @@ export default function SelectUnit() {
     }
 
     // Privileged users can go directly to dashboard without selecting a unit
-    if (!authLoading && !unitsLoading && canBypassSelection && !activeSession) {
+    // UNLESS they're in assistencial mode (want to select a unit explicitly)
+    if (!authLoading && !unitsLoading && canBypassSelection && !activeSession && !isAssistencialMode) {
       navigate('/dashboard');
     }
-  }, [user, authLoading, unitsLoading, activeSession, canBypassSelection, navigate]);
+  }, [user, authLoading, unitsLoading, activeSession, canBypassSelection, isAssistencialMode, navigate]);
 
   // Fetch unit occupancy status
   useEffect(() => {
@@ -224,11 +230,15 @@ export default function SelectUnit() {
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold mb-2">Escolha sua UTI</h2>
+            <h2 className="text-2xl font-bold mb-2">
+              {isAssistencialMode ? 'Acesso Assistencial' : 'Escolha sua UTI'}
+            </h2>
             <p className="text-muted-foreground">
-              {canBypassSelection 
-                ? 'Você pode acessar qualquer UTI sem bloquear outros usuários.'
-                : 'Você ficará exclusivo nesta UTI até fazer logout.'}
+              {isAssistencialMode 
+                ? 'Selecione a UTI para acessar o painel assistencial.'
+                : canBypassSelection 
+                  ? 'Você pode acessar qualquer UTI sem bloquear outros usuários.'
+                  : 'Você ficará exclusivo nesta UTI até fazer logout.'}
             </p>
           </div>
 

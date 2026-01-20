@@ -4,7 +4,7 @@ import { useUnit } from '@/hooks/useUnit';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Activity, LogOut, Settings, Printer, Home, Lock, Clock } from 'lucide-react';
+import { Activity, LogOut, Settings, Printer, Home, Lock, Clock, Stethoscope } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 
@@ -126,10 +126,10 @@ export function DashboardHeader() {
             Imprimir
           </Button>
 
-          {isOnAdmin && (
-            <Button variant="outline" size="sm" onClick={() => navigate('/dashboard')} className="gap-2">
-              <Home className="h-4 w-4" />
-              Dashboard
+          {isOnAdmin && hasRole('admin') && (
+            <Button variant="outline" size="sm" onClick={() => navigate('/select-unit?mode=assistencial')} className="gap-2">
+              <Stethoscope className="h-4 w-4" />
+              Acesso Assistencial
             </Button>
           )}
 
