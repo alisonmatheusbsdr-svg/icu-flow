@@ -6,19 +6,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Activity, LogOut, Settings, Printer, Home, Lock, Clock } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 
-function formatDuration(startedAt: string): string {
-  const start = new Date(startedAt).getTime();
+const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+
+function formatTimeRemaining(lastActivity: string): { text: string; isUrgent: boolean } {
+  const lastActivityTime = new Date(lastActivity).getTime();
   const now = Date.now();
-  const diffMs = now - start;
+  const elapsedMs = now - lastActivityTime;
+  const remainingMs = INACTIVITY_TIMEOUT_MS - elapsedMs;
   
-  const hours = Math.floor(diffMs / (1000 * 60 * 60));
-  const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-  
-  if (hours > 0) {
-    return `${hours}h ${minutes}min`;
+  if (remainingMs <= 0) {
+    return { text: 'Expirado', isUrgent: true };
   }
-  return `${minutes}min`;
+  
+  const minutes = Math.ceil(remainingMs / (1000 * 60));
+  const isUrgent = minutes <= 5;
+  
+  return { text: `${minutes}min`, isUrgent };
 }
 
 export function DashboardHeader() {
@@ -26,7 +31,7 @@ export function DashboardHeader() {
   const location = useLocation();
   const { profile, roles, signOut, hasRole } = useAuth();
   const { units, selectedUnit, selectUnit, canSwitchUnits, activeSession } = useUnit();
-  const [sessionDuration, setSessionDuration] = useState<string>('');
+  const [timeRemaining, setTimeRemaining] = useState<{ text: string; isUrgent: boolean } | null>(null);
   
   const isOnAdmin = location.pathname === '/admin';
 
@@ -37,23 +42,23 @@ export function DashboardHeader() {
     coordenador: 'Coordenador'
   };
 
-  // Update session duration every minute
+  // Update countdown every 30 seconds
   useEffect(() => {
-    if (!activeSession?.started_at) {
-      setSessionDuration('');
+    if (!activeSession?.last_activity) {
+      setTimeRemaining(null);
       return;
     }
 
     // Initial update
-    setSessionDuration(formatDuration(activeSession.started_at));
+    setTimeRemaining(formatTimeRemaining(activeSession.last_activity));
 
-    // Update every minute
+    // Update every 30 seconds for precision
     const interval = setInterval(() => {
-      setSessionDuration(formatDuration(activeSession.started_at));
-    }, 60 * 1000);
+      setTimeRemaining(formatTimeRemaining(activeSession.last_activity));
+    }, 30 * 1000);
 
     return () => clearInterval(interval);
-  }, [activeSession?.started_at]);
+  }, [activeSession?.last_activity]);
 
   const handleLogout = async () => {
     await signOut();
@@ -98,11 +103,19 @@ export function DashboardHeader() {
             )
           )}
 
-          {/* Session duration indicator */}
-          {activeSession && sessionDuration && (
-            <Badge variant="outline" className="gap-1.5 px-2.5 py-1 text-xs font-normal text-muted-foreground">
+          {/* Inactivity countdown indicator */}
+          {activeSession && timeRemaining && (
+            <Badge 
+              variant="outline" 
+              className={cn(
+                "gap-1.5 px-2.5 py-1 text-xs font-normal transition-colors",
+                timeRemaining.isUrgent 
+                  ? "border-destructive text-destructive animate-pulse" 
+                  : "text-muted-foreground"
+              )}
+            >
               <Clock className="h-3 w-3" />
-              {sessionDuration}
+              {timeRemaining.text}
             </Badge>
           )}
         </div>

@@ -207,18 +207,23 @@ export function UnitProvider({ children }: { children: ReactNode }) {
   };
 
   // Update activity timestamp (heartbeat)
-  const updateActivity = async () => {
+  const updateActivity = useCallback(async () => {
     if (!activeSession) return;
+
+    const newTimestamp = new Date().toISOString();
 
     const { error } = await supabase
       .from('active_sessions')
-      .update({ last_activity: new Date().toISOString() })
+      .update({ last_activity: newTimestamp })
       .eq('id', activeSession.id);
 
     if (error) {
       console.error('Error updating activity:', error);
+    } else {
+      // Update local state immediately for UI responsiveness
+      setActiveSession(prev => prev ? { ...prev, last_activity: newTimestamp } : null);
     }
-  };
+  }, [activeSession]);
 
   // Select unit (for privileged users who can switch)
   const selectUnit = (unit: Unit) => {
