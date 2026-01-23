@@ -15,6 +15,22 @@ import { toast } from "sonner";
 import { PatientWithDetails } from "@/types/database";
 import { formatInitials } from "@/lib/utils";
 
+const COMMON_COMORBIDITIES = ['HAS', 'DM', 'DAC', 'DPOC', 'ASMA', 'IRC', 'IRC-HD'];
+
+const parseExistingComorbidities = (comorbidities: string | null) => {
+  if (!comorbidities) return { selected: [] as string[], others: '' };
+  
+  const parts = comorbidities.split(/[,;]/).map(c => c.trim());
+  const selected = parts.filter(c => 
+    COMMON_COMORBIDITIES.includes(c.toUpperCase())
+  ).map(c => c.toUpperCase());
+  const others = parts.filter(c => 
+    !COMMON_COMORBIDITIES.includes(c.toUpperCase())
+  ).join(', ');
+  
+  return { selected, others };
+};
+
 interface EditPatientDialogProps {
   patient: PatientWithDetails;
   isOpen: boolean;
@@ -33,8 +49,18 @@ export function EditPatientDialog({
   const [age, setAge] = useState(patient.age.toString());
   const [weight, setWeight] = useState(patient.weight?.toString() || "");
   const [mainDiagnosis, setMainDiagnosis] = useState(patient.main_diagnosis || "");
-  const [comorbidities, setComorbidities] = useState(patient.comorbidities || "");
+  const { selected, others } = parseExistingComorbidities(patient.comorbidities);
+  const [selectedComorbidities, setSelectedComorbidities] = useState<string[]>(selected);
+  const [otherComorbidities, setOtherComorbidities] = useState(others);
   const [isPalliative, setIsPalliative] = useState(patient.is_palliative);
+
+  const toggleComorbidity = (comorbidity: string) => {
+    setSelectedComorbidities(prev =>
+      prev.includes(comorbidity)
+        ? prev.filter(c => c !== comorbidity)
+        : [...prev, comorbidity]
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,7 +80,7 @@ export function EditPatientDialog({
           age: parseInt(age),
           weight: weight ? parseFloat(weight) : null,
           main_diagnosis: mainDiagnosis.trim() || null,
-          comorbidities: comorbidities.trim() || null,
+          comorbidities: [...selectedComorbidities, otherComorbidities.trim()].filter(Boolean).join(', ') || null,
           is_palliative: isPalliative,
         })
         .eq("id", patient.id);
@@ -131,13 +157,24 @@ export function EditPatientDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="comorbidities">Comorbidades</Label>
-            <Textarea
-              id="comorbidities"
-              value={comorbidities}
-              onChange={(e) => setComorbidities(e.target.value)}
-              placeholder="Ex: HAS, DM, IRC"
-              rows={2}
+            <Label>Comorbidades</Label>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {COMMON_COMORBIDITIES.map((comorbidity) => (
+                <Button
+                  key={comorbidity}
+                  type="button"
+                  variant={selectedComorbidities.includes(comorbidity) ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => toggleComorbidity(comorbidity)}
+                >
+                  {comorbidity}
+                </Button>
+              ))}
+            </div>
+            <Input
+              placeholder="Outras: Obesidade, Hipotireoidismo..."
+              value={otherComorbidities}
+              onChange={(e) => setOtherComorbidities(e.target.value)}
             />
           </div>
 
