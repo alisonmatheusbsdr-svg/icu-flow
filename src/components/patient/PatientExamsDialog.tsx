@@ -33,6 +33,7 @@ interface PatientExamsDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdate: () => void;
+  initialTypeFilter?: ExamType;
 }
 
 const CULTURE_TYPES = [
@@ -44,14 +45,14 @@ const CULTURE_TYPES = [
   'Outra'
 ];
 
-export function PatientExamsDialog({ patientId, isOpen, onClose, onUpdate }: PatientExamsDialogProps) {
+export function PatientExamsDialog({ patientId, isOpen, onClose, onUpdate, initialTypeFilter }: PatientExamsDialogProps) {
   const { user } = useAuth();
   const [exams, setExams] = useState<PatientExam[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Filter state
-  const [typeFilter, setTypeFilter] = useState<ExamType | 'all'>('all');
+  const [typeFilter, setTypeFilter] = useState<ExamType | 'all'>(initialTypeFilter || 'all');
   const [criticalOnly, setCriticalOnly] = useState(false);
   
   // Form state
@@ -91,8 +92,12 @@ export function PatientExamsDialog({ patientId, isOpen, onClose, onUpdate }: Pat
   useEffect(() => {
     if (isOpen) {
       fetchExams();
+      // Apply initial filter when dialog opens
+      if (initialTypeFilter) {
+        setTypeFilter(initialTypeFilter);
+      }
     }
-  }, [isOpen, patientId]);
+  }, [isOpen, patientId, initialTypeFilter]);
 
   const resetForm = () => {
     setExamType('laboratorial');

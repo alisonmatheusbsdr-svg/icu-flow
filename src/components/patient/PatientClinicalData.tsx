@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { Plus, Trash2, AlertCircle, Syringe, Activity, Pill, X, ChevronDown, Shield, Utensils, AlertTriangle, CheckCircle, Link2 } from 'lucide-react';
+import { Plus, Trash2, AlertCircle, Syringe, Activity, Pill, X, ChevronDown, Shield, Utensils, AlertTriangle, CheckCircle, Link2, TestTube } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -23,6 +23,7 @@ import { VasoactiveDrugCalculator } from './VasoactiveDrugCalculator';
 import { EditableDayBadge } from './EditableDayBadge';
 import { VenousAccessSection, ACCESS_TYPES, INSERTION_SITES } from './VenousAccessSection';
 import { RespiratorySection } from './RespiratorySection';
+import { PatientExamsDialog } from './PatientExamsDialog';
 import type { PatientWithDetails, DietType } from '@/types/database';
 
 // Derived devices - these are automatically shown based on other sections
@@ -304,6 +305,7 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
   const [isLoading, setIsLoading] = useState(false);
   const [showCustomDeviceInput, setShowCustomDeviceInput] = useState(false);
   const [showAtbInput, setShowAtbInput] = useState(false);
+  const [isExamsDialogOpen, setIsExamsDialogOpen] = useState(false);
 
   // Calculate days for a device
   const getDeviceDays = (insertionDate: string) => {
@@ -1043,15 +1045,27 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
         onUpdate={onUpdate}
       />
 
-      {/* Antibiotics / Infectology */}
+      {/* Antibiotics / Antibioticoterapia */}
       <div className="section-card">
         <div className="section-title justify-between">
           <div className="flex items-center gap-2">
             <Pill className="h-4 w-4 text-[hsl(var(--status-atb))]" />
-            Infectologia
+            Antibioticoterapia
           </div>
           
-          {/* Add antibiotic dropdown - now in title */}
+          <div className="flex items-center gap-2">
+            {/* Button to open cultures */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
+              onClick={() => setIsExamsDialogOpen(true)}
+            >
+              <TestTube className="h-3.5 w-3.5" />
+              Culturas
+            </Button>
+            
+            {/* Add antibiotic dropdown */}
           {(() => {
             const activeAtbNames = new Set(patient.antibiotics?.map(a => a.antibiotic_name) || []);
             
@@ -1128,6 +1142,7 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
               </DropdownMenu>
             );
           })()}
+          </div>
         </div>
         
         <div className="mt-3">
@@ -1320,6 +1335,15 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
           )}
         </div>
       </div>
+
+      {/* Exams Dialog - opens filtered to Cultures */}
+      <PatientExamsDialog
+        patientId={patient.id}
+        isOpen={isExamsDialogOpen}
+        onClose={() => setIsExamsDialogOpen(false)}
+        onUpdate={onUpdate}
+        initialTypeFilter="cultura"
+      />
     </div>
   );
 }
