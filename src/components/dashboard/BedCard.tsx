@@ -169,13 +169,16 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
             red: 'bg-red-500',
             gray: 'bg-gray-400'
           };
+
+          // For blocked patients (TOT/DVA), show full red bar to indicate blocker
+          const barWidth = status === 'blocked' ? 100 : (status === 'palliative' ? 100 : probability);
           
           return (
             <div className="mt-2 flex items-center gap-2">
               <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                 <div 
                   className={cn("h-full transition-all", colorClasses[color])}
-                  style={{ width: status === 'palliative' ? '100%' : `${probability}%` }}
+                  style={{ width: `${barWidth}%` }}
                 />
               </div>
               <span className="text-xs text-muted-foreground min-w-[28px] text-right">
