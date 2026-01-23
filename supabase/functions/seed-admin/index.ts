@@ -20,8 +20,16 @@ Deno.serve(async (req) => {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    const adminEmail = 'alisonmatheus.bs@outlook.com'
-    const adminPassword = '#Ambs021190*'
+    const adminEmail = Deno.env.get('ADMIN_EMAIL')
+    const adminPassword = Deno.env.get('ADMIN_PASSWORD')
+
+    if (!adminEmail || !adminPassword) {
+      console.error('Missing ADMIN_EMAIL or ADMIN_PASSWORD environment variables')
+      return new Response(
+        JSON.stringify({ error: 'Missing admin credentials in environment variables' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
     // Check if user already exists
     const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
