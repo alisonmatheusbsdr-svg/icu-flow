@@ -24,7 +24,9 @@ interface UnitContextType {
   activeSession: ActiveSession | null;
   isSessionBlocking: boolean;
   canSwitchUnits: boolean;
+  showAllUnits: boolean;
   selectUnit: (unit: Unit) => void;
+  selectAllUnits: () => void;
   refreshUnits: () => Promise<void>;
   startSession: (unitId: string) => Promise<{ error: string | null }>;
   endSession: () => Promise<void>;
@@ -42,11 +44,15 @@ export function UnitProvider({ children }: { children: ReactNode }) {
   const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null);
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showAllUnits, setShowAllUnits] = useState(false);
 
   // Check if user has privileged role (can switch units, doesn't block)
   // Only evaluate after roles are loaded to prevent incorrect defaults
   const canSwitchUnits = rolesLoaded && roles.some(r => PRIVILEGED_ROLES.includes(r));
   const isSessionBlocking = activeSession?.is_blocking ?? false;
+  
+  // Check if user is a coordinator (can see all units at once)
+  const isCoordinator = rolesLoaded && roles.includes('coordenador');
 
   // Fetch units
   const fetchUnits = useCallback(async () => {
@@ -229,8 +235,17 @@ export function UnitProvider({ children }: { children: ReactNode }) {
   const selectUnit = (unit: Unit) => {
     if (canSwitchUnits) {
       setSelectedUnit(unit);
+      setShowAllUnits(false);
       // Also start/update session for this unit
       startSession(unit.id);
+    }
+  };
+
+  // Select all units view (for coordinators)
+  const selectAllUnits = () => {
+    if (isCoordinator) {
+      setSelectedUnit(null);
+      setShowAllUnits(true);
     }
   };
 
@@ -246,7 +261,9 @@ export function UnitProvider({ children }: { children: ReactNode }) {
       activeSession,
       isSessionBlocking,
       canSwitchUnits,
+      showAllUnits,
       selectUnit,
+      selectAllUnits,
       refreshUnits,
       startSession,
       endSession,

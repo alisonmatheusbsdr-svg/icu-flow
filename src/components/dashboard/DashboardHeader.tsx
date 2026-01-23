@@ -4,7 +4,7 @@ import { useUnit } from '@/hooks/useUnit';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Activity, LogOut, Settings, Printer, Home, Lock, Clock, Stethoscope } from 'lucide-react';
+import { Activity, LogOut, Settings, Printer, Lock, Clock, Stethoscope, Building2, LayoutGrid } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 
@@ -30,9 +30,10 @@ export function DashboardHeader() {
   const navigate = useNavigate();
   const location = useLocation();
   const { profile, roles, signOut, hasRole } = useAuth();
-  const { units, selectedUnit, selectUnit, canSwitchUnits, activeSession } = useUnit();
+  const { units, selectedUnit, selectUnit, canSwitchUnits, activeSession, showAllUnits, selectAllUnits } = useUnit();
   const [timeRemaining, setTimeRemaining] = useState<{ text: string; isUrgent: boolean } | null>(null);
   
+  const isCoordinator = hasRole('coordenador');
   const isOnAdmin = location.pathname === '/admin';
 
   const roleLabels: Record<string, string> = {
@@ -82,16 +83,37 @@ export function DashboardHeader() {
           {/* Show dropdown for privileged users, fixed badge for plantonistas */}
           {units.length > 0 && (
             canSwitchUnits ? (
-              <Select value={selectedUnit?.id} onValueChange={(id) => {
-                const unit = units.find(u => u.id === id);
-                if (unit) selectUnit(unit);
-              }}>
+              <Select 
+                value={showAllUnits ? 'all' : selectedUnit?.id || ''} 
+                onValueChange={(id) => {
+                  if (id === 'all') {
+                    selectAllUnits();
+                  } else {
+                    const unit = units.find(u => u.id === id);
+                    if (unit) selectUnit(unit);
+                  }
+                }}
+              >
                 <SelectTrigger className="w-48">
                   <SelectValue placeholder="Selecione a UTI" />
                 </SelectTrigger>
                 <SelectContent>
+                  {/* Coordinators can see all units at once */}
+                  {isCoordinator && (
+                    <SelectItem value="all">
+                      <div className="flex items-center gap-2">
+                        <LayoutGrid className="h-4 w-4" />
+                        Visão Geral
+                      </div>
+                    </SelectItem>
+                  )}
                   {units.map(unit => (
-                    <SelectItem key={unit.id} value={unit.id}>{unit.name}</SelectItem>
+                    <SelectItem key={unit.id} value={unit.id}>
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4" />
+                        {unit.name}
+                      </div>
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
