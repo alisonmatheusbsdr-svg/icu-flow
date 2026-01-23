@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
+import { formatInitials } from '@/lib/utils';
 
 interface AdmitPatientFormProps {
   bedId: string;
@@ -32,7 +33,7 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
 
     const { error: patientError } = await supabase.from('patients').insert({
       bed_id: bedId,
-      initials: initials.toUpperCase(),
+      initials: initials.replace(/\./g, '').toUpperCase(),
       age: parseInt(age),
       weight: weight ? parseFloat(weight) : null,
       main_diagnosis: mainDiagnosis || null,
@@ -58,7 +59,7 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
       <div className="grid grid-cols-3 gap-4">
         <div className="space-y-2">
           <Label htmlFor="initials">Iniciais *</Label>
-          <Input id="initials" placeholder="JMS" value={initials} onChange={(e) => setInitials(e.target.value)} maxLength={5} />
+          <Input id="initials" placeholder="J.M.S" value={initials} onChange={(e) => setInitials(formatInitials(e.target.value))} maxLength={9} />
         </div>
         <div className="space-y-2">
           <Label htmlFor="age">Idade *</Label>
