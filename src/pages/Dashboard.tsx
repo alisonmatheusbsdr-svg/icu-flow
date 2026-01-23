@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUnit } from '@/hooks/useUnit';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { BedGrid } from '@/components/dashboard/BedGrid';
+import { AllUnitsGrid } from '@/components/dashboard/AllUnitsGrid';
 import { PendingApproval } from '@/components/dashboard/PendingApproval';
 import { Loader2 } from 'lucide-react';
 
@@ -12,8 +13,11 @@ const ACTIVITY_DEBOUNCE_MS = 60 * 1000; // 1 minute debounce
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user, isLoading: authLoading, isApproved, profile, hasRole } = useAuth();
-  const { selectedUnit, isLoading: unitLoading, activeSession, canSwitchUnits, updateActivity } = useUnit();
+  const { selectedUnit, isLoading: unitLoading, activeSession, canSwitchUnits, updateActivity, showAllUnits } = useUnit();
   const lastActivityUpdate = useRef<number>(0);
+
+  // Check if user is a coordinator viewing all units
+  const isCoordinator = hasRole('coordenador');
 
   // Check if user needs to select a unit first (plantonistas without active session)
   const needsUnitSelection = !activeSession && !canSwitchUnits;
@@ -49,10 +53,11 @@ export default function Dashboard() {
     }
 
     // Redirect plantonistas without active session to unit selection
-    if (!authLoading && !unitLoading && isApproved && needsUnitSelection) {
+    // Coordinators can see all units, so they don't need to select
+    if (!authLoading && !unitLoading && isApproved && needsUnitSelection && !isCoordinator) {
       navigate('/select-unit');
     }
-  }, [user, authLoading, unitLoading, isApproved, needsUnitSelection, navigate]);
+  }, [user, authLoading, unitLoading, isApproved, needsUnitSelection, isCoordinator, navigate]);
 
   if (authLoading || unitLoading) {
     return (
@@ -74,26 +79,40 @@ export default function Dashboard() {
     return <PendingApproval profile={profile} />;
   }
 
-  // Redirect plantonistas to unit selection
-  if (needsUnitSelection) {
+  // Redirect plantonistas to unit selection (except coordinators)
+  if (needsUnitSelection && !isCoordinator) {
     return null;
   }
+
+  // Determine what to render in the main area
+  const renderMainContent = () => {
+    // If coordinator and showing all units (or no unit selected)
+    if (isCoordinator && (showAllUnits || !selectedUnit)) {
+      return <AllUnitsGrid />;
+    }
+
+    // If a specific unit is selected
+    if (selectedUnit) {
+      return <BedGrid unitId={selectedUnit.id} unitName={selectedUnit.name} bedCount={selectedUnit.bed_count} />;
+    }
+
+    // Fallback: no units available
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground">Nenhuma unidade disponível.</p>
+        <p className="text-sm text-muted-foreground mt-2">
+          Entre em contato com o administrador para ter acesso a uma UTI.
+        </p>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader />
       
       <main className="container mx-auto px-4 py-6">
-        {selectedUnit ? (
-          <BedGrid unitId={selectedUnit.id} unitName={selectedUnit.name} bedCount={selectedUnit.bed_count} />
-        ) : (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">Nenhuma unidade disponível.</p>
-            <p className="text-sm text-muted-foreground mt-2">
-              Entre em contato com o administrador para ter acesso a uma UTI.
-            </p>
-          </div>
-        )}
+        {renderMainContent()}
       </main>
     </div>
   );
