@@ -8,6 +8,8 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { formatInitials } from '@/lib/utils';
 
+const COMMON_COMORBIDITIES = ['HAS', 'DM', 'DAC', 'DPOC', 'ASMA', 'IRC', 'IRC-HD'];
+
 interface AdmitPatientFormProps {
   bedId: string;
   onSuccess: () => void;
@@ -19,8 +21,17 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
   const [age, setAge] = useState('');
   const [weight, setWeight] = useState('');
   const [mainDiagnosis, setMainDiagnosis] = useState('');
-  const [comorbidities, setComorbidities] = useState('');
+  const [selectedComorbidities, setSelectedComorbidities] = useState<string[]>([]);
+  const [otherComorbidities, setOtherComorbidities] = useState('');
   const [isPalliative, setIsPalliative] = useState(false);
+
+  const toggleComorbidity = (comorbidity: string) => {
+    setSelectedComorbidities(prev =>
+      prev.includes(comorbidity)
+        ? prev.filter(c => c !== comorbidity)
+        : [...prev, comorbidity]
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,7 +48,7 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
       age: parseInt(age),
       weight: weight ? parseFloat(weight) : null,
       main_diagnosis: mainDiagnosis || null,
-      comorbidities: comorbidities || null,
+      comorbidities: [...selectedComorbidities, otherComorbidities.trim()].filter(Boolean).join(', ') || null,
       is_palliative: isPalliative
     });
 
@@ -77,8 +88,25 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="comorbidities">Comorbidades</Label>
-        <Textarea id="comorbidities" placeholder="HAS, DM, DPOC..." value={comorbidities} onChange={(e) => setComorbidities(e.target.value)} />
+        <Label>Comorbidades</Label>
+        <div className="flex flex-wrap gap-2 mb-2">
+          {COMMON_COMORBIDITIES.map((comorbidity) => (
+            <Button
+              key={comorbidity}
+              type="button"
+              variant={selectedComorbidities.includes(comorbidity) ? "default" : "outline"}
+              size="sm"
+              onClick={() => toggleComorbidity(comorbidity)}
+            >
+              {comorbidity}
+            </Button>
+          ))}
+        </div>
+        <Input
+          placeholder="Outras: Obesidade, Hipotireoidismo..."
+          value={otherComorbidities}
+          onChange={(e) => setOtherComorbidities(e.target.value)}
+        />
       </div>
 
       <div className="flex items-center gap-2">
