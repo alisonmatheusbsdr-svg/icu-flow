@@ -1,123 +1,184 @@
 
 
-## Plano: Botões Clicáveis para Comorbidades Comuns
+## Plano: Eliminar Redundância entre Seções de Dispositivos
 
 ### Objetivo
-Adicionar botões toggle para as comorbidades mais frequentes em UTI, mantendo o campo de texto livre para outras comorbidades.
+Remover a duplicação de informação entre as seções, fazendo com que:
+
+1. **TOT e TQT** sejam automaticamente derivados do **Suporte Respiratório** → aparecem em "Dispositivos Invasivos" como badges não-editáveis
+2. **CVC** (Cateter Venoso Central) seja automaticamente derivado dos **Acessos Venosos** → aparece em "Dispositivos Invasivos" como badge derivado
 
 ---
 
-### Lista de Comorbidades Clicáveis
-
-```typescript
-const COMMON_COMORBIDITIES = ['HAS', 'DM', 'DAC', 'DPOC', 'ASMA', 'IRC', 'IRC-HD'];
-```
-
----
-
-### Interface Visual
+### Comportamento Atual vs. Proposto
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│ Comorbidades                                                    │
-│                                                                 │
-│  ┌─────┐ ┌────┐ ┌─────┐ ┌──────┐ ┌──────┐ ┌─────┐ ┌────────┐  │
-│  │ HAS │ │ DM │ │ DAC │ │ DPOC │ │ ASMA │ │ IRC │ │ IRC-HD │  │
-│  └─────┘ └────┘ └─────┘ └──────┘ └──────┘ └─────┘ └────────┘  │
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │ Outras: Obesidade, Hipotireoidismo...                   │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                        ATUAL (com redundância)                      │
+├─────────────────────────────────────────────────────────────────────┤
+│ Dispositivos Invasivos:  [TOT D4] [CVC D1] [PAI D1]                │
+│                          ↑ manual  ↑ manual                         │
+│                                                                     │
+│ Acessos Venosos:         [CVC Jugular D1]                          │
+│                          ↑ manual (dados separados)                 │
+│                                                                     │
+│ Suporte Respiratório:    TOT (Ventilação Invasiva)                 │
+│                          ↑ manual (dados separados)                 │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                      PROPOSTO (sem redundância)                     │
+├─────────────────────────────────────────────────────────────────────┤
+│ Dispositivos Invasivos:  [TOT D4 🔗] [CVC D1 🔗] [PAI D1]          │
+│                          ↑ derivado  ↑ derivado  ↑ manual           │
+│                                                                     │
+│ Acessos Venosos:         [CVC Jugular D1] ← fonte da verdade       │
+│                                                                     │
+│ Suporte Respiratório:    TOT (Ventilação Invasiva) ← fonte verdade │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-**Comportamento:**
-- Clicar em um botão alterna seu estado (selecionado/não selecionado)
-- Botão selecionado: cor de fundo destacada (primary)
-- Botão não selecionado: contorno simples (outline)
-- Campo de texto livre para outras comorbidades além das padrão
+---
+
+### Regras de Derivação
+
+#### 1. TOT (Tubo Orotraqueal)
+- **Fonte de dados**: `respiratory_support.modality === 'tot'`
+- **Dias de uso**: Calculado a partir de `respiratory_support.intubation_date`
+- **Aparição**: Badge especial em "Dispositivos Invasivos" com indicador de que é derivado
+- **Remoção do dropdown**: TOT não aparece mais como opção selecionável em dispositivos
+
+#### 2. TQT (Traqueostomia)
+- **Fonte de dados**: `respiratory_support.modality === 'traqueostomia'`
+- **Dias de uso**: Não há campo de data específico (será adicionado no futuro se necessário)
+- **Aparição**: Badge especial derivado
+- **Remoção do dropdown**: TQT não aparece mais como opção selecionável
+
+#### 3. CVC (Cateter Venoso Central)
+- **Fonte de dados**: `venous_access` com `access_type` em `['central_nao_tunelizado', 'central_tunelizado', 'hemodialise']`
+- **Dias de uso**: Calculado a partir de `venous_access.insertion_date`
+- **Aparição**: Um badge para cada CVC ativo, mostrando local e dias
+- **Remoção do dropdown**: CVC não aparece mais como opção selecionável
 
 ---
 
 ### Mudanças Técnicas
 
-#### 1. Arquivo: `src/components/dashboard/AdmitPatientForm.tsx`
+#### Arquivo: `src/components/patient/PatientClinicalData.tsx`
 
-**Novos estados:**
+**1. Atualizar constantes de dispositivos:**
+
 ```typescript
-const COMMON_COMORBIDITIES = ['HAS', 'DM', 'DAC', 'DPOC', 'ASMA', 'IRC', 'IRC-HD'];
+// Dispositivos que não devem aparecer no dropdown (são derivados)
+const DERIVED_DEVICES = ['TOT', 'TQT', 'CVC', 'CVD'];
 
-const [selectedComorbidities, setSelectedComorbidities] = useState<string[]>([]);
-const [otherComorbidities, setOtherComorbidities] = useState('');
+// Filtrar STANDARD_DEVICES para excluir os derivados
+const SELECTABLE_DEVICES = STANDARD_DEVICES.filter(d => !DERIVED_DEVICES.includes(d));
+// Resultado: ['PAI', 'SNE', 'SVD']
+```
 
-const toggleComorbidity = (comorbidity: string) => {
-  setSelectedComorbidities(prev => 
-    prev.includes(comorbidity)
-      ? prev.filter(c => c !== comorbidity)
-      : [...prev, comorbidity]
-  );
+**2. Criar componente/lógica para dispositivos derivados:**
+
+```typescript
+// Função para gerar badges derivados do Suporte Respiratório
+const getDerivedRespiratoryDevice = () => {
+  if (!patient.respiratory_support) return null;
+  
+  const modality = patient.respiratory_support.modality;
+  
+  if (modality === 'tot') {
+    const days = patient.respiratory_support.intubation_date 
+      ? Math.ceil((Date.now() - new Date(patient.respiratory_support.intubation_date).getTime()) / 86400000)
+      : null;
+    return { type: 'TOT', days, source: 'respiratory' };
+  }
+  
+  if (modality === 'traqueostomia') {
+    return { type: 'TQT', days: null, source: 'respiratory' };
+  }
+  
+  return null;
+};
+
+// Função para gerar badges derivados dos Acessos Venosos
+const getDerivedVenousDevices = () => {
+  const centralTypes = ['central_nao_tunelizado', 'central_tunelizado', 'hemodialise'];
+  const centralAccesses = (patient.venous_access || [])
+    .filter(a => centralTypes.includes(a.access_type));
+  
+  return centralAccesses.map(access => ({
+    type: 'CVC',
+    days: Math.ceil((Date.now() - new Date(access.insertion_date).getTime()) / 86400000),
+    source: 'venous_access',
+    details: INSERTION_SITES[access.insertion_site]?.label || access.insertion_site,
+    accessId: access.id
+  }));
 };
 ```
 
-**Ao salvar - combinar comorbidades:**
+**3. Atualizar renderização da seção "Dispositivos Invasivos":**
+
 ```typescript
-comorbidities: [...selectedComorbidities, otherComorbidities.trim()]
-  .filter(Boolean).join(', ') || null
+{/* Dispositivos derivados do Suporte Respiratório */}
+{getDerivedRespiratoryDevice() && (
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-sm"
+           style={{ backgroundColor, borderColor, color }}>
+        <span className="font-medium">{device.type}</span>
+        {device.days !== null && <span className="text-xs opacity-80">D{device.days}</span>}
+        <Link className="h-3 w-3 opacity-60" /> {/* Indicador de derivado */}
+      </div>
+    </TooltipTrigger>
+    <TooltipContent>
+      <p>Derivado do Suporte Respiratório</p>
+      <p className="text-xs">Altere em "Suporte Respiratório"</p>
+    </TooltipContent>
+  </Tooltip>
+)}
+
+{/* Dispositivos derivados dos Acessos Venosos */}
+{getDerivedVenousDevices().map(device => (
+  <Tooltip key={device.accessId}>
+    <TooltipTrigger asChild>
+      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-sm"
+           style={{ backgroundColor, borderColor, color }}>
+        <span className="font-medium">CVC</span>
+        <span className="text-xs opacity-60">D{device.days}</span>
+        <Link className="h-3 w-3 opacity-60" />
+      </div>
+    </TooltipTrigger>
+    <TooltipContent>
+      <p>Derivado de Acessos Venosos</p>
+      <p className="text-xs">{device.details}</p>
+    </TooltipContent>
+  </Tooltip>
+))}
 ```
 
-**Nova UI (substituir Textarea):**
-```tsx
-<div className="space-y-2">
-  <Label>Comorbidades</Label>
-  <div className="flex flex-wrap gap-2 mb-2">
-    {COMMON_COMORBIDITIES.map((comorbidity) => (
-      <Button
-        key={comorbidity}
-        type="button"
-        variant={selectedComorbidities.includes(comorbidity) ? "default" : "outline"}
-        size="sm"
-        onClick={() => toggleComorbidity(comorbidity)}
-      >
-        {comorbidity}
-      </Button>
-    ))}
-  </div>
-  <Input
-    placeholder="Outras: Obesidade, Hipotireoidismo..."
-    value={otherComorbidities}
-    onChange={(e) => setOtherComorbidities(e.target.value)}
-  />
-</div>
+**4. Atualizar o dropdown de adicionar dispositivo:**
+
+```typescript
+// Ao invés de usar getDevicesWithStatus(), usar apenas SELECTABLE_DEVICES
+const getSelectableDevices = () => {
+  return SELECTABLE_DEVICES.filter(device => !activeDeviceTypes.has(device))
+    .map(device => ({ device, isDisabled: false }));
+};
 ```
+
+**5. Remover dispositivos manuais duplicados:**
+
+- Na renderização dos dispositivos ativos, filtrar para não mostrar TOT/TQT/CVC manuais se existirem dados derivados
+- Ou seja, se há `respiratory_support.modality === 'tot'`, ignorar qualquer TOT manual em `invasive_devices`
 
 ---
 
-#### 2. Arquivo: `src/components/patient/EditPatientDialog.tsx`
+### Lógica de Alerta (Mantida)
 
-**Mesmas mudanças acima, mais:**
+Os alertas de tempo (warning/danger) continuam funcionando:
 
-**Inicialização ao editar paciente existente:**
-```typescript
-// Parsear comorbidades existentes
-const parseExistingComorbidities = (comorbidities: string | null) => {
-  if (!comorbidities) return { selected: [], others: '' };
-  
-  const parts = comorbidities.split(/[,;]/).map(c => c.trim());
-  const selected = parts.filter(c => 
-    COMMON_COMORBIDITIES.includes(c.toUpperCase())
-  ).map(c => c.toUpperCase());
-  const others = parts.filter(c => 
-    !COMMON_COMORBIDITIES.includes(c.toUpperCase())
-  ).join(', ');
-  
-  return { selected, others };
-};
-
-const { selected, others } = parseExistingComorbidities(patient.comorbidities);
-const [selectedComorbidities, setSelectedComorbidities] = useState<string[]>(selected);
-const [otherComorbidities, setOtherComorbidities] = useState(others);
-```
+- **TOT**: Usa os thresholds existentes (7 dias warning, 15 dias danger)
+- **CVC**: Usa os thresholds do `VenousAccessSection` baseados no tipo e local de inserção
 
 ---
 
@@ -125,16 +186,20 @@ const [otherComorbidities, setOtherComorbidities] = useState(others);
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/components/dashboard/AdmitPatientForm.tsx` | Adicionar 7 botões toggle (HAS, DM, DAC, DPOC, ASMA, IRC, IRC-HD) + campo texto |
-| `src/components/patient/EditPatientDialog.tsx` | Mesma mudança + parse de comorbidades existentes ao editar |
+| `src/components/patient/PatientClinicalData.tsx` | Principal - implementar badges derivados, remover TOT/TQT/CVC do dropdown, ajustar renderização |
+
+---
+
+### Importação Adicional
+
+Importar o ícone `Link` do lucide-react para indicar visualmente que o badge é derivado de outra seção.
 
 ---
 
 ### Resultado Esperado
 
-1. **7 botões clicáveis**: HAS, DM, DAC, DPOC, ASMA, IRC, IRC-HD
-2. **Toggle visual**: botão muda de cor ao clicar (outline ↔ primary)
-3. **Campo texto livre**: para outras comorbidades não listadas
-4. **Edição preserva dados**: comorbidades conhecidas viram botões selecionados, outras ficam no campo texto
-5. **Armazenamento unificado**: tudo salvo junto no campo `comorbidities` (ex: "HAS, DM, IRC-HD, Obesidade")
+1. **Sem duplicação**: Usuário cadastra TOT em Suporte Respiratório uma vez, aparece em Dispositivos automaticamente
+2. **Dados consistentes**: Dias de uso sempre vêm da fonte correta
+3. **UI intuitiva**: Badge derivado tem ícone de "link" e tooltip explicativo
+4. **Fluxo natural**: Menos cliques para registrar o mesmo dado
 
