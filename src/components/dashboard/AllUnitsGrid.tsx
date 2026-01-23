@@ -32,11 +32,58 @@ interface UnitWithBeds {
   stats: {
     total: number;
     occupied: number;
-    highDischarge: number; // probabilidade > 80%
+    highDischarge: number; // probabilidade >= 80%
     blocked: number; // TOT ou DVA
     palliative: number;
   };
 }
+
+// Função de cálculo de probabilidade (igual ao BedCard)
+const calculateDischargeProbability = (patient: BedWithPatient['patient']) => {
+  if (!patient) return { probability: 0, status: 'empty' as const };
+  
+  if (patient.is_palliative) {
+    return { probability: 100, status: 'palliative' as const };
+  }
+  
+  const isOnTOT = patient.respiratory_modality === 'tot' || patient.has_tot_device;
+  if (isOnTOT || patient.has_active_dva) {
+    return { probability: 0, status: 'blocked' as const };
+  }
+  
+  let discount = 0;
+  
+  // Respiratory support (TQT, VNI)
+  if (['traqueostomia', 'vni'].includes(patient.respiratory_modality || '')) {
+    discount += 15;
+  }
+  
+  // Antibiotics
+  const atbCount = patient.active_antibiotics_count || 0;
+  if (atbCount >= 4) discount += 15;
+  else if (atbCount === 3) discount += 10;
+  else if (atbCount >= 1) discount += 5;
+  
+  // Devices
+  const devCount = patient.active_devices_count || 0;
+  if (devCount >= 6) discount += 15;
+  else if (devCount >= 4) discount += 10;
+  else if (devCount >= 2) discount += 5;
+  
+  // Central access
+  if (patient.has_central_access) discount += 5;
+  
+  // Sepsis/Shock
+  if (patient.has_sepsis_or_shock) discount += 10;
+  
+  // LOS (days hospitalized)
+  const days = Math.ceil((Date.now() - new Date(patient.admission_date).getTime()) / 86400000);
+  if (days > 30) discount += 10;
+  else if (days > 14) discount += 5;
+  
+  const probability = Math.max(0, 100 - discount);
+  return { probability, status: 'normal' as const };
+};
 
 export function AllUnitsGrid() {
   const [unitsWithBeds, setUnitsWithBeds] = useState<UnitWithBeds[]>([]);
@@ -152,14 +199,12 @@ export function AllUnitsGrid() {
       ).length;
       const palliativeCount = occupiedBeds.filter(b => b.patient?.is_palliative).length;
       
-      // High discharge probability calculation (simplified - > 80%)
+      // High discharge probability calculation (usando mesma lógica do BedCard)
       const highDischargeCount = occupiedBeds.filter(b => {
-        if (!b.patient || b.patient.is_palliative) return false;
-        if (b.patient.has_tot_device || b.patient.has_active_dva) return false;
-        // Simple heuristic: no devices, no antibiotics, not septic
-        return (b.patient.active_devices_count || 0) === 0 && 
-               (b.patient.active_antibiotics_count || 0) <= 1 &&
-               !b.patient.has_sepsis_or_shock;
+        if (!b.patient) return false;
+        const { probability, status } = calculateDischargeProbability(b.patient);
+        // Alta provável = probabilidade >= 80% e não é palliativo nem bloqueado
+        return status === 'normal' && probability >= 80;
       }).length;
 
       return {
