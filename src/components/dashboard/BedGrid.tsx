@@ -20,8 +20,35 @@ interface VasoactiveDrug {
   patient_id: string;
 }
 
+interface Antibiotic {
+  patient_id: string;
+}
+
+interface InvasiveDevice {
+  patient_id: string;
+  device_type: string;
+}
+
+interface VenousAccess {
+  patient_id: string;
+  access_type: string;
+}
+
+interface Precaution {
+  patient_id: string;
+  precaution_type: string;
+}
+
 interface BedWithPatient extends Bed {
-  patient?: (Patient & { respiratory_modality?: string; has_active_dva?: boolean }) | null;
+  patient?: (Patient & { 
+    respiratory_modality?: string; 
+    has_active_dva?: boolean;
+    active_antibiotics_count?: number;
+    active_devices_count?: number;
+    has_central_access?: boolean;
+    has_sepsis_or_shock?: boolean;
+    has_tot_device?: boolean;
+  }) | null;
 }
 
 export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
@@ -45,6 +72,10 @@ export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
       let patients: Patient[] = [];
       let respiratoryModalities: RespiratoryModality[] = [];
       let vasoactiveDrugs: VasoactiveDrug[] = [];
+      let antibiotics: Antibiotic[] = [];
+      let devices: InvasiveDevice[] = [];
+      let venousAccess: VenousAccess[] = [];
+      let precautions: Precaution[] = [];
       
       if (occupiedBedIds.length > 0) {
         const { data } = await supabase
@@ -54,11 +85,11 @@ export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
           .eq('is_active', true);
         patients = (data || []).map(p => ({ ...p, weight: p.weight ?? null })) as Patient[];
         
-        // Fetch respiratory modalities and vasoactive drugs for these patients
+        // Fetch all clinical data for these patients
         if (patients.length > 0) {
           const patientIds = patients.map(p => p.id);
           
-          const [respResult, dvaResult] = await Promise.all([
+          const [respResult, dvaResult, atbResult, devResult, venResult, precResult] = await Promise.all([
             supabase
               .from('respiratory_support')
               .select('patient_id, modality')
@@ -68,11 +99,35 @@ export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
               .from('vasoactive_drugs')
               .select('patient_id')
               .in('patient_id', patientIds)
+              .eq('is_active', true),
+            supabase
+              .from('antibiotics')
+              .select('patient_id')
+              .in('patient_id', patientIds)
+              .eq('is_active', true),
+            supabase
+              .from('invasive_devices')
+              .select('patient_id, device_type')
+              .in('patient_id', patientIds)
+              .eq('is_active', true),
+            supabase
+              .from('venous_access')
+              .select('patient_id, access_type')
+              .in('patient_id', patientIds)
+              .eq('is_active', true),
+            supabase
+              .from('patient_precautions')
+              .select('patient_id, precaution_type')
+              .in('patient_id', patientIds)
               .eq('is_active', true)
           ]);
           
           respiratoryModalities = respResult.data || [];
           vasoactiveDrugs = dvaResult.data || [];
+          antibiotics = atbResult.data || [];
+          devices = devResult.data || [];
+          venousAccess = venResult.data || [];
+          precautions = precResult.data || [];
         }
       }
 
@@ -80,17 +135,44 @@ export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
 
       const bedsWithPatients = bedsData.map(bed => {
         const patient = patients.find(p => p.bed_id === bed.id);
-        const respModality = patient 
-          ? respiratoryModalities.find(r => r.patient_id === patient.id)?.modality 
-          : undefined;
+        if (!patient) {
+          return { ...bed, patient: null };
+        }
+
+        const respModality = respiratoryModalities.find(r => r.patient_id === patient.id)?.modality;
+        const patientAntibiotics = antibiotics.filter(a => a.patient_id === patient.id);
+        const patientDevices = devices.filter(d => d.patient_id === patient.id);
+        const patientVenous = venousAccess.filter(v => v.patient_id === patient.id);
+        const patientPrecautions = precautions.filter(p => p.patient_id === patient.id);
+        
+        // Check for central access types
+        const centralTypes = ['central', 'picc', 'port-a-cath', 'hemodialise'];
+        const hasCentralAccess = patientVenous.some(v => 
+          centralTypes.some(t => v.access_type.toLowerCase().includes(t))
+        );
+        
+        // Check for sepsis or shock precautions
+        const hasSepsisOrShock = patientPrecautions.some(p => 
+          ['sepse', 'choque'].includes(p.precaution_type.toLowerCase())
+        );
+
+        // Check for TOT in invasive devices
+        const hasTotDevice = patientDevices.some(d => 
+          d.device_type.toLowerCase() === 'tot'
+        );
         
         return {
           ...bed,
-          patient: patient ? { 
+          patient: { 
             ...patient, 
             respiratory_modality: respModality,
-            has_active_dva: patientsWithDva.has(patient.id)
-          } : null
+            has_active_dva: patientsWithDva.has(patient.id),
+            active_antibiotics_count: patientAntibiotics.length,
+            active_devices_count: patientDevices.length,
+            has_central_access: hasCentralAccess,
+            has_sepsis_or_shock: hasSepsisOrShock,
+            has_tot_device: hasTotDevice
+          }
         };
       });
 
