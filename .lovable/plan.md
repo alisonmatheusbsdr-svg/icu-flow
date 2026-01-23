@@ -1,142 +1,122 @@
 
 
-## Plano: Formatação Automática de Iniciais com Pontos
+## Plano: Botões Clicáveis para Comorbidades Comuns
 
 ### Objetivo
-Criar uma formatação automática no campo "Iniciais" que:
-1. **Insere pontos entre cada letra** conforme o usuário digita (ex: `ASDAS` → `A.S.D.A.S`)
-2. **Aceita apenas letras** (ignora números, símbolos e outros caracteres)
-3. **Converte automaticamente para maiúsculas**
+Adicionar botões toggle para as comorbidades mais frequentes em UTI, mantendo o campo de texto livre para outras comorbidades.
 
 ---
 
-### Comportamento Esperado
+### Lista de Comorbidades Clicáveis
 
-```
-Usuário digita: "a"      → Campo mostra: "A"
-Usuário digita: "as"     → Campo mostra: "A.S"
-Usuário digita: "asd"    → Campo mostra: "A.S.D"
-Usuário digita: "asda"   → Campo mostra: "A.S.D.A"
-Usuário digita: "asdas"  → Campo mostra: "A.S.D.A.S"
-Usuário digita: "asd1"   → Campo mostra: "A.S.D" (ignora o número)
-Usuário digita: "asd@"   → Campo mostra: "A.S.D" (ignora o símbolo)
+```typescript
+const COMMON_COMORBIDITIES = ['HAS', 'DM', 'DAC', 'DPOC', 'ASMA', 'IRC', 'IRC-HD'];
 ```
 
 ---
 
-### Solução Técnica
+### Interface Visual
 
-Criar uma função helper `formatInitials` que será reutilizada em ambos os formulários:
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│ Comorbidades                                                    │
+│                                                                 │
+│  ┌─────┐ ┌────┐ ┌─────┐ ┌──────┐ ┌──────┐ ┌─────┐ ┌────────┐  │
+│  │ HAS │ │ DM │ │ DAC │ │ DPOC │ │ ASMA │ │ IRC │ │ IRC-HD │  │
+│  └─────┘ └────┘ └─────┘ └──────┘ └──────┘ └─────┘ └────────┘  │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ Outras: Obesidade, Hipotireoidismo...                   │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
 
+**Comportamento:**
+- Clicar em um botão alterna seu estado (selecionado/não selecionado)
+- Botão selecionado: cor de fundo destacada (primary)
+- Botão não selecionado: contorno simples (outline)
+- Campo de texto livre para outras comorbidades além das padrão
+
+---
+
+### Mudanças Técnicas
+
+#### 1. Arquivo: `src/components/dashboard/AdmitPatientForm.tsx`
+
+**Novos estados:**
 ```typescript
-function formatInitials(value: string): string {
-  // 1. Remove tudo que não é letra
-  const lettersOnly = value.replace(/[^a-zA-Z]/g, '');
-  
-  // 2. Converte para maiúsculas
-  const upperCase = lettersOnly.toUpperCase();
-  
-  // 3. Limita a 5 letras (para não ultrapassar o limite visual)
-  const limited = upperCase.slice(0, 5);
-  
-  // 4. Insere ponto entre cada letra
-  return limited.split('').join('.');
-}
+const COMMON_COMORBIDITIES = ['HAS', 'DM', 'DAC', 'DPOC', 'ASMA', 'IRC', 'IRC-HD'];
 
-// Exemplos:
-// formatInitials("asdas")  → "A.S.D.A.S"
-// formatInitials("ABC123") → "A.B.C"
-// formatInitials("J@#M$S") → "J.M.S"
+const [selectedComorbidities, setSelectedComorbidities] = useState<string[]>([]);
+const [otherComorbidities, setOtherComorbidities] = useState('');
+
+const toggleComorbidity = (comorbidity: string) => {
+  setSelectedComorbidities(prev => 
+    prev.includes(comorbidity)
+      ? prev.filter(c => c !== comorbidity)
+      : [...prev, comorbidity]
+  );
+};
+```
+
+**Ao salvar - combinar comorbidades:**
+```typescript
+comorbidities: [...selectedComorbidities, otherComorbidities.trim()]
+  .filter(Boolean).join(', ') || null
+```
+
+**Nova UI (substituir Textarea):**
+```tsx
+<div className="space-y-2">
+  <Label>Comorbidades</Label>
+  <div className="flex flex-wrap gap-2 mb-2">
+    {COMMON_COMORBIDITIES.map((comorbidity) => (
+      <Button
+        key={comorbidity}
+        type="button"
+        variant={selectedComorbidities.includes(comorbidity) ? "default" : "outline"}
+        size="sm"
+        onClick={() => toggleComorbidity(comorbidity)}
+      >
+        {comorbidity}
+      </Button>
+    ))}
+  </div>
+  <Input
+    placeholder="Outras: Obesidade, Hipotireoidismo..."
+    value={otherComorbidities}
+    onChange={(e) => setOtherComorbidities(e.target.value)}
+  />
+</div>
 ```
 
 ---
 
-### Mudanças Necessárias
+#### 2. Arquivo: `src/components/patient/EditPatientDialog.tsx`
 
-#### 1. Criar utilitário reutilizável (Opção A - inline)
+**Mesmas mudanças acima, mais:**
 
-A função pode ser incluída diretamente nos componentes, mas como será usada em 2 lugares, podemos:
-- Criar em `src/lib/utils.ts` ou
-- Duplicar nos dois componentes (mais simples para alteração pontual)
-
-#### 2. Atualizar `src/components/dashboard/AdmitPatientForm.tsx`
-
-**Linha 61** - Modificar o Input de iniciais:
-
+**Inicialização ao editar paciente existente:**
 ```typescript
-// Antes
-<Input 
-  id="initials" 
-  placeholder="JMS" 
-  value={initials} 
-  onChange={(e) => setInitials(e.target.value)} 
-  maxLength={5} 
-/>
+// Parsear comorbidades existentes
+const parseExistingComorbidities = (comorbidities: string | null) => {
+  if (!comorbidities) return { selected: [], others: '' };
+  
+  const parts = comorbidities.split(/[,;]/).map(c => c.trim());
+  const selected = parts.filter(c => 
+    COMMON_COMORBIDITIES.includes(c.toUpperCase())
+  ).map(c => c.toUpperCase());
+  const others = parts.filter(c => 
+    !COMMON_COMORBIDITIES.includes(c.toUpperCase())
+  ).join(', ');
+  
+  return { selected, others };
+};
 
-// Depois
-<Input 
-  id="initials" 
-  placeholder="J.M.S" 
-  value={initials} 
-  onChange={(e) => setInitials(formatInitials(e.target.value))} 
-  maxLength={9}  // 5 letras + 4 pontos = 9 caracteres
-/>
-```
-
-**Linha 35** - Ajustar o envio ao banco (remover pontos):
-
-```typescript
-// Antes
-initials: initials.toUpperCase(),
-
-// Depois
-initials: initials.replace(/\./g, '').toUpperCase(),
-```
-
-#### 3. Atualizar `src/components/patient/EditPatientDialog.tsx`
-
-**Linhas 85-92** - Modificar o Input de iniciais:
-
-```typescript
-// Antes
-<Input
-  id="initials"
-  value={initials}
-  onChange={(e) => setInitials(e.target.value.toUpperCase())}
-  placeholder="Ex: JPS"
-  maxLength={5}
-  required
-/>
-
-// Depois
-<Input
-  id="initials"
-  value={initials}
-  onChange={(e) => setInitials(formatInitials(e.target.value))}
-  placeholder="Ex: J.P.S"
-  maxLength={9}
-  required
-/>
-```
-
-**Linha 52** - Ajustar o envio ao banco:
-
-```typescript
-// Antes
-initials: initials.trim().toUpperCase(),
-
-// Depois  
-initials: initials.replace(/\./g, '').trim().toUpperCase(),
-```
-
-**Linha 31** - Inicializar com pontos (paciente existente):
-
-```typescript
-// Antes
-const [initials, setInitials] = useState(patient.initials);
-
-// Depois
-const [initials, setInitials] = useState(formatInitials(patient.initials));
+const { selected, others } = parseExistingComorbidities(patient.comorbidities);
+const [selectedComorbidities, setSelectedComorbidities] = useState<string[]>(selected);
+const [otherComorbidities, setOtherComorbidities] = useState(others);
 ```
 
 ---
@@ -145,16 +125,16 @@ const [initials, setInitials] = useState(formatInitials(patient.initials));
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/components/dashboard/AdmitPatientForm.tsx` | Adicionar função `formatInitials`, aplicar no onChange, ajustar maxLength e placeholder |
-| `src/components/patient/EditPatientDialog.tsx` | Adicionar função `formatInitials`, aplicar no onChange e inicialização, ajustar maxLength e placeholder |
+| `src/components/dashboard/AdmitPatientForm.tsx` | Adicionar 7 botões toggle (HAS, DM, DAC, DPOC, ASMA, IRC, IRC-HD) + campo texto |
+| `src/components/patient/EditPatientDialog.tsx` | Mesma mudança + parse de comorbidades existentes ao editar |
 
 ---
 
 ### Resultado Esperado
 
-1. **Ao digitar letras**: Pontos são inseridos automaticamente entre cada letra
-2. **Ao digitar números/símbolos**: São ignorados silenciosamente
-3. **Visualização**: `A.S.D.A.S` (formatado com pontos)
-4. **Armazenamento**: `ASDAS` (sem pontos, apenas letras)
-5. **Ao editar paciente**: Iniciais existentes já aparecem formatadas com pontos
+1. **7 botões clicáveis**: HAS, DM, DAC, DPOC, ASMA, IRC, IRC-HD
+2. **Toggle visual**: botão muda de cor ao clicar (outline ↔ primary)
+3. **Campo texto livre**: para outras comorbidades não listadas
+4. **Edição preserva dados**: comorbidades conhecidas viram botões selecionados, outras ficam no campo texto
+5. **Armazenamento unificado**: tudo salvo junto no campo `comorbidities` (ex: "HAS, DM, IRC-HD, Obesidade")
 
