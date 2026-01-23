@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { Plus, Trash2, AlertCircle, Syringe, Activity, Pill, X, ChevronDown, Shield, Utensils, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Plus, Trash2, AlertCircle, Syringe, Activity, Pill, X, ChevronDown, Shield, Utensils, AlertTriangle, CheckCircle, Link2 } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -21,9 +21,15 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { VasoactiveDrugCalculator } from './VasoactiveDrugCalculator';
 import { EditableDayBadge } from './EditableDayBadge';
-import { VenousAccessSection } from './VenousAccessSection';
+import { VenousAccessSection, ACCESS_TYPES, INSERTION_SITES } from './VenousAccessSection';
 import { RespiratorySection } from './RespiratorySection';
 import type { PatientWithDetails, DietType } from '@/types/database';
+
+// Derived devices - these are automatically shown based on other sections
+const DERIVED_DEVICES = ['TOT', 'TQT', 'CVC', 'CVD'];
+
+// Access types that represent central venous catheters
+const CENTRAL_ACCESS_TYPES = ['central_nao_tunelizado', 'central_tunelizado', 'hemodialise'];
 
 interface PatientClinicalDataProps {
   patient: PatientWithDetails;
@@ -42,6 +48,9 @@ const DEVICE_LABELS: Record<string, string> = {
 };
 
 const STANDARD_DEVICES = Object.keys(DEVICE_LABELS);
+
+// Selectable devices (excluding derived ones that come from other sections)
+const SELECTABLE_DEVICES = STANDARD_DEVICES.filter(d => !DERIVED_DEVICES.includes(d));
 
 // Mutually exclusive devices - adding one removes the other
 const MUTUALLY_EXCLUSIVE_DEVICES: Record<string, string> = {
@@ -304,14 +313,50 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
   // Get active device types
   const activeDeviceTypes = new Set(patient.invasive_devices?.map(d => d.device_type.toUpperCase()) || []);
 
-  // Get available devices with their disabled status
+  // Get available devices with their disabled status (only selectable devices)
   const getDevicesWithStatus = () => {
-    return STANDARD_DEVICES.filter(device => !activeDeviceTypes.has(device))
+    return SELECTABLE_DEVICES.filter(device => !activeDeviceTypes.has(device))
       .map(device => {
         const exclusiveDevice = MUTUALLY_EXCLUSIVE_DEVICES[device];
         const isDisabled = !!(exclusiveDevice && activeDeviceTypes.has(exclusiveDevice));
         return { device, isDisabled };
       });
+  };
+
+  // Get derived device from respiratory support (TOT or TQT)
+  const getDerivedRespiratoryDevice = () => {
+    if (!patient.respiratory_support) return null;
+    
+    const modality = patient.respiratory_support.modality;
+    
+    if (modality === 'tot') {
+      const intubationDate = patient.respiratory_support.intubation_date;
+      const days = intubationDate 
+        ? Math.ceil((Date.now() - new Date(intubationDate).getTime()) / 86400000)
+        : null;
+      return { type: 'TOT', days, source: 'respiratory' as const };
+    }
+    
+    if (modality === 'traqueostomia') {
+      return { type: 'TQT', days: null, source: 'respiratory' as const };
+    }
+    
+    return null;
+  };
+
+  // Get derived devices from venous access (CVC)
+  const getDerivedVenousDevices = () => {
+    const centralAccesses = (patient.venous_access || [])
+      .filter(a => CENTRAL_ACCESS_TYPES.includes(a.access_type));
+    
+    return centralAccesses.map(access => ({
+      type: 'CVC',
+      days: Math.ceil((Date.now() - new Date(access.insertion_date).getTime()) / 86400000),
+      source: 'venous_access' as const,
+      details: INSERTION_SITES[access.insertion_site]?.label || access.insertion_site,
+      accessType: ACCESS_TYPES[access.access_type]?.shortLabel || 'CVC',
+      accessId: access.id
+    }));
   };
 
   // Get active DVA by name
@@ -657,8 +702,90 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
           {/* Active devices as removable badges */}
           <TooltipProvider delayDuration={200}>
             <div className="flex flex-wrap gap-2 items-center">
-              {/* Standard active devices */}
-              {STANDARD_DEVICES.filter(device => activeDeviceTypes.has(device)).map(device => {
+              {/* Derived device from Respiratory Support (TOT or TQT) */}
+              {(() => {
+                const derivedResp = getDerivedRespiratoryDevice();
+                if (!derivedResp) return null;
+                
+                const days = derivedResp.days || 0;
+                const alertLevel = getDeviceAlertLevel(derivedResp.type, days);
+                const alertMessage = getDeviceAlertMessage(derivedResp.type, alertLevel);
+                const styles = ALERT_STYLES[alertLevel];
+                
+                return (
+                  <Tooltip key={`derived-${derivedResp.type}`}>
+                    <TooltipTrigger asChild>
+                      <div 
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-sm"
+                        style={{
+                          backgroundColor: styles.bg,
+                          borderColor: styles.border,
+                          borderWidth: '1px',
+                          color: styles.text
+                        }}
+                      >
+                        <span className="font-medium">{derivedResp.type}</span>
+                        {derivedResp.days !== null && (
+                          <span className="text-xs opacity-80">D{derivedResp.days}</span>
+                        )}
+                        {alertLevel === 'warning' && (
+                          <AlertTriangle className={`h-3.5 w-3.5 ${styles.icon}`} />
+                        )}
+                        {alertLevel === 'danger' && (
+                          <AlertCircle className={`h-3.5 w-3.5 ${styles.icon}`} />
+                        )}
+                        <Link2 className="h-3 w-3 opacity-50" />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="font-medium">{DEVICE_LABELS[derivedResp.type]}</p>
+                      <p className="text-xs text-muted-foreground">Derivado do Suporte Respiratório</p>
+                      {derivedResp.days !== null && (
+                        <p className="text-xs">Intubação há {derivedResp.days} dias</p>
+                      )}
+                      {alertMessage && (
+                        <p className={`text-xs mt-1 ${styles.icon}`}>
+                          {alertLevel === 'warning' ? '⚠️' : '🚨'} {alertMessage}
+                        </p>
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })()}
+
+              {/* Derived devices from Venous Access (CVC) */}
+              {getDerivedVenousDevices().map(derivedCvc => {
+                const alertLevel = 'ok' as const; // CVC alerts are handled in VenousAccessSection
+                const styles = ALERT_STYLES[alertLevel];
+                
+                return (
+                  <Tooltip key={`derived-cvc-${derivedCvc.accessId}`}>
+                    <TooltipTrigger asChild>
+                      <div 
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-sm"
+                        style={{
+                          backgroundColor: styles.bg,
+                          borderColor: styles.border,
+                          borderWidth: '1px',
+                          color: styles.text
+                        }}
+                      >
+                        <span className="font-medium">{derivedCvc.accessType}</span>
+                        <span className="text-xs opacity-80">D{derivedCvc.days}</span>
+                        <Link2 className="h-3 w-3 opacity-50" />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="font-medium">Cateter Venoso Central</p>
+                      <p className="text-xs text-muted-foreground">Derivado de Acessos Venosos</p>
+                      <p className="text-xs">{derivedCvc.details}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })}
+
+              {/* Standard active devices (only selectable ones - PAI, SNE, SVD) */}
+              {SELECTABLE_DEVICES.filter(device => activeDeviceTypes.has(device)).map(device => {
                 const deviceData = patient.invasive_devices?.find(d => d.device_type.toUpperCase() === device);
                 const days = deviceData ? getDeviceDays(deviceData.insertion_date) : 0;
                 const alertLevel = getDeviceAlertLevel(device, days);
@@ -716,7 +843,7 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
                 );
               })}
 
-              {/* Custom active devices */}
+              {/* Custom active devices (non-standard) */}
               {patient.invasive_devices?.filter(d => !STANDARD_DEVICES.includes(d.device_type.toUpperCase())).map(device => (
                 <div key={device.id} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm">
                   <span className="font-medium">{device.device_type}</span>
@@ -736,8 +863,10 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
                 </div>
               ))}
 
-              {/* Empty state */}
-              {(!patient.invasive_devices || patient.invasive_devices.length === 0) && (
+              {/* Empty state - only show if no devices at all (including derived) */}
+              {(!patient.invasive_devices || patient.invasive_devices.length === 0) && 
+               !getDerivedRespiratoryDevice() && 
+               getDerivedVenousDevices().length === 0 && (
                 <span className="text-sm text-muted-foreground">Nenhum dispositivo</span>
               )}
             </div>
