@@ -598,8 +598,19 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
     setIsLoading(false);
   };
 
+  // Check if patient is on TOT (Orotracheal Tube)
+  const isPatientOnTOT = () => {
+    return patient.respiratory_support?.modality === 'tot';
+  };
+
   // Update diet type
   const handleUpdateDiet = async (dietType: DietType) => {
+    // Block oral diet if patient is on TOT
+    if (dietType === 'oral' && isPatientOnTOT()) {
+      toast.error('Dieta oral não permitida para pacientes em uso de TOT');
+      return;
+    }
+
     setIsLoading(true);
     const { error } = await supabase
       .from('patients')
@@ -1258,16 +1269,30 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              {Object.entries(DIET_TYPES).map(([type, config]) => (
-                <DropdownMenuItem
-                  key={type}
-                  onClick={() => handleUpdateDiet(type as DietType)}
-                  className={`cursor-pointer ${patient.diet_type === type ? 'bg-accent' : ''}`}
-                >
-                  <span className="mr-2">{config.emoji}</span>
-                  {config.label}
-                </DropdownMenuItem>
-              ))}
+              {Object.entries(DIET_TYPES).map(([type, config]) => {
+                const isDisabledByTOT = type === 'oral' && isPatientOnTOT();
+                
+                return (
+                  <DropdownMenuItem
+                    key={type}
+                    onClick={() => !isDisabledByTOT && handleUpdateDiet(type as DietType)}
+                    disabled={isDisabledByTOT}
+                    className={cn(
+                      'cursor-pointer',
+                      patient.diet_type === type && 'bg-accent',
+                      isDisabledByTOT && 'opacity-50 cursor-not-allowed'
+                    )}
+                  >
+                    <span className="mr-2">{config.emoji}</span>
+                    {config.label}
+                    {isDisabledByTOT && (
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        (TOT ativo)
+                      </span>
+                    )}
+                  </DropdownMenuItem>
+                );
+              })}
               {patient.diet_type && (
                 <>
                   <DropdownMenuSeparator />
