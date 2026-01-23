@@ -13,6 +13,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { PatientWithDetails } from "@/types/database";
+import { formatInitials } from "@/lib/utils";
 
 interface EditPatientDialogProps {
   patient: PatientWithDetails;
@@ -28,7 +29,7 @@ export function EditPatientDialog({
   onSuccess,
 }: EditPatientDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const [initials, setInitials] = useState(patient.initials);
+  const [initials, setInitials] = useState(formatInitials(patient.initials));
   const [age, setAge] = useState(patient.age.toString());
   const [weight, setWeight] = useState(patient.weight?.toString() || "");
   const [mainDiagnosis, setMainDiagnosis] = useState(patient.main_diagnosis || "");
@@ -49,7 +50,7 @@ export function EditPatientDialog({
       const { error } = await supabase
         .from("patients")
         .update({
-          initials: initials.trim().toUpperCase(),
+          initials: initials.replace(/\./g, '').trim().toUpperCase(),
           age: parseInt(age),
           weight: weight ? parseFloat(weight) : null,
           main_diagnosis: mainDiagnosis.trim() || null,
@@ -85,9 +86,9 @@ export function EditPatientDialog({
               <Input
                 id="initials"
                 value={initials}
-                onChange={(e) => setInitials(e.target.value.toUpperCase())}
-                placeholder="Ex: JPS"
-                maxLength={5}
+                onChange={(e) => setInitials(formatInitials(e.target.value))}
+                placeholder="Ex: J.P.S"
+                maxLength={9}
                 required
               />
             </div>
