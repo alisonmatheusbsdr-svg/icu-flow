@@ -115,6 +115,19 @@ export function EditRespiratoryDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validation for TOT modality
+    if (modality === 'tot') {
+      if (!intubationDate) {
+        toast.error('Data da IOT é obrigatória');
+        return;
+      }
+      if (!fio2 || parseFloat(fio2) < 21) {
+        toast.error('FiO₂ é obrigatória para TOT (mínimo 21%)');
+        return;
+      }
+    }
+    
     setIsLoading(true);
 
     try {
@@ -282,6 +295,8 @@ export function EditRespiratoryDialog({
                 type="date"
                 value={intubationDate}
                 onChange={(e) => setIntubationDate(e.target.value)}
+                required
+                className={!intubationDate ? 'border-destructive/50' : ''}
               />
             </div>
             <div className="space-y-2">
@@ -304,6 +319,8 @@ export function EditRespiratoryDialog({
                   placeholder="Ex: 40"
                   min="21"
                   max="100"
+                  required
+                  className={!fio2 ? 'border-destructive/50' : ''}
                 />
               </div>
               <div className="space-y-2">
