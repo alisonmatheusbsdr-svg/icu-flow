@@ -4,12 +4,72 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AdmitPatientForm } from './AdmitPatientForm';
 import { Wind, Heart, Plus, Pill, Ban } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { Bed, Patient } from '@/types/database';
 
 interface PatientWithModality extends Patient {
   respiratory_modality?: string;
   has_active_dva?: boolean;
+  active_antibiotics_count?: number;
+  active_devices_count?: number;
+  has_central_access?: boolean;
+  has_sepsis_or_shock?: boolean;
+  has_tot_device?: boolean;
 }
+
+const calculateDischargeProbability = (patient: PatientWithModality) => {
+  // Palliative = special case
+  if (patient.is_palliative) {
+    return { probability: 100, status: 'palliative' as const, color: 'gray' as const };
+  }
+  
+  // Absolute blockers - TOT from respiratory OR invasive devices, or active DVA
+  const isOnTOT = patient.respiratory_modality === 'tot' || patient.has_tot_device;
+  if (isOnTOT || patient.has_active_dva) {
+    return { probability: 0, status: 'blocked' as const, color: 'red' as const };
+  }
+  
+  // Calculate discounts
+  let discount = 0;
+  
+  // Respiratory support
+  if (['traqueostomia', 'vni'].includes(patient.respiratory_modality || '')) {
+    discount += 15;
+  }
+  
+  // Antibiotics
+  const atbCount = patient.active_antibiotics_count || 0;
+  if (atbCount >= 4) discount += 15;
+  else if (atbCount === 3) discount += 10;
+  else if (atbCount >= 1) discount += 5;
+  
+  // Devices
+  const devCount = patient.active_devices_count || 0;
+  if (devCount >= 6) discount += 15;
+  else if (devCount >= 4) discount += 10;
+  else if (devCount >= 2) discount += 5;
+  
+  // Central access
+  if (patient.has_central_access) discount += 5;
+  
+  // Sepsis/Shock
+  if (patient.has_sepsis_or_shock) discount += 10;
+  
+  // LOS (days hospitalized)
+  const days = Math.ceil((Date.now() - new Date(patient.admission_date).getTime()) / 86400000);
+  if (days > 30) discount += 10;
+  else if (days > 14) discount += 5;
+  
+  const probability = Math.max(0, 100 - discount);
+  
+  // Determine color
+  let color: 'green' | 'yellow' | 'orange' | 'red' = 'green';
+  if (probability < 30) color = 'red';
+  else if (probability < 60) color = 'orange';
+  else if (probability < 80) color = 'yellow';
+  
+  return { probability, status: 'normal' as const, color };
+};
 
 interface BedCardProps {
   bed: Bed;
@@ -97,6 +157,33 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
             <Badge className="badge-pal text-xs gap-1"><Heart className="h-3 w-3" />CCPP</Badge>
           )}
         </div>
+        
+        {/* Mini discharge probability bar */}
+        {(() => {
+          const { probability, status, color } = calculateDischargeProbability(patient);
+          
+          const colorClasses = {
+            green: 'bg-green-500',
+            yellow: 'bg-yellow-500',
+            orange: 'bg-orange-500',
+            red: 'bg-red-500',
+            gray: 'bg-gray-400'
+          };
+          
+          return (
+            <div className="mt-2 flex items-center gap-2">
+              <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                <div 
+                  className={cn("h-full transition-all", colorClasses[color])}
+                  style={{ width: status === 'palliative' ? '100%' : `${probability}%` }}
+                />
+              </div>
+              <span className="text-xs text-muted-foreground min-w-[28px] text-right">
+                {status === 'palliative' ? 'CP' : `${probability}%`}
+              </span>
+            </div>
+          );
+        })()}
       </CardContent>
     </Card>
   );
