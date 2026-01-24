@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Building2, Lock, Unlock, Users, LogOut } from 'lucide-react';
+import { Loader2, Building2, Lock, Unlock, Users, LogOut, ArrowRightLeft, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -16,6 +16,7 @@ interface UnitWithStatus {
   name: string;
   bed_count: number;
   isOccupied: boolean;
+  isInHandover: boolean;
   occupiedBy?: {
     nome: string;
     since: string;
@@ -27,11 +28,12 @@ export default function SelectUnit() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isLoading: authLoading, isApproved, profile, signOut, hasRole, roles } = useAuth();
-  const { units, isLoading: unitsLoading, startSession, activeSession } = useUnit();
+  const { units, isLoading: unitsLoading, startSession, activeSession, joinAsHandoverReceiver } = useUnit();
   const [unitsWithStatus, setUnitsWithStatus] = useState<UnitWithStatus[]>([]);
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
   const [isStartingSession, setIsStartingSession] = useState<string | null>(null);
   const [isReleasingSession, setIsReleasingSession] = useState<string | null>(null);
+  const [isJoiningHandover, setIsJoiningHandover] = useState<string | null>(null);
 
   // Check if in assistencial mode (admin accessing UTI selector)
   const searchParams = new URLSearchParams(location.search);
@@ -39,6 +41,9 @@ export default function SelectUnit() {
 
   // Check if user can bypass unit selection (privileged roles)
   const canBypassSelection = hasRole('admin') || hasRole('coordenador') || hasRole('diarista');
+  
+  // Check if user is a plantonista (can join handover)
+  const isPlantonista = hasRole('plantonista') && !canBypassSelection;
 
   // Redirect if already has active session or can bypass
   useEffect(() => {
@@ -71,7 +76,7 @@ export default function SelectUnit() {
       
       const { data: sessions, error } = await supabase
         .from('active_sessions')
-        .select('id, unit_id, user_id, started_at, is_blocking')
+        .select('id, unit_id, user_id, started_at, is_blocking, handover_mode')
         .eq('is_blocking', true)
         .gt('last_activity', thirtyMinutesAgo);
 
@@ -100,6 +105,7 @@ export default function SelectUnit() {
       const statusMap = (sessions || []).reduce((acc, session) => {
         acc[session.unit_id] = {
           isOccupied: true,
+          isInHandover: session.handover_mode || false,
           occupiedBy: {
             nome: profiles[session.user_id] || 'Usuário',
             since: session.started_at
@@ -107,11 +113,12 @@ export default function SelectUnit() {
           sessionId: session.id
         };
         return acc;
-      }, {} as Record<string, { isOccupied: boolean; occupiedBy?: { nome: string; since: string }; sessionId?: string }>);
+      }, {} as Record<string, { isOccupied: boolean; isInHandover: boolean; occupiedBy?: { nome: string; since: string }; sessionId?: string }>);
 
       const enrichedUnits = units.map(unit => ({
         ...unit,
         isOccupied: statusMap[unit.id]?.isOccupied || false,
+        isInHandover: statusMap[unit.id]?.isInHandover || false,
         occupiedBy: statusMap[unit.id]?.occupiedBy,
         sessionId: statusMap[unit.id]?.sessionId
       }));
@@ -140,7 +147,7 @@ export default function SelectUnit() {
   }, [units, isApproved]);
 
   const handleSelectUnit = async (unit: UnitWithStatus) => {
-    if (unit.isOccupied && !canBypassSelection) {
+    if (unit.isOccupied && !canBypassSelection && !unit.isInHandover) {
       toast.error('Esta UTI está ocupada. Aguarde o plantonista atual fazer logout.');
       return;
     }
@@ -156,6 +163,21 @@ export default function SelectUnit() {
     }
 
     toast.success(`Sessão iniciada na ${unit.name}`);
+    navigate('/dashboard');
+  };
+
+  const handleJoinHandover = async (unit: UnitWithStatus) => {
+    setIsJoiningHandover(unit.id);
+    
+    const result = await joinAsHandoverReceiver(unit.id);
+    
+    if (result.error) {
+      toast.error(result.error);
+      setIsJoiningHandover(null);
+      return;
+    }
+
+    toast.success(`Entrando em modo visualização na ${unit.name}`);
     navigate('/dashboard');
   };
 
@@ -261,7 +283,7 @@ export default function SelectUnit() {
                 <Card 
                   key={unit.id} 
                   className={`transition-all ${
-                    unit.isOccupied && !canBypassSelection 
+                    unit.isOccupied && !canBypassSelection && !unit.isInHandover
                       ? 'opacity-60' 
                       : 'hover:border-primary cursor-pointer'
                   }`}
@@ -275,7 +297,12 @@ export default function SelectUnit() {
                           {unit.bed_count} leitos
                         </CardDescription>
                       </div>
-                      {unit.isOccupied ? (
+                      {unit.isInHandover ? (
+                        <Badge className="gap-1 bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 border-amber-300">
+                          <ArrowRightLeft className="h-3 w-3" />
+                          Em Passagem
+                        </Badge>
+                      ) : unit.isOccupied ? (
                         <Badge variant="destructive" className="gap-1">
                           <Lock className="h-3 w-3" />
                           Ocupada
@@ -300,37 +327,55 @@ export default function SelectUnit() {
                             })}
                           </p>
                         </div>
-                        <div className="flex gap-2">
-                          {canRelease && (
+                        <div className="flex flex-col gap-2">
+                          {/* Show join handover button for plantonistas when unit is in handover mode */}
+                          {unit.isInHandover && isPlantonista && (
                             <Button 
-                              variant="destructive" 
-                              size="sm" 
-                              className="flex-1"
-                              disabled={isReleasingSession === unit.sessionId}
-                              onClick={() => handleReleaseUnit(unit.sessionId!, unit.name)}
+                              className="w-full gap-2"
+                              disabled={isJoiningHandover === unit.id}
+                              onClick={() => handleJoinHandover(unit)}
                             >
-                              {isReleasingSession === unit.sessionId ? (
+                              {isJoiningHandover === unit.id ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
                               ) : (
-                                'Liberar UTI'
+                                <UserCheck className="h-4 w-4" />
                               )}
+                              Entrar para Receber Plantão
                             </Button>
                           )}
-                          {canBypassSelection && (
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="flex-1"
-                              disabled={isStartingSession === unit.id}
-                              onClick={() => handleSelectUnit(unit)}
-                            >
-                              {isStartingSession === unit.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                'Entrar assim mesmo'
-                              )}
-                            </Button>
-                          )}
+                          
+                          <div className="flex gap-2">
+                            {canRelease && (
+                              <Button 
+                                variant="destructive" 
+                                size="sm" 
+                                className="flex-1"
+                                disabled={isReleasingSession === unit.sessionId}
+                                onClick={() => handleReleaseUnit(unit.sessionId!, unit.name)}
+                              >
+                                {isReleasingSession === unit.sessionId ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  'Liberar UTI'
+                                )}
+                              </Button>
+                            )}
+                            {canBypassSelection && (
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="flex-1"
+                                disabled={isStartingSession === unit.id}
+                                onClick={() => handleSelectUnit(unit)}
+                              >
+                                {isStartingSession === unit.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  'Entrar assim mesmo'
+                                )}
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ) : (

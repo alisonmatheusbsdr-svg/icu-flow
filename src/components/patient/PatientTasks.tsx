@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useUnit } from '@/hooks/useUnit';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -16,6 +17,7 @@ interface PatientTasksProps {
 
 export function PatientTasks({ patient, authorProfiles, onUpdate }: PatientTasksProps) {
   const { user } = useAuth();
+  const { canEdit } = useUnit();
   const [newTask, setNewTask] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -32,7 +34,7 @@ export function PatientTasks({ patient, authorProfiles, onUpdate }: PatientTasks
   });
 
   const handleAddTask = async () => {
-    if (!newTask.trim() || !user) return;
+    if (!newTask.trim() || !user || !canEdit) return;
     setIsLoading(true);
     
     const { error } = await supabase.from('patient_tasks').insert({
@@ -52,7 +54,7 @@ export function PatientTasks({ patient, authorProfiles, onUpdate }: PatientTasks
   };
 
   const handleToggleTask = async (task: PatientTask) => {
-    if (!user) return;
+    if (!user || !canEdit) return;
     setIsLoading(true);
 
     const { error } = await supabase
@@ -73,6 +75,7 @@ export function PatientTasks({ patient, authorProfiles, onUpdate }: PatientTasks
   };
 
   const handleDeleteTask = async (taskId: string) => {
+    if (!canEdit) return;
     setIsLoading(true);
     
     const { error } = await supabase
@@ -104,25 +107,27 @@ export function PatientTasks({ patient, authorProfiles, onUpdate }: PatientTasks
       </h3>
 
       {/* Add new task */}
-      <div className="flex gap-2 mb-4">
-        <Input
-          placeholder="Nova pendência..."
-          value={newTask}
-          onChange={(e) => setNewTask(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={isLoading}
-          className="flex-1"
-        />
-        <Button
-          onClick={handleAddTask}
-          disabled={isLoading || !newTask.trim()}
-          size="sm"
-          className="gap-1"
-        >
-          <Plus className="h-4 w-4" />
-          Adicionar
-        </Button>
-      </div>
+      {canEdit && (
+        <div className="flex gap-2 mb-4">
+          <Input
+            placeholder="Nova pendência..."
+            value={newTask}
+            onChange={(e) => setNewTask(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={isLoading}
+            className="flex-1"
+          />
+          <Button
+            onClick={handleAddTask}
+            disabled={isLoading || !newTask.trim()}
+            size="sm"
+            className="gap-1"
+          >
+            <Plus className="h-4 w-4" />
+            Adicionar
+          </Button>
+        </div>
+      )}
 
       {/* Task list */}
       {sortedTasks.length > 0 ? (
@@ -139,7 +144,7 @@ export function PatientTasks({ patient, authorProfiles, onUpdate }: PatientTasks
               <Checkbox
                 checked={task.is_completed}
                 onCheckedChange={() => handleToggleTask(task)}
-                disabled={isLoading}
+                disabled={isLoading || !canEdit}
                 className="mt-0.5"
               />
               <div className="flex-1 min-w-0">
@@ -157,15 +162,17 @@ export function PatientTasks({ patient, authorProfiles, onUpdate }: PatientTasks
                   </p>
                 )}
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleDeleteTask(task.id)}
-                disabled={isLoading}
-                className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
+              {canEdit && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleDeleteTask(task.id)}
+                  disabled={isLoading}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
             </div>
           ))}
         </div>

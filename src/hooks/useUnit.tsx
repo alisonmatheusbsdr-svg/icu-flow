@@ -15,6 +15,8 @@ interface ActiveSession {
   started_at: string;
   last_activity: string;
   is_blocking: boolean;
+  handover_mode: boolean;
+  is_handover_receiver: boolean;
 }
 
 interface UnitContextType {
@@ -25,12 +27,19 @@ interface UnitContextType {
   isSessionBlocking: boolean;
   canSwitchUnits: boolean;
   showAllUnits: boolean;
+  isInHandoverMode: boolean;
+  isHandoverReceiver: boolean;
+  canEdit: boolean;
   selectUnit: (unit: Unit) => void;
   selectAllUnits: () => void;
   refreshUnits: () => Promise<void>;
   startSession: (unitId: string) => Promise<{ error: string | null }>;
   endSession: () => Promise<void>;
   updateActivity: () => Promise<void>;
+  startHandoverMode: () => Promise<void>;
+  endHandoverMode: () => Promise<void>;
+  joinAsHandoverReceiver: (unitId: string) => Promise<{ error: string | null }>;
+  assumeShift: () => Promise<void>;
 }
 
 const UnitContext = createContext<UnitContextType | undefined>(undefined);
@@ -53,6 +62,13 @@ export function UnitProvider({ children }: { children: ReactNode }) {
   
   // Check if user is a coordinator (can see all units at once)
   const isCoordinator = rolesLoaded && roles.includes('coordenador');
+
+  // Handover mode states
+  const isInHandoverMode = activeSession?.handover_mode ?? false;
+  const isHandoverReceiver = activeSession?.is_handover_receiver ?? false;
+  
+  // Can edit: true unless user is a handover receiver
+  const canEdit = !isHandoverReceiver;
 
   // Fetch units
   const fetchUnits = useCallback(async () => {
@@ -149,13 +165,13 @@ export function UnitProvider({ children }: { children: ReactNode }) {
       
       const { data: existingSession } = await supabase
         .from('active_sessions')
-        .select('id')
+        .select('id, handover_mode')
         .eq('unit_id', unitId)
         .eq('is_blocking', true)
         .gt('last_activity', thirtyMinutesAgo)
         .maybeSingle();
 
-      if (existingSession) {
+      if (existingSession && !existingSession.handover_mode) {
         return { error: 'Esta UTI já está ocupada por outro plantonista' };
       }
     }
@@ -231,6 +247,144 @@ export function UnitProvider({ children }: { children: ReactNode }) {
     }
   }, [activeSession]);
 
+  // Start handover mode - allows a second plantonista to view
+  const startHandoverMode = async () => {
+    if (!activeSession || !activeSession.is_blocking) return;
+
+    const { error } = await supabase
+      .from('active_sessions')
+      .update({ handover_mode: true })
+      .eq('id', activeSession.id);
+
+    if (error) {
+      console.error('Error starting handover mode:', error);
+    } else {
+      setActiveSession(prev => prev ? { ...prev, handover_mode: true } : null);
+    }
+  };
+
+  // End handover mode and remove any receiver sessions
+  const endHandoverMode = async () => {
+    if (!activeSession) return;
+
+    // First, delete any receiver sessions for this unit
+    await supabase
+      .from('active_sessions')
+      .delete()
+      .eq('unit_id', activeSession.unit_id)
+      .eq('is_handover_receiver', true);
+
+    // Then update our session to exit handover mode
+    const { error } = await supabase
+      .from('active_sessions')
+      .update({ handover_mode: false })
+      .eq('id', activeSession.id);
+
+    if (error) {
+      console.error('Error ending handover mode:', error);
+    } else {
+      setActiveSession(prev => prev ? { ...prev, handover_mode: false } : null);
+    }
+  };
+
+  // Join as handover receiver (view-only mode)
+  const joinAsHandoverReceiver = async (unitId: string): Promise<{ error: string | null }> => {
+    if (!user) {
+      return { error: 'Usuário não autenticado' };
+    }
+
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+
+    // Check if unit is in handover mode
+    const { data: blockingSession } = await supabase
+      .from('active_sessions')
+      .select('id, handover_mode')
+      .eq('unit_id', unitId)
+      .eq('is_blocking', true)
+      .eq('handover_mode', true)
+      .gt('last_activity', thirtyMinutesAgo)
+      .maybeSingle();
+
+    if (!blockingSession) {
+      return { error: 'Esta UTI não está em modo de passagem' };
+    }
+
+    // Check if there's already a receiver
+    const { data: existingReceiver } = await supabase
+      .from('active_sessions')
+      .select('id')
+      .eq('unit_id', unitId)
+      .eq('is_handover_receiver', true)
+      .gt('last_activity', thirtyMinutesAgo)
+      .maybeSingle();
+
+    if (existingReceiver) {
+      return { error: 'Já existe alguém recebendo este plantão' };
+    }
+
+    // Delete any existing session for this user
+    await supabase
+      .from('active_sessions')
+      .delete()
+      .eq('user_id', user.id);
+
+    // Create receiver session
+    const { data, error } = await supabase
+      .from('active_sessions')
+      .insert({
+        user_id: user.id,
+        unit_id: unitId,
+        is_blocking: false,
+        is_handover_receiver: true
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error joining as receiver:', error);
+      return { error: 'Erro ao entrar como receptor' };
+    }
+
+    setActiveSession(data as ActiveSession);
+    
+    const unit = units.find(u => u.id === unitId);
+    if (unit) {
+      setSelectedUnit(unit);
+    }
+
+    return { error: null };
+  };
+
+  // Assume the shift (receiver becomes blocking, previous owner is removed)
+  const assumeShift = async () => {
+    if (!activeSession || !activeSession.is_handover_receiver) return;
+
+    // Delete the blocking session for this unit (the one passing the shift)
+    await supabase
+      .from('active_sessions')
+      .delete()
+      .eq('unit_id', activeSession.unit_id)
+      .eq('is_blocking', true);
+
+    // Update our session to become the new blocking session
+    const { data, error } = await supabase
+      .from('active_sessions')
+      .update({ 
+        is_blocking: true, 
+        is_handover_receiver: false,
+        handover_mode: false 
+      })
+      .eq('id', activeSession.id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error assuming shift:', error);
+    } else {
+      setActiveSession(data as ActiveSession);
+    }
+  };
+
   // Select unit (for privileged users who can switch)
   const selectUnit = (unit: Unit) => {
     if (canSwitchUnits) {
@@ -262,12 +416,19 @@ export function UnitProvider({ children }: { children: ReactNode }) {
       isSessionBlocking,
       canSwitchUnits,
       showAllUnits,
+      isInHandoverMode,
+      isHandoverReceiver,
+      canEdit,
       selectUnit,
       selectAllUnits,
       refreshUnits,
       startSession,
       endSession,
-      updateActivity
+      updateActivity,
+      startHandoverMode,
+      endHandoverMode,
+      joinAsHandoverReceiver,
+      assumeShift
     }}>
       {children}
     </UnitContext.Provider>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useUnit } from '@/hooks/useUnit';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { PatientWithDetails } from '@/types/database';
@@ -130,6 +131,7 @@ const getPrecautionLabel = (type: string, level?: string | null, notes?: string 
 
 export const PatientPrecautions = ({ patient, onUpdate }: PatientPrecautionsProps) => {
   const { user } = useAuth();
+  const { canEdit } = useUnit();
   const [isLoading, setIsLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [pendingSelections, setPendingSelections] = useState<PendingPrecaution[]>([]);
@@ -184,7 +186,7 @@ export const PatientPrecautions = ({ patient, onUpdate }: PatientPrecautionsProp
   };
 
   const handleSaveBatch = async () => {
-    if (!user || pendingSelections.length === 0) return;
+    if (!user || pendingSelections.length === 0 || !canEdit) return;
     setIsLoading(true);
 
     try {
@@ -212,6 +214,7 @@ export const PatientPrecautions = ({ patient, onUpdate }: PatientPrecautionsProp
   };
 
   const handleRemovePrecaution = async (id: string) => {
+    if (!canEdit) return;
     setIsLoading(true);
     try {
       await supabase
@@ -227,6 +230,7 @@ export const PatientPrecautions = ({ patient, onUpdate }: PatientPrecautionsProp
   };
 
   const handleUpdateRiskLevel = async (id: string, newLevel: string) => {
+    if (!canEdit) return;
     setIsLoading(true);
     try {
       const { error } = await supabase
@@ -269,12 +273,13 @@ export const PatientPrecautions = ({ patient, onUpdate }: PatientPrecautionsProp
           </h3>
         </div>
 
-        <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
-          <DialogTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-              <Plus className="h-4 w-4" />
-            </Button>
-          </DialogTrigger>
+        {canEdit && (
+          <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
+            <DialogTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                <Plus className="h-4 w-4" />
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Adicionar Precauções</DialogTitle>
@@ -474,7 +479,8 @@ export const PatientPrecautions = ({ patient, onUpdate }: PatientPrecautionsProp
               </Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        )}
       </div>
 
       {/* Active precautions as badges */}
@@ -534,12 +540,14 @@ export const PatientPrecautions = ({ patient, onUpdate }: PatientPrecautionsProp
                 ) : (
                   <span>{getPrecautionLabel(precaution.precaution_type, precaution.risk_level, precaution.notes)}</span>
                 )}
-                <button
-                  onClick={() => handleRemovePrecaution(precaution.id)}
-                  className="hover:text-destructive transition-colors"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                {canEdit && (
+                  <button
+                    onClick={() => handleRemovePrecaution(precaution.id)}
+                    className="hover:text-destructive transition-colors"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             );
           })}

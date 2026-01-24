@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useUnit } from '@/hooks/useUnit';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -30,8 +31,8 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
   const [isDischargeDialogOpen, setIsDischargeDialogOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isExamsDialogOpen, setIsExamsDialogOpen] = useState(false);
-  
   const { isPreparing, printData, showPreview, preparePrint, closePreview } = usePrintPatient();
+  const { canEdit } = useUnit();
 
   const fetchPatient = async (isRefresh = false) => {
     if (!patientId) return;
@@ -146,26 +147,30 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
           {/* Botões de ação */}
           {patient && (
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsEditOpen(true)}
-                className="flex items-center gap-2"
-              >
-                <Edit className="h-4 w-4" />
-                Editar Dados
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  document.getElementById('evolution-input-section')?.scrollIntoView({ behavior: 'smooth' });
-                }}
-                className="flex items-center gap-2"
-              >
-                <PenLine className="h-4 w-4" />
-                Evoluir
-              </Button>
+              {canEdit && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsEditOpen(true)}
+                  className="flex items-center gap-2"
+                >
+                  <Edit className="h-4 w-4" />
+                  Editar Dados
+                </Button>
+              )}
+              {canEdit && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    document.getElementById('evolution-input-section')?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <PenLine className="h-4 w-4" />
+                  Evoluir
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -189,7 +194,7 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
                 )}
                 Imprimir
               </Button>
-              {patient.is_active && (
+              {canEdit && patient.is_active && (
                 <Button
                   variant="outline"
                   size="sm"

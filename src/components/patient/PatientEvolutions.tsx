@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useUnit } from '@/hooks/useUnit';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { CharacterCounter } from '@/components/ui/character-counter';
@@ -20,6 +21,7 @@ interface PatientEvolutionsProps {
 
 export function PatientEvolutions({ patient, authorProfiles, onUpdate }: PatientEvolutionsProps) {
   const { user } = useAuth();
+  const { canEdit } = useUnit();
   const [newEvolution, setNewEvolution] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const historyContainerRef = useRef<HTMLDivElement>(null);
@@ -42,7 +44,7 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate }: Patient
   }, [patient.evolutions]);
 
   const handleAddEvolution = async () => {
-    if (!newEvolution.trim() || !user) return;
+    if (!newEvolution.trim() || !user || !canEdit) return;
     setIsLoading(true);
     const { error } = await supabase.from('evolutions').insert({ 
       patient_id: patient.id, 
@@ -97,39 +99,41 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate }: Patient
         )}
       </div>
 
-      {/* New Evolution */}
-      <div id="evolution-input-section" className="section-card">
-        <h3 className="text-sm font-semibold text-foreground mb-3">SUA EVOLUÇÃO</h3>
-        
-        <Textarea
-          placeholder="Registrar evolução do plantão..."
-          value={newEvolution}
-          onChange={(e) => setNewEvolution(e.target.value)}
-          rows={5}
-          className="evolution-textarea"
-        />
-        <CharacterCounter current={newEvolution.length} max={EVOLUTION_CHAR_LIMIT} className="mb-3" />
-        
-        <div className="flex justify-end gap-2">
-          <Button 
-            variant="outline"
-            onClick={handleSaveDraft} 
-            disabled={isLoading || !newEvolution.trim()}
-            className="gap-2"
-          >
-            <Save className="h-4 w-4" />
-            Salvar Rascunho
-          </Button>
-          <Button 
-            onClick={handleAddEvolution} 
-            disabled={isLoading || !newEvolution.trim()}
-            className="bg-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/90 text-white gap-2"
-          >
-            <Check className="h-4 w-4" />
-            Validar Evolução
-          </Button>
+      {/* New Evolution - only show if canEdit */}
+      {canEdit && (
+        <div id="evolution-input-section" className="section-card">
+          <h3 className="text-sm font-semibold text-foreground mb-3">SUA EVOLUÇÃO</h3>
+          
+          <Textarea
+            placeholder="Registrar evolução do plantão..."
+            value={newEvolution}
+            onChange={(e) => setNewEvolution(e.target.value)}
+            rows={5}
+            className="evolution-textarea"
+          />
+          <CharacterCounter current={newEvolution.length} max={EVOLUTION_CHAR_LIMIT} className="mb-3" />
+          
+          <div className="flex justify-end gap-2">
+            <Button 
+              variant="outline"
+              onClick={handleSaveDraft} 
+              disabled={isLoading || !newEvolution.trim()}
+              className="gap-2"
+            >
+              <Save className="h-4 w-4" />
+              Salvar Rascunho
+            </Button>
+            <Button 
+              onClick={handleAddEvolution} 
+              disabled={isLoading || !newEvolution.trim()}
+              className="bg-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/90 text-white gap-2"
+            >
+              <Check className="h-4 w-4" />
+              Validar Evolução
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Pending Tasks Section */}
       <PatientTasks 

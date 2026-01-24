@@ -17,8 +17,10 @@ export type Database = {
       active_sessions: {
         Row: {
           created_at: string
+          handover_mode: boolean
           id: string
           is_blocking: boolean
+          is_handover_receiver: boolean
           last_activity: string
           started_at: string
           unit_id: string
@@ -26,8 +28,10 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          handover_mode?: boolean
           id?: string
           is_blocking?: boolean
+          is_handover_receiver?: boolean
           last_activity?: string
           started_at?: string
           unit_id: string
@@ -35,8 +39,10 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          handover_mode?: boolean
           id?: string
           is_blocking?: boolean
+          is_handover_receiver?: boolean
           last_activity?: string
           started_at?: string
           unit_id?: string
