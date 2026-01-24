@@ -302,7 +302,7 @@ export function AllUnitsGrid() {
               {stats.blocked > 0 && (
                 <Badge variant="outline" className="gap-1 border-destructive text-destructive">
                   <AlertTriangle className="h-3 w-3" />
-                  {stats.blocked} bloqueado{stats.blocked > 1 ? 's' : ''}
+                  {stats.blocked} crítico{stats.blocked > 1 ? 's' : ''}
                 </Badge>
               )}
               
