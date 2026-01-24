@@ -3,11 +3,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { CharacterCounter } from '@/components/ui/character-counter';
 import { toast } from 'sonner';
 import { Check, Clock, Save } from 'lucide-react';
 import { PatientTasks } from './PatientTasks';
 import { PatientPrecautions } from './PatientPrecautions';
 import type { PatientWithDetails, Profile } from '@/types/database';
+
+const EVOLUTION_CHAR_LIMIT = 420;
 
 interface PatientEvolutionsProps {
   patient: PatientWithDetails;
@@ -103,8 +106,9 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate }: Patient
           value={newEvolution}
           onChange={(e) => setNewEvolution(e.target.value)}
           rows={5}
-          className="evolution-textarea mb-3"
+          className="evolution-textarea"
         />
+        <CharacterCounter current={newEvolution.length} max={EVOLUTION_CHAR_LIMIT} className="mb-3" />
         
         <div className="flex justify-end gap-2">
           <Button 
