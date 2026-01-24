@@ -1,82 +1,65 @@
 
 
-# Plano: Corrigir Dois Botões "X" nos Modais de Impressão
+# Plano: Corrigir Sobreposição de Elementos no Modal de Impressão
 
 ## Problema
 
-Os modais de impressão exibem **dois ícones "X"** no canto superior direito:
+O botão X automático do `DialogContent` está posicionado com `absolute right-4 top-4`, sobrepondo-se aos botões de impressão no header customizado do modal.
 
-| Origem | Localização |
-|--------|-------------|
-| `DialogContent` (automático) | `src/components/ui/dialog.tsx` linha 45-48 |
-| Botão manual | Header customizado dos modais de impressão |
-
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│ Preview de Impressão - UTI 1     [Imprimir]  [X]  [X] ← DUPLICADOS
-├─────────────────────────────────────────────────────────────────┤
 ```
+┌─────────────────────────────────────────────────────────────────┐
+│ Preview de Impressão    [Imprimir Atual] [Imprimir Todos] [X]  │
+│                                          ↑ SOBREPOSIÇÃO ↑      │
+└─────────────────────────────────────────────────────────────────┘
+│                [Anterior]    Leito 5    [Próximo]              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Causa
+
+O componente `DialogContent` adiciona automaticamente um botão X com posição absoluta:
+
+```tsx
+// dialog.tsx linha 45-48
+<DialogPrimitive.Close className="absolute right-4 top-4 ...">
+  <X className="h-4 w-4" />
+</DialogPrimitive.Close>
+```
+
+Quando usamos `p-0` no DialogContent e criamos um header customizado com botões, o X absoluto fica por cima de tudo.
 
 ## Solução
 
-Remover o botão X manual dos modais de impressão, mantendo apenas o X automático do `DialogContent`.
+Reorganizar o header para acomodar o botão X automático, adicionando espaço à direita (padding) para que os botões de impressão não fiquem embaixo do X.
 
-## Arquivos a Modificar
+## Alteração
 
-### 1. `src/components/print/UnitPrintPreviewModal.tsx`
+### Arquivo: `src/components/print/UnitPrintPreviewModal.tsx`
 
-**Remover linhas 422-424:**
-
-```tsx
-// REMOVER este bloco
-<Button variant="ghost" size="icon" onClick={onClose}>
-  <X className="h-4 w-4" />
-</Button>
-```
-
-**Também remover o import `X` se não for usado em outro lugar.**
-
-### 2. `src/components/print/PrintPreviewModal.tsx`
-
-**Remover linhas 288-290:**
+Modificar o header (linhas 402-423) para adicionar `pr-12` (padding-right de 48px) que acomoda o botão X automático:
 
 ```tsx
-// REMOVER este bloco
-<Button variant="ghost" size="icon" onClick={onClose}>
-  <X className="h-4 w-4" />
-</Button>
+{/* Header */}
+<div className="flex items-center justify-between px-4 py-3 border-b bg-muted/50 pr-12">
+  <h2 className="text-lg font-semibold">Preview de Impressão - {unitName}</h2>
+  <div className="flex items-center gap-2">
+    {/* Botões de impressão ficam com espaço antes do X */}
+  </div>
+</div>
 ```
 
-**Também remover o import `X` do lucide-react.**
+### Arquivo: `src/components/print/PrintPreviewModal.tsx`
+
+Aplicar a mesma correção no outro modal de impressão.
 
 ## Resultado Esperado
 
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│ Preview de Impressão - UTI 1     [Imprimir Atual] [Imprimir Todos]  [X]
-├─────────────────────────────────────────────────────────────────┤
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ Preview de Impressão    [Imprimir Atual] [Imprimir Todos]       [X]│
+│                                                          espaço ↑  │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-Apenas um botão X visível, fornecido automaticamente pelo componente `DialogContent`.
-
----
-
-## Seção Técnica
-
-### Alterações Detalhadas
-
-**UnitPrintPreviewModal.tsx:**
-- Linha 4: Remover `X` do import de lucide-react
-- Linhas 422-424: Remover o `<Button>` com ícone X
-
-**PrintPreviewModal.tsx:**
-- Linha 4: Remover `X` do import de lucide-react
-- Linhas 288-290: Remover o `<Button>` com ícone X
-
-### Comportamento Mantido
-
-O X automático do `DialogContent` já:
-- Fecha o modal ao ser clicado
-- Dispara `onOpenChange(false)` que chama `onClose()`
-- Possui styling e acessibilidade adequados
+Os botões de impressão ficam visíveis e o X fica isolado no canto superior direito sem sobreposição.
 
