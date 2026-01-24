@@ -36,8 +36,8 @@ serve(async (req) => {
       );
     }
 
-    // Format evolutions for the prompt (excluding the 2 most recent)
-    const evolutionsToSummarize = evolutions.slice(2); // Skip first 2 (most recent)
+    // Format evolutions for the prompt (excluding the 3 most recent, since we now show 3)
+    const evolutionsToSummarize = evolutions.slice(3); // Skip first 3 (most recent)
     const formattedEvolutions = evolutionsToSummarize.map((e: Evolution, i: number) => {
       const date = new Date(e.created_at).toLocaleString('pt-BR', { 
         day: '2-digit', 
@@ -47,11 +47,17 @@ serve(async (req) => {
       });
       return `[${date}${e.author_name ? ` - ${e.author_name}` : ''}]: ${e.content}`;
     }).join('\n\n---\n\n');
+    
+    const evolutionCount = evolutionsToSummarize.length;
 
+    // Dynamic line count based on evolution count
+    const maxLines = evolutionCount <= 5 ? 3 : evolutionCount <= 10 ? 4 : 6;
+    
     const systemPrompt = `Você é um médico intensivista experiente. Sua tarefa é resumir evoluções clínicas de pacientes de UTI de forma clara e concisa.
 
 Regras:
-- Resuma em NO MÁXIMO 3 linhas
+- Resuma em NO MÁXIMO ${maxLines} linhas
+- Para internações longas, capture a trajetória: admissão → intercorrências principais → estado atual
 - Foque em: diagnóstico/problema principal, tendência clínica (melhora/piora/estável), e próximos passos se mencionados
 - Use linguagem médica objetiva
 - NÃO inclua datas ou nomes de autores
@@ -62,7 +68,7 @@ Regras:
 
 ${formattedEvolutions}`;
 
-    console.log(`Summarizing ${evolutionsToSummarize.length} evolutions...`);
+    console.log(`Summarizing ${evolutionCount} evolutions (max ${maxLines} lines)...`);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -76,7 +82,7 @@ ${formattedEvolutions}`;
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
         ],
-        max_tokens: 200,
+        max_tokens: 400,
         temperature: 0.3,
       }),
     });

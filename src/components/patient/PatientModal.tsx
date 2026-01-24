@@ -54,7 +54,7 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
       return;
     }
 
-    const [devicesRes, drugsRes, antibioticsRes, plansRes, evolutionsRes, prophylaxisRes, venousAccessRes, respiratorySupportRes, tasksRes, precautionsRes] = await Promise.all([
+    const [devicesRes, drugsRes, antibioticsRes, plansRes, evolutionsRes, prophylaxisRes, venousAccessRes, respiratorySupportRes, tasksRes, precautionsRes, examsRes] = await Promise.all([
       supabase.from('invasive_devices').select('*').eq('patient_id', patientId).eq('is_active', true),
       supabase.from('vasoactive_drugs').select('*').eq('patient_id', patientId).eq('is_active', true),
       supabase.from('antibiotics').select('*').eq('patient_id', patientId).eq('is_active', true),
@@ -64,7 +64,8 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
       supabase.from('venous_access').select('*').eq('patient_id', patientId).eq('is_active', true),
       supabase.from('respiratory_support').select('*').eq('patient_id', patientId).eq('is_active', true).order('created_at', { ascending: false }).limit(1),
       supabase.from('patient_tasks').select('*').eq('patient_id', patientId),
-      supabase.from('patient_precautions').select('*').eq('patient_id', patientId).eq('is_active', true)
+      supabase.from('patient_precautions').select('*').eq('patient_id', patientId).eq('is_active', true),
+      supabase.from('patient_exams').select('*').eq('patient_id', patientId).order('exam_date', { ascending: false })
     ]);
 
     const patientWithDetails: PatientWithDetails = {
@@ -80,7 +81,11 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
       venous_access: venousAccessRes.data || [],
       respiratory_support: respiratorySupportRes.data?.[0] || null,
       patient_tasks: tasksRes.data || [],
-      patient_precautions: precautionsRes.data || []
+      patient_precautions: precautionsRes.data || [],
+      patient_exams: (examsRes.data || []).map(e => ({
+        ...e,
+        exam_type: e.exam_type as 'imagem' | 'laboratorial' | 'cultura' | 'outros'
+      }))
     };
 
     setPatient(patientWithDetails);
