@@ -41,11 +41,11 @@ interface PatientDischargeDialogProps {
 
 type DischargeOutcome = 'alta_enfermaria' | 'obito' | 'transferencia_externa' | 'transferencia_interna';
 
-const outcomeOptions: { value: DischargeOutcome; label: string; icon: React.ReactNode; color: string }[] = [
-  { value: 'alta_enfermaria', label: 'Alta para Enfermaria', icon: <Home className="h-4 w-4" />, color: 'text-green-600' },
-  { value: 'obito', label: 'Óbito', icon: <Cross className="h-4 w-4" />, color: 'text-red-600' },
-  { value: 'transferencia_externa', label: 'Transferência Externa', icon: <Building2 className="h-4 w-4" />, color: 'text-blue-600' },
-  { value: 'transferencia_interna', label: 'Transferência Interna', icon: <ArrowRightLeft className="h-4 w-4" />, color: 'text-orange-600' },
+const outcomeOptions: { value: DischargeOutcome; label: string; icon: React.ReactNode; iconColor: string }[] = [
+  { value: 'alta_enfermaria', label: 'Alta para Enfermaria', icon: <Home className="h-4 w-4" />, iconColor: 'text-emerald-600' },
+  { value: 'obito', label: 'Óbito', icon: <Cross className="h-4 w-4" />, iconColor: 'text-red-600' },
+  { value: 'transferencia_externa', label: 'Transferência Externa', icon: <Building2 className="h-4 w-4" />, iconColor: 'text-amber-600' },
+  { value: 'transferencia_interna', label: 'Transferência Interna', icon: <ArrowRightLeft className="h-4 w-4" />, iconColor: 'text-blue-600' },
 ];
 
 export function PatientDischargeDialog({
@@ -135,9 +135,9 @@ export function PatientDischargeDialog({
             <SelectContent>
               {outcomeOptions.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
-                  <span className={`flex items-center gap-2 ${option.color}`}>
-                    {option.icon}
-                    {option.label}
+                  <span className="flex items-center gap-2">
+                    <span className={option.iconColor}>{option.icon}</span>
+                    <span>{option.label}</span>
                   </span>
                 </SelectItem>
               ))}
