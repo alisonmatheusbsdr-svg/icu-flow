@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Printer, X } from 'lucide-react';
+import { Printer } from 'lucide-react';
 import { PrintPatientSheet } from './PrintPatientSheet';
 import type { PatientWithDetails, Profile } from '@/types/database';
 import './print-styles.css';
@@ -284,9 +284,6 @@ export function PrintPreviewModal({
             <Button onClick={handlePrint} className="flex items-center gap-2">
               <Printer className="h-4 w-4" />
               Imprimir
-            </Button>
-            <Button variant="ghost" size="icon" onClick={onClose}>
-              <X className="h-4 w-4" />
             </Button>
           </div>
         </div>

@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Printer, X, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { Printer, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { PrintPatientSheet } from './PrintPatientSheet';
 import type { PatientWithDetails, Profile } from '@/types/database';
 import './print-styles.css';
@@ -418,9 +418,6 @@ export function UnitPrintPreviewModal({
             >
               <Printer className="h-4 w-4" />
               Imprimir Todos ({totalPatients})
-            </Button>
-            <Button variant="ghost" size="icon" onClick={onClose}>
-              <X className="h-4 w-4" />
             </Button>
           </div>
         </div>
