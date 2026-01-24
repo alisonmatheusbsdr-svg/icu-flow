@@ -27,7 +27,7 @@ export function usePrintPatient() {
       let summary: string | null = null;
       const evolutions = patient.evolutions || [];
       
-      if (evolutions.length >= 4) {
+      if (evolutions.length >= 3) {
         try {
           const { data, error } = await supabase.functions.invoke('summarize-evolutions', {
             body: {

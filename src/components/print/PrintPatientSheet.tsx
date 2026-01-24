@@ -48,8 +48,8 @@ export function PrintPatientSheet({
   const daysAdmitted = getDays(patient.admission_date);
   const currentPlan = patient.therapeutic_plans?.[0]?.content || null;
   const evolutions = patient.evolutions || [];
-  const latestEvolutions = evolutions.slice(0, 3);
-  const evolutionLabels = ['ÚLTIMA', 'PENÚLTIMA', 'ANTEPENÚLTIMA'];
+  const latestEvolutions = evolutions.slice(0, 2);
+  const evolutionLabels = ['ÚLTIMA', 'PENÚLTIMA'];
 
   // Get respiratory support details
   const respSupport = patient.respiratory_support;
@@ -271,7 +271,7 @@ export function PrintPatientSheet({
                   📝 {evolutionLabels[idx] || `EVO ${idx + 1}`} ({format(new Date(evo.created_at), "dd/MM HH:mm", { locale: ptBR })} - {authorName})
                 </div>
                 <div className="print-evolution-content">
-                  {truncate(evo.content, 280)}
+                  {truncate(evo.content, 420)}
                 </div>
               </div>
             );
