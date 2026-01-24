@@ -1,109 +1,154 @@
 
-# Plano: Substituir Botão "Imprimir" por Botão de Perfil
+
+# Plano: Diarista com Perfil Igual ao Coordenador
 
 ## Objetivo
 
-Remover o botão "Imprimir" que não está funcional e substituí-lo por um botão "Perfil" que permite ao usuário editar seus dados pessoais e alterar sua senha.
+Modificar o perfil do **Diarista** para ter o mesmo comportamento de navegação do **Coordenador**, incluindo:
+- Acesso à **Visão Geral** panorâmica de todas as UTIs
+- Dropdown para alternar entre "Visão Geral" e UTIs específicas
+- Manter a capacidade exclusiva de criar/editar o **Plano Terapêutico**
+
+## Situação Atual
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                         COMPORTAMENTO                           │
+├──────────────┬──────────────────────────────────────────────────┤
+│ Plantonista  │ Seleciona UTI → Fica bloqueado → Timeout 30min   │
+├──────────────┼──────────────────────────────────────────────────┤
+│ Diarista     │ Vai direto ao Dashboard com dropdown de UTIs     │
+│              │ NÃO tem "Visão Geral"                            │
+├──────────────┼──────────────────────────────────────────────────┤
+│ Coordenador  │ Dashboard com "Visão Geral" + dropdown de UTIs   │
+│              │ Pode ver todas UTIs simultaneamente              │
+└──────────────┴──────────────────────────────────────────────────┘
+```
 
 ## Alterações
 
-### 1. Criar Componente `ProfileDialog`
+### 1. Modificar `useUnit.tsx` - Adicionar Diarista à Visão Geral
 
-**Novo arquivo:** `src/components/profile/ProfileDialog.tsx`
+**Arquivo:** `src/hooks/useUnit.tsx`
 
-Modal com duas abas:
-
-```text
-┌────────────────────────────────────────────┐
-│ Meu Perfil                             [X] │
-├────────────────────────────────────────────┤
-│  [Dados Pessoais]  [Alterar Senha]         │
-│                                            │
-│  Nome Completo                             │
-│  ┌──────────────────────────────────────┐  │
-│  │ Dr. João Silva                       │  │
-│  └──────────────────────────────────────┘  │
-│                                            │
-│  CRM                                       │
-│  ┌──────────────────────────────────────┐  │
-│  │ CRM-PE 123456                        │  │
-│  └──────────────────────────────────────┘  │
-│                                            │
-│                    [Cancelar] [Salvar]     │
-└────────────────────────────────────────────┘
-```
-
-**Componentes utilizados:**
-- `Dialog`, `DialogContent`, `DialogHeader`, `DialogTitle`
-- `Tabs`, `TabsContent`, `TabsList`, `TabsTrigger`
-- `Input`, `Label`, `Button`
-
-**Funcionalidades:**
-
-| Aba | Campos | Ação |
-|-----|--------|------|
-| Dados Pessoais | Nome, CRM | Atualiza tabela `profiles` |
-| Alterar Senha | Nova senha, Confirmar senha | `supabase.auth.updateUser()` |
-
-### 2. Atualizar `useAuth.tsx`
-
-Adicionar função `updateProfile` ao contexto:
+Linha 64 - A verificação de coordenador para mostrar "Visão Geral" precisa incluir diarista:
 
 ```typescript
-updateProfile: (updates: { nome?: string; crm?: string }) => Promise<{ error: Error | null }>;
-updatePassword: (newPassword: string) => Promise<{ error: Error | null }>;
+// Antes
+const isCoordinator = rolesLoaded && roles.includes('coordenador');
+
+// Depois - renomear para ser mais genérico
+const canViewAllUnits = rolesLoaded && (roles.includes('coordenador') || roles.includes('diarista'));
 ```
 
-### 3. Atualizar `DashboardHeader.tsx`
+Linha 398-404 - Ajustar `selectAllUnits` para incluir diarista:
 
-**Linha 7:** Trocar import `Printer` por `User`
-
-**Linhas 247-250:** Substituir botão "Imprimir":
-
-```tsx
+```typescript
 // Antes
-<Button variant="outline" size="sm" className="gap-2">
-  <Printer className="h-4 w-4" />
-  Imprimir
-</Button>
+const selectAllUnits = () => {
+  if (isCoordinator) {
+    setSelectedUnit(null);
+    setShowAllUnits(true);
+  }
+};
 
 // Depois
-<Button 
-  variant="outline" 
-  size="sm" 
-  className="gap-2"
-  onClick={() => setIsProfileOpen(true)}
->
-  <User className="h-4 w-4" />
-  Perfil
-</Button>
+const selectAllUnits = () => {
+  if (canViewAllUnits) {
+    setSelectedUnit(null);
+    setShowAllUnits(true);
+  }
+};
 ```
 
-**Adicionar:**
-- Estado `isProfileOpen`
-- Import e renderização do `ProfileDialog`
+### 2. Modificar `Dashboard.tsx` - Incluir Diarista na Visão Geral
 
-## Arquivos
+**Arquivo:** `src/pages/Dashboard.tsx`
 
-| Arquivo | Ação |
-|---------|------|
-| `src/components/profile/ProfileDialog.tsx` | **Criar** |
-| `src/hooks/useAuth.tsx` | **Modificar** - adicionar `updateProfile` e `updatePassword` |
-| `src/components/dashboard/DashboardHeader.tsx` | **Modificar** - trocar botão |
+Linha 21 - Verificar se é diarista ou coordenador:
 
-## Validações
+```typescript
+// Antes
+const isCoordinator = hasRole('coordenador');
 
-**Dados Pessoais:**
-- Nome: obrigatório, mínimo 3 caracteres
-- CRM: obrigatório
+// Depois
+const canViewAllUnits = hasRole('coordenador') || hasRole('diarista');
+```
 
-**Alterar Senha:**
-- Nova senha: mínimo 6 caracteres
-- Confirmação deve ser igual à nova senha
-- Feedback visual de sucesso/erro com toast
+Linhas 58, 84, 91 - Usar a nova variável no lugar de `isCoordinator`:
 
-## Segurança
+```typescript
+// Em todos os lugares onde usa isCoordinator para redirecionamento
+// Substituir por canViewAllUnits
+```
 
-- Atualização de senha usa `supabase.auth.updateUser()` que valida a sessão
-- Tabela `profiles` já tem RLS: usuário só edita seu próprio registro
-- Não é necessário pedir senha atual (Supabase valida o token)
+### 3. Modificar `DashboardHeader.tsx` - Mostrar Dropdown de Visão Geral para Diarista
+
+**Arquivo:** `src/components/dashboard/DashboardHeader.tsx`
+
+Linha 53 - Adicionar diarista à verificação:
+
+```typescript
+// Antes
+const isCoordinator = hasRole('coordenador');
+
+// Depois
+const canViewAllUnits = hasRole('coordenador') || hasRole('diarista');
+```
+
+Linha 143 - Usar a nova variável para mostrar "Visão Geral" no dropdown:
+
+```typescript
+// Antes
+{isCoordinator && (
+  <SelectItem value="all">
+    <div className="flex items-center gap-2">
+      <LayoutGrid className="h-4 w-4" />
+      Visão Geral
+    </div>
+  </SelectItem>
+)}
+
+// Depois
+{canViewAllUnits && (
+  // ... mesmo código
+)}
+```
+
+## Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/hooks/useUnit.tsx` | Adicionar `diarista` à lógica de `canViewAllUnits` |
+| `src/pages/Dashboard.tsx` | Substituir `isCoordinator` por `canViewAllUnits` |
+| `src/components/dashboard/DashboardHeader.tsx` | Mostrar "Visão Geral" no dropdown para diarista |
+
+## Funcionalidades Preservadas
+
+O Plano Terapêutico continuará funcionando **exatamente igual**. A verificação em `TherapeuticPlan.tsx` (linha 27) permanece:
+
+```typescript
+const canEditPlan = hasRole('diarista') && canEdit;
+```
+
+Isso significa que:
+- Apenas **Diaristas** podem criar/editar planos terapêuticos
+- A política RLS no banco já garante isso também
+
+## Resultado Esperado
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                      NOVO COMPORTAMENTO                         │
+├──────────────┬──────────────────────────────────────────────────┤
+│ Plantonista  │ (sem alteração)                                  │
+├──────────────┼──────────────────────────────────────────────────┤
+│ Diarista     │ Dashboard com "Visão Geral" + dropdown de UTIs   │
+│              │ MANTÉM: edição de Plano Terapêutico              │
+├──────────────┼──────────────────────────────────────────────────┤
+│ Coordenador  │ (sem alteração)                                  │
+└──────────────┴──────────────────────────────────────────────────┘
+```
+
+O Diarista agora terá a mesma experiência de navegação do Coordenador, podendo visualizar todas as UTIs simultaneamente na "Visão Geral" ou focar em uma UTI específica através do dropdown.
+
