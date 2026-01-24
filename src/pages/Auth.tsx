@@ -167,7 +167,7 @@ export default function Auth() {
                     <Input
                       id="signup-crm"
                       type="text"
-                      placeholder="CRM/SP 123456"
+                      placeholder="CRM-PE 123456"
                       value={signupCrm}
                       onChange={(e) => setSignupCrm(e.target.value)}
                       disabled={isLoading}
