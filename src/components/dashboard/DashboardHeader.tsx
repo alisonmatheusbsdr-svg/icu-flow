@@ -4,10 +4,11 @@ import { useUnit } from '@/hooks/useUnit';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Activity, LogOut, Settings, Printer, Lock, Clock, Stethoscope, Building2, LayoutGrid, UserCheck, Eye, ArrowRightLeft, XCircle } from 'lucide-react';
+import { Activity, LogOut, Settings, User, Lock, Clock, Stethoscope, Building2, LayoutGrid, UserCheck, Eye, ArrowRightLeft, XCircle } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { ProfileDialog } from '@/components/profile/ProfileDialog';
 
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -47,6 +48,7 @@ export function DashboardHeader() {
   } = useUnit();
   const [timeRemaining, setTimeRemaining] = useState<{ text: string; isUrgent: boolean } | null>(null);
   const [isHandoverLoading, setIsHandoverLoading] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   
   const isCoordinator = hasRole('coordenador');
   const isOnAdmin = location.pathname === '/admin';
@@ -244,9 +246,14 @@ export function DashboardHeader() {
             </Button>
           )}
 
-          <Button variant="outline" size="sm" className="gap-2">
-            <Printer className="h-4 w-4" />
-            Imprimir
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="gap-2"
+            onClick={() => setIsProfileOpen(true)}
+          >
+            <User className="h-4 w-4" />
+            Perfil
           </Button>
 
           {isOnAdmin && hasRole('admin') && (
@@ -275,6 +282,8 @@ export function DashboardHeader() {
           </Button>
         </div>
       </div>
+
+      <ProfileDialog open={isProfileOpen} onOpenChange={setIsProfileOpen} />
     </header>
   );
 }

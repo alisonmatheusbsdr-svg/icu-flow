@@ -25,6 +25,8 @@ interface AuthContextType {
   signUp: (email: string, password: string, nome: string, crm: string, role: AppRole) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  updateProfile: (updates: { nome?: string; crm?: string }) => Promise<{ error: Error | null }>;
+  updatePassword: (newPassword: string) => Promise<{ error: Error | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -148,6 +150,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRolesLoaded(false);
   };
 
+  const updateProfile = async (updates: { nome?: string; crm?: string }) => {
+    if (!user) {
+      return { error: new Error('Usuário não autenticado') };
+    }
+
+    const { error } = await supabase
+      .from('profiles')
+      .update(updates)
+      .eq('id', user.id);
+
+    if (!error) {
+      // Refresh profile data after update
+      await fetchProfile(user.id);
+    }
+
+    return { error: error ? new Error(error.message) : null };
+  };
+
+  const updatePassword = async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    return { error: error ? new Error(error.message) : null };
+  };
+
   const hasRole = (role: AppRole) => roles.includes(role);
   const isApproved = profile?.approval_status === 'approved';
 
@@ -164,7 +189,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn,
       signUp,
       signOut,
-      refreshProfile
+      refreshProfile,
+      updateProfile,
+      updatePassword
     }}>
       {children}
     </AuthContext.Provider>
