@@ -1,13 +1,13 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { BedCard } from './BedCard';
 import { PatientModal } from '@/components/patient/PatientModal';
-import { PrintableUnitDocument, PrintableUnitDocumentRef } from '@/components/print/PrintableUnitDocument';
+import { UnitPrintPreviewModal } from '@/components/print/UnitPrintPreviewModal';
 import { Button } from '@/components/ui/button';
 import { Loader2, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import '@/components/print/print-styles.css';
-import type { Bed, Patient } from '@/types/database';
+import type { Bed, Patient, PatientWithDetails, Profile } from '@/types/database';
 
 interface BedGridProps {
   unitId: string;
@@ -55,14 +55,22 @@ interface BedWithPatient extends Bed {
   }) | null;
 }
 
+interface PatientPrintData {
+  patient: PatientWithDetails;
+  bedNumber: number;
+  evolutionSummary: string | null;
+  authorProfiles: Record<string, Profile>;
+}
+
 export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
   const [beds, setBeds] = useState<BedWithPatient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [selectedBedNumber, setSelectedBedNumber] = useState<number>(0);
   const [isPrintMode, setIsPrintMode] = useState(false);
-  const [isPrintReady, setIsPrintReady] = useState(false);
-  const printRef = useRef<PrintableUnitDocumentRef>(null);
+  const [isPrintLoading, setIsPrintLoading] = useState(false);
+  const [printLoadingStatus, setLoadingStatus] = useState('Carregando...');
+  const [printPatients, setPrintPatients] = useState<PatientPrintData[]>([]);
 
   const fetchBeds = async () => {
     setIsLoading(true);
@@ -203,27 +211,156 @@ export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
     fetchBeds(); // Refresh data when modal closes
   };
 
-  const handlePrintUnit = () => {
+  const handlePrintUnit = async () => {
     setIsPrintMode(true);
-    setIsPrintReady(false);
-  };
+    setIsPrintLoading(true);
+    setPrintPatients([]);
+    
+    try {
+      setLoadingStatus('Carregando leitos ocupados...');
+      
+      // Get all occupied beds in the unit
+      const { data: bedsData, error: bedsError } = await supabase
+        .from('beds')
+        .select('*')
+        .eq('unit_id', unitId)
+        .eq('is_occupied', true)
+        .order('bed_number');
 
-  const handlePrintReady = () => {
-    setIsPrintReady(true);
-    setTimeout(() => {
-      printRef.current?.triggerPrint();
-      // Reset after print
-      setTimeout(() => {
+      if (bedsError) throw bedsError;
+      if (!bedsData || bedsData.length === 0) {
+        toast.error('Nenhum leito ocupado na unidade');
         setIsPrintMode(false);
-        setIsPrintReady(false);
-      }, 500);
-    }, 100);
+        setIsPrintLoading(false);
+        return;
+      }
+
+      const bedIds = bedsData.map(b => b.id);
+      setLoadingStatus(`Carregando dados de ${bedsData.length} pacientes...`);
+
+      // Get all active patients in these beds
+      const { data: patientsData, error: patientsError } = await supabase
+        .from('patients')
+        .select('*')
+        .in('bed_id', bedIds)
+        .eq('is_active', true);
+
+      if (patientsError) throw patientsError;
+      if (!patientsData || patientsData.length === 0) {
+        toast.error('Nenhum paciente ativo encontrado');
+        setIsPrintMode(false);
+        setIsPrintLoading(false);
+        return;
+      }
+
+      const patientIds = patientsData.map(p => p.id);
+
+      // Fetch all related data in parallel
+      setLoadingStatus('Carregando dados clínicos...');
+      const [
+        devicesRes, drugsRes, antibioticsRes, plansRes, evolutionsRes,
+        prophylaxisRes, venousAccessRes, respiratorySupportRes, tasksRes, precautionsRes
+      ] = await Promise.all([
+        supabase.from('invasive_devices').select('*').in('patient_id', patientIds).eq('is_active', true),
+        supabase.from('vasoactive_drugs').select('*').in('patient_id', patientIds).eq('is_active', true),
+        supabase.from('antibiotics').select('*').in('patient_id', patientIds).eq('is_active', true),
+        supabase.from('therapeutic_plans').select('*').in('patient_id', patientIds).order('created_at', { ascending: false }),
+        supabase.from('evolutions').select('*').in('patient_id', patientIds).order('created_at', { ascending: false }),
+        supabase.from('prophylaxis').select('*').in('patient_id', patientIds).eq('is_active', true),
+        supabase.from('venous_access').select('*').in('patient_id', patientIds).eq('is_active', true),
+        supabase.from('respiratory_support').select('*').in('patient_id', patientIds).eq('is_active', true),
+        supabase.from('patient_tasks').select('*').in('patient_id', patientIds),
+        supabase.from('patient_precautions').select('*').in('patient_id', patientIds).eq('is_active', true)
+      ]);
+
+      // Collect all author IDs
+      const authorIds = new Set<string>();
+      plansRes.data?.forEach(p => authorIds.add(p.created_by));
+      evolutionsRes.data?.forEach(e => authorIds.add(e.created_by));
+
+      // Fetch author profiles
+      let authorProfiles: Record<string, Profile> = {};
+      if (authorIds.size > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('*')
+          .in('id', Array.from(authorIds));
+        if (profiles) {
+          profiles.forEach(p => { authorProfiles[p.id] = p as Profile; });
+        }
+      }
+
+      // Build patient data with all relations
+      setLoadingStatus('Gerando resumos IA...');
+      const patientPrintDataPromises = patientsData.map(async (patientData) => {
+        const bed = bedsData.find(b => b.id === patientData.bed_id);
+        const patientEvolutions = evolutionsRes.data?.filter(e => e.patient_id === patientData.id) || [];
+        
+        const patientWithDetails: PatientWithDetails = {
+          ...patientData,
+          weight: patientData.weight ?? null,
+          diet_type: (patientData.diet_type as PatientWithDetails['diet_type']) ?? null,
+          invasive_devices: devicesRes.data?.filter(d => d.patient_id === patientData.id) || [],
+          vasoactive_drugs: drugsRes.data?.filter(d => d.patient_id === patientData.id) || [],
+          antibiotics: antibioticsRes.data?.filter(a => a.patient_id === patientData.id) || [],
+          therapeutic_plans: plansRes.data?.filter(p => p.patient_id === patientData.id).slice(0, 1) || [],
+          evolutions: patientEvolutions,
+          prophylaxis: prophylaxisRes.data?.filter(p => p.patient_id === patientData.id) || [],
+          venous_access: venousAccessRes.data?.filter(v => v.patient_id === patientData.id) || [],
+          respiratory_support: respiratorySupportRes.data?.find(r => r.patient_id === patientData.id) || null,
+          patient_tasks: tasksRes.data?.filter(t => t.patient_id === patientData.id) || [],
+          patient_precautions: precautionsRes.data?.filter(p => p.patient_id === patientData.id) || []
+        };
+
+        // Get AI summary if there are 3+ evolutions
+        let summary: string | null = null;
+        if (patientEvolutions.length >= 3) {
+          try {
+            const { data, error } = await supabase.functions.invoke('summarize-evolutions', {
+              body: {
+                evolutions: patientEvolutions.map(e => ({
+                  content: e.content,
+                  created_at: e.created_at,
+                  author_name: authorProfiles[e.created_by]?.nome
+                })),
+                patient_context: patientData.main_diagnosis
+              }
+            });
+            if (!error && data?.summary) {
+              summary = data.summary;
+            }
+          } catch (e) {
+            console.error('Failed to get summary for patient:', patientData.id, e);
+          }
+        }
+
+        return {
+          patient: patientWithDetails,
+          bedNumber: bed?.bed_number || 0,
+          evolutionSummary: summary,
+          authorProfiles
+        };
+      });
+
+      const patientPrintData = await Promise.all(patientPrintDataPromises);
+      
+      // Sort by bed number
+      patientPrintData.sort((a, b) => a.bedNumber - b.bedNumber);
+      
+      setPrintPatients(patientPrintData);
+      setIsPrintLoading(false);
+
+    } catch (error) {
+      console.error('Error fetching patients for print:', error);
+      toast.error(error instanceof Error ? error.message : 'Erro ao carregar dados');
+      setIsPrintMode(false);
+      setIsPrintLoading(false);
+    }
   };
 
-  const handlePrintError = (error: string) => {
-    toast.error(error);
+  const handleClosePrintPreview = () => {
     setIsPrintMode(false);
-    setIsPrintReady(false);
+    setPrintPatients([]);
   };
 
   if (isLoading) {
@@ -278,16 +415,14 @@ export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
         onClose={handleCloseModal}
       />
 
-      {/* Print container for entire unit - renders when print mode is active */}
-      {isPrintMode && (
-        <PrintableUnitDocument
-          ref={printRef}
-          unitId={unitId}
-          unitName={unitName}
-          onReady={handlePrintReady}
-          onError={handlePrintError}
-        />
-      )}
+      <UnitPrintPreviewModal
+        isOpen={isPrintMode}
+        onClose={handleClosePrintPreview}
+        unitName={unitName}
+        patients={printPatients}
+        isLoading={isPrintLoading}
+        loadingStatus={printLoadingStatus}
+      />
     </div>
   );
 }
