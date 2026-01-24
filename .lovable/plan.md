@@ -1,36 +1,175 @@
 
-# Plano: Renomear Terminologia "Bloqueados" para "Críticos"
+# Plano: Bloquear Leitos (Admin/Coordenador)
 
-## Problema Identificado
+## Contexto
 
-O termo **"bloqueados"** na interface sugere leitos inativos, mas na verdade se refere a pacientes com **impossibilidade de alta** (intubados com TOT ou em uso de drogas vasoativas - DVA). Isso gera confusão com o conceito de "leito bloqueado" (indisponível para internação).
+Adicionar funcionalidade para Admins e Coordenadores bloquearem leitos fisicamente (indisponível para admissão), diferente do conceito de "paciente crítico" (TOT/DVA que impede alta).
 
-## Proposta de Novo Termo
+## Alterações de Schema
 
-| Antes | Depois |
-|-------|--------|
-| "3 bloqueados" | "3 críticos" |
+### 1. Migração - Adicionar coluna `is_blocked` na tabela `beds`
 
-**Justificativa:** O termo "críticos" transmite corretamente que são pacientes em condição clínica grave (TOT/DVA) que impede a alta, sem confundir com a disponibilidade física do leito.
+```sql
+ALTER TABLE beds 
+ADD COLUMN is_blocked BOOLEAN NOT NULL DEFAULT false;
 
-## Alterações
+ALTER TABLE beds 
+ADD COLUMN blocked_at TIMESTAMP WITH TIME ZONE;
+
+ALTER TABLE beds 
+ADD COLUMN blocked_by UUID REFERENCES auth.users(id);
+
+ALTER TABLE beds 
+ADD COLUMN blocked_reason TEXT;
+```
+
+## Alterações de Código
+
+### Arquivo: `src/types/database.ts`
+
+Atualizar interface `Bed`:
+
+```typescript
+export interface Bed {
+  id: string;
+  unit_id: string;
+  bed_number: number;
+  is_occupied: boolean;
+  is_blocked: boolean;           // NOVO
+  blocked_at: string | null;     // NOVO
+  blocked_by: string | null;     // NOVO
+  blocked_reason: string | null; // NOVO
+  created_at: string;
+}
+```
+
+### Arquivo: `src/components/dashboard/BedCard.tsx`
+
+1. Adicionar novo estado visual para leito bloqueado (fundo vermelho/cinza com ícone de cadeado)
+2. Adicionar DropdownMenu com opção "Bloquear Leito" ou "Desbloquear Leito" para Admin/Coordenador
+3. Quando bloqueado, não permite admitir paciente
+
+```text
+Leito Bloqueado:
+┌─────────────────┐
+│  Leito 5        │
+│     🔒          │
+│  BLOQUEADO      │
+│ (Manutenção)    │
+│                 │
+│ [Desbloquear]   │ ← Só Admin/Coord
+└─────────────────┘
+```
+
+### Novo Arquivo: `src/components/dashboard/BlockBedDialog.tsx`
+
+Modal para bloquear leito com campo de motivo opcional:
+
+```text
+┌────────────────────────────────┐
+│  Bloquear Leito 5              │
+├────────────────────────────────┤
+│  Motivo (opcional):            │
+│  ┌────────────────────────┐    │
+│  │ Manutenção, limpeza... │    │
+│  └────────────────────────┘    │
+│                                │
+│  [Cancelar]  [Confirmar]       │
+└────────────────────────────────┘
+```
 
 ### Arquivo: `src/components/dashboard/AllUnitsGrid.tsx`
 
-**Linha 305** - Atualizar texto do badge:
+1. Adicionar contador de leitos bloqueados nas estatísticas
+2. Mostrar badge "X bloqueados" (agora sim referindo-se a leitos físicos)
 
 ```typescript
-// Antes
-{stats.blocked} bloqueado{stats.blocked > 1 ? 's' : ''}
-
-// Depois
-{stats.blocked} crítico{stats.blocked > 1 ? 's' : ''}
+stats: {
+  total: number;
+  occupied: number;
+  blocked: number;      // Leitos fisicamente bloqueados (NOVO)
+  highDischarge: number;
+  critical: number;     // Renomear de 'blocked' (TOT/DVA)
+  palliative: number;
+}
 ```
+
+### Arquivo: `src/hooks/useAuth.tsx`
+
+Já temos `hasRole()` disponível - usaremos para verificar permissão.
+
+## Fluxo de Uso
+
+```text
+┌─────────────────────────────────────────────────────────┐
+│                    LEITO VAGO                           │
+│                                                         │
+│   ┌─────────┐                        ┌─────────┐       │
+│   │ Admitir │  ← Plantonista         │   ⋮     │       │
+│   └─────────┘                        └────┬────┘       │
+│                                           │            │
+│                           ┌───────────────┴──────┐     │
+│                           │ • Bloquear Leito     │     │
+│                           └──────────────────────┘     │
+│                              ↑ Admin/Coordenador       │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│                   LEITO BLOQUEADO                       │
+│                                                         │
+│            🔒 BLOQUEADO                                 │
+│            "Manutenção"                                 │
+│                                                         │
+│   ┌──────────────┐                                     │
+│   │ Desbloquear  │  ← Admin/Coordenador                │
+│   └──────────────┘                                     │
+└─────────────────────────────────────────────────────────┘
+```
+
+## Regras de Negócio
+
+| Situação | Pode Bloquear? | Pode Desbloquear? | Pode Admitir? |
+|----------|----------------|-------------------|---------------|
+| Leito Vago | ✅ Admin/Coord | N/A | ✅ Todos |
+| Leito Ocupado | ❌ | N/A | N/A |
+| Leito Bloqueado | N/A | ✅ Admin/Coord | ❌ |
 
 ## Resultado Esperado
 
-O badge nas estatísticas da unidade exibirá:
-- **"1 crítico"** (singular)
-- **"3 críticos"** (plural)
+1. **Leito vago**: Mostra botão "+" para admitir + menu de contexto com "Bloquear" (Admin/Coord)
+2. **Leito bloqueado**: Exibe visual diferenciado (cadeado vermelho), motivo, e botão "Desbloquear" (Admin/Coord)
+3. **Estatísticas**: Badge "X bloqueados" na Visão Geral referindo-se a leitos físicos indisponíveis
 
-Mantém-se a mesma lógica (TOT + DVA), apenas com terminologia mais clara e clinicamente precisa.
+---
+
+## Seção Técnica
+
+### RLS Policy para bloqueio
+
+```sql
+-- Apenas Admin e Coordenador podem bloquear/desbloquear
+CREATE POLICY "Admins and coordinators can block beds"
+ON beds
+FOR UPDATE
+USING (
+  has_role(auth.uid(), 'admin') OR 
+  has_role(auth.uid(), 'coordenador')
+)
+WITH CHECK (
+  has_role(auth.uid(), 'admin') OR 
+  has_role(auth.uid(), 'coordenador')
+);
+```
+
+### Componente BedCard - Lógica de Renderização
+
+```typescript
+// Ordem de prioridade de exibição:
+if (bed.is_blocked) {
+  return <BlockedBedCard />; // Visual de bloqueado
+}
+if (!patient) {
+  return <EmptyBedCard />;   // Visual de vago
+}
+return <OccupiedBedCard />;  // Visual com paciente
+```
