@@ -121,8 +121,8 @@ export function DashboardHeader() {
             <span className="font-semibold text-foreground">UTI Handoff Pro</span>
           </button>
 
-          {/* Show dropdown for privileged users, fixed badge for plantonistas */}
-          {units.length > 0 && (
+          {/* Show dropdown for privileged users, fixed badge for plantonistas - hide on admin page */}
+          {units.length > 0 && !isOnAdmin && (
             canSwitchUnits ? (
               <Select 
                 value={showAllUnits ? 'all' : selectedUnit?.id || ''} 
