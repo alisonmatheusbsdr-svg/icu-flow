@@ -1,175 +1,118 @@
 
-# Plano: Bloquear Leitos (Admin/Coordenador)
+# Plano: Botão de Impressão na Visão Geral (Coordenador/Diarista)
 
 ## Contexto
 
-Adicionar funcionalidade para Admins e Coordenadores bloquearem leitos fisicamente (indisponível para admissão), diferente do conceito de "paciente crítico" (TOT/DVA que impede alta).
+Adicionar um botão de impressão (ícone de impressora) no header de cada unidade na tela "Visão Geral das UTIs". Isso permite que Coordenadores e Diaristas imprimam os dados de uma UTI específica diretamente da visão panorâmica, sem precisar entrar na unidade.
 
-## Alterações de Schema
-
-### 1. Migração - Adicionar coluna `is_blocked` na tabela `beds`
-
-```sql
-ALTER TABLE beds 
-ADD COLUMN is_blocked BOOLEAN NOT NULL DEFAULT false;
-
-ALTER TABLE beds 
-ADD COLUMN blocked_at TIMESTAMP WITH TIME ZONE;
-
-ALTER TABLE beds 
-ADD COLUMN blocked_by UUID REFERENCES auth.users(id);
-
-ALTER TABLE beds 
-ADD COLUMN blocked_reason TEXT;
-```
-
-## Alterações de Código
-
-### Arquivo: `src/types/database.ts`
-
-Atualizar interface `Bed`:
-
-```typescript
-export interface Bed {
-  id: string;
-  unit_id: string;
-  bed_number: number;
-  is_occupied: boolean;
-  is_blocked: boolean;           // NOVO
-  blocked_at: string | null;     // NOVO
-  blocked_by: string | null;     // NOVO
-  blocked_reason: string | null; // NOVO
-  created_at: string;
-}
-```
-
-### Arquivo: `src/components/dashboard/BedCard.tsx`
-
-1. Adicionar novo estado visual para leito bloqueado (fundo vermelho/cinza com ícone de cadeado)
-2. Adicionar DropdownMenu com opção "Bloquear Leito" ou "Desbloquear Leito" para Admin/Coordenador
-3. Quando bloqueado, não permite admitir paciente
+## Localização do Botão
 
 ```text
-Leito Bloqueado:
-┌─────────────────┐
-│  Leito 5        │
-│     🔒          │
-│  BLOQUEADO      │
-│ (Manutenção)    │
-│                 │
-│ [Desbloquear]   │ ← Só Admin/Coord
-└─────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 📋 UTI 1 - HMA    [👥 10/10] [↗ 5 altas] [⚠ 3 críticos] [🖨️] [▼]      │
+│                                                          ↑              │
+│                                                    NOVO BOTÃO           │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Novo Arquivo: `src/components/dashboard/BlockBedDialog.tsx`
-
-Modal para bloquear leito com campo de motivo opcional:
-
-```text
-┌────────────────────────────────┐
-│  Bloquear Leito 5              │
-├────────────────────────────────┤
-│  Motivo (opcional):            │
-│  ┌────────────────────────┐    │
-│  │ Manutenção, limpeza... │    │
-│  └────────────────────────┘    │
-│                                │
-│  [Cancelar]  [Confirmar]       │
-└────────────────────────────────┘
-```
+## Alterações
 
 ### Arquivo: `src/components/dashboard/AllUnitsGrid.tsx`
 
-1. Adicionar contador de leitos bloqueados nas estatísticas
-2. Mostrar badge "X bloqueados" (agora sim referindo-se a leitos físicos)
+**1. Adicionar imports necessários**
 
 ```typescript
-stats: {
-  total: number;
-  occupied: number;
-  blocked: number;      // Leitos fisicamente bloqueados (NOVO)
-  highDischarge: number;
-  critical: number;     // Renomear de 'blocked' (TOT/DVA)
-  palliative: number;
+import { Printer } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { UnitPrintPreviewModal } from '@/components/print/UnitPrintPreviewModal';
+import { toast } from 'sonner';
+import type { PatientWithDetails, Profile } from '@/types/database';
+```
+
+**2. Adicionar interface PatientPrintData**
+
+```typescript
+interface PatientPrintData {
+  patient: PatientWithDetails;
+  bedNumber: number;
+  evolutionSummary: string | null;
+  authorProfiles: Record<string, Profile>;
 }
 ```
 
-### Arquivo: `src/hooks/useAuth.tsx`
+**3. Adicionar estados para controle de impressão**
 
-Já temos `hasRole()` disponível - usaremos para verificar permissão.
+```typescript
+// Estados de impressão
+const [printingUnitId, setPrintingUnitId] = useState<string | null>(null);
+const [isPrintLoading, setIsPrintLoading] = useState(false);
+const [printLoadingStatus, setPrintLoadingStatus] = useState('Carregando...');
+const [printPatients, setPrintPatients] = useState<PatientPrintData[]>([]);
+const [printUnitName, setPrintUnitName] = useState('');
+```
+
+**4. Adicionar função handlePrintUnit**
+
+Reutilizar a mesma lógica do `BedGrid`:
+- Buscar leitos ocupados da unidade
+- Buscar pacientes ativos
+- Buscar dados clínicos em paralelo
+- Gerar resumos IA para pacientes com 3+ evoluções
+- Ordenar por número do leito
+- Abrir modal de preview
+
+**5. Adicionar botão no header de cada unidade**
+
+Dentro do `CollapsibleTrigger`, antes dos badges:
+
+```tsx
+<Button
+  variant="ghost"
+  size="icon"
+  className="h-7 w-7"
+  onClick={(e) => {
+    e.stopPropagation(); // Evita toggle do Collapsible
+    handlePrintUnit(unit.id, unit.name);
+  }}
+  disabled={stats.occupied === 0 || printingUnitId === unit.id}
+>
+  {printingUnitId === unit.id ? (
+    <Loader2 className="h-4 w-4 animate-spin" />
+  ) : (
+    <Printer className="h-4 w-4" />
+  )}
+</Button>
+```
+
+**6. Adicionar modal de preview**
+
+No final do componente, antes do fechamento:
+
+```tsx
+<UnitPrintPreviewModal
+  isOpen={!!printingUnitId && !isPrintLoading}
+  onClose={handleClosePrintPreview}
+  unitName={printUnitName}
+  patients={printPatients}
+  isLoading={isPrintLoading}
+  loadingStatus={printLoadingStatus}
+/>
+```
 
 ## Fluxo de Uso
 
 ```text
-┌─────────────────────────────────────────────────────────┐
-│                    LEITO VAGO                           │
-│                                                         │
-│   ┌─────────┐                        ┌─────────┐       │
-│   │ Admitir │  ← Plantonista         │   ⋮     │       │
-│   └─────────┘                        └────┬────┘       │
-│                                           │            │
-│                           ┌───────────────┴──────┐     │
-│                           │ • Bloquear Leito     │     │
-│                           └──────────────────────┘     │
-│                              ↑ Admin/Coordenador       │
-└─────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────┐
-│                   LEITO BLOQUEADO                       │
-│                                                         │
-│            🔒 BLOQUEADO                                 │
-│            "Manutenção"                                 │
-│                                                         │
-│   ┌──────────────┐                                     │
-│   │ Desbloquear  │  ← Admin/Coordenador                │
-│   └──────────────┘                                     │
-└─────────────────────────────────────────────────────────┘
+1. Coordenador/Diarista na Visão Geral
+2. Clica no ícone 🖨️ de uma UTI
+3. Loading aparece no botão
+4. Modal de preview abre com todos os pacientes
+5. Pode navegar entre pacientes ou imprimir todos
 ```
-
-## Regras de Negócio
-
-| Situação | Pode Bloquear? | Pode Desbloquear? | Pode Admitir? |
-|----------|----------------|-------------------|---------------|
-| Leito Vago | ✅ Admin/Coord | N/A | ✅ Todos |
-| Leito Ocupado | ❌ | N/A | N/A |
-| Leito Bloqueado | N/A | ✅ Admin/Coord | ❌ |
 
 ## Resultado Esperado
 
-1. **Leito vago**: Mostra botão "+" para admitir + menu de contexto com "Bloquear" (Admin/Coord)
-2. **Leito bloqueado**: Exibe visual diferenciado (cadeado vermelho), motivo, e botão "Desbloquear" (Admin/Coord)
-3. **Estatísticas**: Badge "X bloqueados" na Visão Geral referindo-se a leitos físicos indisponíveis
-
----
-
-## Seção Técnica
-
-### RLS Policy para bloqueio
-
-```sql
--- Apenas Admin e Coordenador podem bloquear/desbloquear
-CREATE POLICY "Admins and coordinators can block beds"
-ON beds
-FOR UPDATE
-USING (
-  has_role(auth.uid(), 'admin') OR 
-  has_role(auth.uid(), 'coordenador')
-)
-WITH CHECK (
-  has_role(auth.uid(), 'admin') OR 
-  has_role(auth.uid(), 'coordenador')
-);
-```
-
-### Componente BedCard - Lógica de Renderização
-
-```typescript
-// Ordem de prioridade de exibição:
-if (bed.is_blocked) {
-  return <BlockedBedCard />; // Visual de bloqueado
-}
-if (!patient) {
-  return <EmptyBedCard />;   // Visual de vago
-}
-return <OccupiedBedCard />;  // Visual com paciente
-```
+- Botão de impressora visível no header de cada unidade
+- Desabilitado quando a unidade não tem pacientes ocupados
+- Loading visual durante carregamento
+- Abre o mesmo modal de preview usado no BedGrid
+- Permite imprimir paciente atual ou todos da unidade
