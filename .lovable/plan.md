@@ -1,41 +1,68 @@
 
+# Plano: Renomear Sistema para "Sinapse | UTI"
 
-# Plano: Remover Seletor de UTI da Página Admin
+## Visão Geral
 
-## Problema
+Atualizar todas as referências do nome antigo "UTI Handoff Pro" e placeholders "Lovable App" para o novo nome **"Sinapse | UTI"**.
 
-Na página `/admin`, o dropdown "Selecione a UTI" aparece no header, mas não tem função nesse contexto. O admin está gerenciando usuários e unidades, não visualizando pacientes.
+## Arquivos a Modificar
 
-## Solução
+### 1. `index.html` - Meta Tags e Título da Página
 
-Ocultar o seletor de UTI quando o usuário está na rota `/admin`.
+| Linha | Antes | Depois |
+|-------|-------|--------|
+| 7 | `<title>Lovable App</title>` | `<title>Sinapse \| UTI</title>` |
+| 8 | `content="Lovable Generated Project"` | `content="Sistema de Gestão e Passagem de Plantão em UTI"` |
+| 12 | `og:title content="Lovable App"` | `og:title content="Sinapse \| UTI"` |
+| 13 | `og:description content="Lovable Generated Project"` | `og:description content="Sistema de Gestão e Passagem de Plantão em UTI"` |
 
-## Alteração
+### 2. `src/pages/Auth.tsx` - Tela de Login
 
-**Arquivo:** `src/components/dashboard/DashboardHeader.tsx`
-
-**Linha 125:** Adicionar verificação `!isOnAdmin` para ocultar o seletor na página Admin:
-
+**Linha 99:**
 ```typescript
 // Antes
-{units.length > 0 && (
-  canSwitchUnits ? (
-    <Select ...>
-    ...
+<h1 className="text-2xl font-bold text-foreground">UTI Handoff Pro</h1>
 
 // Depois
-{units.length > 0 && !isOnAdmin && (
-  canSwitchUnits ? (
-    <Select ...>
-    ...
+<h1 className="text-2xl font-bold text-foreground">Sinapse | UTI</h1>
 ```
 
-A variável `isOnAdmin` já existe (linha 54) e verifica se a rota atual é `/admin`.
+### 3. `src/pages/SelectUnit.tsx` - Seleção de Unidade
+
+**Linha 233:**
+```typescript
+// Antes
+<h1 className="font-semibold text-lg">UTI Handoff Pro</h1>
+
+// Depois
+<h1 className="font-semibold text-lg">Sinapse | UTI</h1>
+```
+
+### 4. `src/components/dashboard/DashboardHeader.tsx` - Header do Dashboard
+
+**Linha 121:**
+```typescript
+// Antes
+<span className="font-semibold text-foreground">UTI Handoff Pro</span>
+
+// Depois
+<span className="font-semibold text-foreground">Sinapse | UTI</span>
+```
+
+## Resumo
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `index.html` | Título, descrição e meta tags OG |
+| `src/pages/Auth.tsx` | Nome no header da tela de login |
+| `src/pages/SelectUnit.tsx` | Nome no header de seleção de UTI |
+| `src/components/dashboard/DashboardHeader.tsx` | Nome no header do dashboard |
 
 ## Resultado
 
-| Página | Comportamento |
-|--------|---------------|
-| `/admin` | Header sem seletor de UTI |
-| `/dashboard` | Header com seletor de UTI (Visão Geral + UTIs) |
-
+O nome **"Sinapse | UTI"** aparecerá em:
+- Aba do navegador
+- Resultados de busca e compartilhamentos (meta tags)
+- Tela de login
+- Seleção de unidade
+- Header do dashboard e admin
