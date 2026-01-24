@@ -1,68 +1,68 @@
 
-# Plano: Renomear Sistema para "Sinapse | UTI"
+# Plano: Melhorar Visibilidade das Cores no Modal de Desfecho
 
-## Visão Geral
+## Problema Identificado
 
-Atualizar todas as referências do nome antigo "UTI Handoff Pro" e placeholders "Lovable App" para o novo nome **"Sinapse | UTI"**.
+No modal "Registrar Desfecho", quando uma opção está em hover/foco, o fundo teal (`--accent: 175 60% 40%`) entra em conflito com as cores de texto das opções (especialmente `text-green-600` da "Alta para Enfermaria"), tornando o texto difícil de ler.
 
-## Arquivos a Modificar
+## Solução
 
-### 1. `index.html` - Meta Tags e Título da Página
+Alterar as cores das opções de desfecho para serem mais contrastantes e usar uma abordagem de "ícone colorido + texto neutro" para garantir legibilidade em qualquer estado:
 
-| Linha | Antes | Depois |
+| Opção | Antes | Depois |
 |-------|-------|--------|
-| 7 | `<title>Lovable App</title>` | `<title>Sinapse \| UTI</title>` |
-| 8 | `content="Lovable Generated Project"` | `content="Sistema de Gestão e Passagem de Plantão em UTI"` |
-| 12 | `og:title content="Lovable App"` | `og:title content="Sinapse \| UTI"` |
-| 13 | `og:description content="Lovable Generated Project"` | `og:description content="Sistema de Gestão e Passagem de Plantão em UTI"` |
+| Alta para Enfermaria | `text-green-600` (texto verde) | Ícone verde + texto neutro |
+| Óbito | `text-red-600` | Ícone vermelho + texto neutro |
+| Transferência Externa | `text-blue-600` | Ícone azul + texto neutro |
+| Transferência Interna | `text-orange-600` | Ícone laranja + texto neutro |
 
-### 2. `src/pages/Auth.tsx` - Tela de Login
+## Alterações
 
-**Linha 99:**
+**Arquivo:** `src/components/patient/PatientDischargeDialog.tsx`
+
+### 1. Atualizar estrutura das opções (linhas 44-49)
+
+Separar a cor do ícone da cor do texto:
+
 ```typescript
-// Antes
-<h1 className="text-2xl font-bold text-foreground">UTI Handoff Pro</h1>
-
-// Depois
-<h1 className="text-2xl font-bold text-foreground">Sinapse | UTI</h1>
+const outcomeOptions: { 
+  value: DischargeOutcome; 
+  label: string; 
+  icon: React.ReactNode; 
+  iconColor: string;
+}[] = [
+  { value: 'alta_enfermaria', label: 'Alta para Enfermaria', icon: <Home className="h-4 w-4" />, iconColor: 'text-emerald-600' },
+  { value: 'obito', label: 'Óbito', icon: <Cross className="h-4 w-4" />, iconColor: 'text-red-600' },
+  { value: 'transferencia_externa', label: 'Transferência Externa', icon: <Building2 className="h-4 w-4" />, iconColor: 'text-amber-600' },
+  { value: 'transferencia_interna', label: 'Transferência Interna', icon: <ArrowRightLeft className="h-4 w-4" />, iconColor: 'text-blue-600' },
+];
 ```
 
-### 3. `src/pages/SelectUnit.tsx` - Seleção de Unidade
+### 2. Atualizar renderização do SelectItem (linhas 136-143)
 
-**Linha 233:**
-```typescript
-// Antes
-<h1 className="font-semibold text-lg">UTI Handoff Pro</h1>
+Aplicar cor apenas no ícone, mantendo texto legível:
 
-// Depois
-<h1 className="font-semibold text-lg">Sinapse | UTI</h1>
+```tsx
+<SelectItem key={option.value} value={option.value}>
+  <span className="flex items-center gap-2">
+    <span className={option.iconColor}>{option.icon}</span>
+    <span>{option.label}</span>
+  </span>
+</SelectItem>
 ```
 
-### 4. `src/components/dashboard/DashboardHeader.tsx` - Header do Dashboard
+## Cores Escolhidas
 
-**Linha 121:**
-```typescript
-// Antes
-<span className="font-semibold text-foreground">UTI Handoff Pro</span>
+| Desfecho | Cor do Ícone | Justificativa |
+|----------|--------------|---------------|
+| Alta para Enfermaria | `emerald-600` | Verde vibrante, associado a alta/positivo |
+| Óbito | `red-600` | Vermelho, alerta crítico |
+| Transferência Externa | `amber-600` | Laranja/âmbar para movimento externo |
+| Transferência Interna | `blue-600` | Azul para movimento interno |
 
-// Depois
-<span className="font-semibold text-foreground">Sinapse | UTI</span>
-```
+## Resultado Esperado
 
-## Resumo
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `index.html` | Título, descrição e meta tags OG |
-| `src/pages/Auth.tsx` | Nome no header da tela de login |
-| `src/pages/SelectUnit.tsx` | Nome no header de seleção de UTI |
-| `src/components/dashboard/DashboardHeader.tsx` | Nome no header do dashboard |
-
-## Resultado
-
-O nome **"Sinapse | UTI"** aparecerá em:
-- Aba do navegador
-- Resultados de busca e compartilhamentos (meta tags)
-- Tela de login
-- Seleção de unidade
-- Header do dashboard e admin
+- Texto sempre legível (cor neutra herdada do tema)
+- Ícones coloridos mantêm a identificação visual rápida
+- Funciona corretamente em hover/foco (fundo teal + texto branco)
+- Consistente em modo claro e escuro
