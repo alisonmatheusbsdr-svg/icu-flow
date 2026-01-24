@@ -11,9 +11,8 @@ import { PatientDischargeDialog } from './PatientDischargeDialog';
 import { EditPatientDialog } from './EditPatientDialog';
 import { PatientExamsDialog } from './PatientExamsDialog';
 import { PatientComplexityBar } from './PatientComplexityBar';
-import { PrintPatientSheet } from '@/components/print/PrintPatientSheet';
+import { PrintPreviewModal } from '@/components/print/PrintPreviewModal';
 import { usePrintPatient } from '@/hooks/usePrintPatient';
-import '@/components/print/print-styles.css';
 import type { PatientWithDetails, Profile, RespiratorySupport, PatientPrecaution } from '@/types/database';
 
 interface PatientModalProps {
@@ -32,7 +31,7 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isExamsDialogOpen, setIsExamsDialogOpen] = useState(false);
   
-  const { isPreparing, printData, preparePrint, clearPrintData } = usePrintPatient();
+  const { isPreparing, printData, showPreview, preparePrint, closePreview } = usePrintPatient();
 
   const fetchPatient = async (isRefresh = false) => {
     if (!patientId) return;
@@ -296,16 +295,16 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
           />
         )}
 
-        {/* Print Container - Hidden on screen, visible on print */}
+        {/* Print Preview Modal */}
         {printData && (
-          <div className="print-container">
-            <PrintPatientSheet
-              patient={printData.patient}
-              bedNumber={printData.bedNumber}
-              evolutionSummary={printData.evolutionSummary}
-              authorProfiles={printData.authorProfiles}
-            />
-          </div>
+          <PrintPreviewModal
+            isOpen={showPreview}
+            onClose={closePreview}
+            patient={printData.patient}
+            bedNumber={printData.bedNumber}
+            evolutionSummary={printData.evolutionSummary}
+            authorProfiles={printData.authorProfiles}
+          />
         )}
       </DialogContent>
     </Dialog>
