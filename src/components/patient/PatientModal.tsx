@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ClipboardList, Edit, Loader2, LogOut, PenLine } from 'lucide-react';
+import { ClipboardList, Edit, Loader2, LogOut, PenLine, Printer } from 'lucide-react';
 import { TherapeuticPlan } from './TherapeuticPlan';
 import { PatientClinicalData } from './PatientClinicalData';
 import { PatientEvolutions } from './PatientEvolutions';
@@ -11,6 +11,9 @@ import { PatientDischargeDialog } from './PatientDischargeDialog';
 import { EditPatientDialog } from './EditPatientDialog';
 import { PatientExamsDialog } from './PatientExamsDialog';
 import { PatientComplexityBar } from './PatientComplexityBar';
+import { PrintPatientSheet } from '@/components/print/PrintPatientSheet';
+import { usePrintPatient } from '@/hooks/usePrintPatient';
+import '@/components/print/print-styles.css';
 import type { PatientWithDetails, Profile, RespiratorySupport, PatientPrecaution } from '@/types/database';
 
 interface PatientModalProps {
@@ -28,6 +31,8 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
   const [isDischargeDialogOpen, setIsDischargeDialogOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isExamsDialogOpen, setIsExamsDialogOpen] = useState(false);
+  
+  const { isPreparing, printData, preparePrint, clearPrintData } = usePrintPatient();
 
   const fetchPatient = async (isRefresh = false) => {
     if (!patientId) return;
@@ -166,6 +171,20 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
                 <ClipboardList className="h-4 w-4" />
                 Exames
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => preparePrint(patient, bedNumber, authorProfiles)}
+                disabled={isPreparing}
+                className="flex items-center gap-2"
+              >
+                {isPreparing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Printer className="h-4 w-4" />
+                )}
+                Imprimir
+              </Button>
               {patient.is_active && (
                 <Button
                   variant="outline"
@@ -275,6 +294,18 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
             onClose={() => setIsExamsDialogOpen(false)}
             onUpdate={() => fetchPatient(true)}
           />
+        )}
+
+        {/* Print Container - Hidden on screen, visible on print */}
+        {printData && (
+          <div className="print-container">
+            <PrintPatientSheet
+              patient={printData.patient}
+              bedNumber={printData.bedNumber}
+              evolutionSummary={printData.evolutionSummary}
+              authorProfiles={printData.authorProfiles}
+            />
+          </div>
         )}
       </DialogContent>
     </Dialog>

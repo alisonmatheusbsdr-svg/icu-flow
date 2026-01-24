@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.get-users-with-email]
 verify_jwt = false
+
+[functions.summarize-evolutions]
+verify_jwt = false

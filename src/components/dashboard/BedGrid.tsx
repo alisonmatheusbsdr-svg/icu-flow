@@ -1,8 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { BedCard } from './BedCard';
 import { PatientModal } from '@/components/patient/PatientModal';
-import { Loader2 } from 'lucide-react';
+import { PrintableUnitDocument, PrintableUnitDocumentRef } from '@/components/print/PrintableUnitDocument';
+import { Button } from '@/components/ui/button';
+import { Loader2, Printer } from 'lucide-react';
+import { toast } from 'sonner';
+import '@/components/print/print-styles.css';
 import type { Bed, Patient } from '@/types/database';
 
 interface BedGridProps {
@@ -56,6 +60,9 @@ export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [selectedBedNumber, setSelectedBedNumber] = useState<number>(0);
+  const [isPrintMode, setIsPrintMode] = useState(false);
+  const [isPrintReady, setIsPrintReady] = useState(false);
+  const printRef = useRef<PrintableUnitDocumentRef>(null);
 
   const fetchBeds = async () => {
     setIsLoading(true);
@@ -196,6 +203,29 @@ export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
     fetchBeds(); // Refresh data when modal closes
   };
 
+  const handlePrintUnit = () => {
+    setIsPrintMode(true);
+    setIsPrintReady(false);
+  };
+
+  const handlePrintReady = () => {
+    setIsPrintReady(true);
+    setTimeout(() => {
+      printRef.current?.triggerPrint();
+      // Reset after print
+      setTimeout(() => {
+        setIsPrintMode(false);
+        setIsPrintReady(false);
+      }, 500);
+    }, 100);
+  };
+
+  const handlePrintError = (error: string) => {
+    toast.error(error);
+    setIsPrintMode(false);
+    setIsPrintReady(false);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -206,7 +236,29 @@ export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold mb-4">{unitName}</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-semibold">{unitName}</h2>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handlePrintUnit}
+          disabled={isPrintMode}
+          className="flex items-center gap-2 no-print"
+        >
+          {isPrintMode ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Preparando...
+            </>
+          ) : (
+            <>
+              <Printer className="h-4 w-4" />
+              Imprimir UTI
+            </>
+          )}
+        </Button>
+      </div>
+
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
         {beds.map(bed => (
           <BedCard 
@@ -225,6 +277,17 @@ export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
         isOpen={!!selectedPatientId}
         onClose={handleCloseModal}
       />
+
+      {/* Print container for entire unit - renders when print mode is active */}
+      {isPrintMode && (
+        <PrintableUnitDocument
+          ref={printRef}
+          unitId={unitId}
+          unitName={unitName}
+          onReady={handlePrintReady}
+          onError={handlePrintError}
+        />
+      )}
     </div>
   );
 }
