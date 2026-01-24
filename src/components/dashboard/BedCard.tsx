@@ -2,9 +2,15 @@ import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
 import { AdmitPatientForm } from './AdmitPatientForm';
-import { Wind, Heart, Plus, Pill, Ban } from 'lucide-react';
+import { BlockBedDialog } from './BlockBedDialog';
+import { Wind, Heart, Plus, Pill, Ban, Lock, MoreVertical, Unlock, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import type { Bed, Patient } from '@/types/database';
 
 interface PatientWithModality extends Patient {
@@ -90,35 +96,136 @@ const MODALITY_BADGES: Record<string, { badge: string; className: string }> = {
 
 export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps) {
   const [isAdmitOpen, setIsAdmitOpen] = useState(false);
+  const [isBlockDialogOpen, setIsBlockDialogOpen] = useState(false);
+  const [isUnblocking, setIsUnblocking] = useState(false);
+  const { hasRole } = useAuth();
+
+  const canBlockBeds = hasRole('admin') || hasRole('coordenador');
 
   const daysInternado = patient 
     ? Math.ceil((new Date().getTime() - new Date(patient.admission_date).getTime()) / (1000 * 60 * 60 * 24))
     : 0;
 
-  if (!patient) {
+  const handleUnblock = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsUnblocking(true);
+    
+    const { error } = await supabase
+      .from('beds')
+      .update({
+        is_blocked: false,
+        blocked_at: null,
+        blocked_by: null,
+        blocked_reason: null
+      })
+      .eq('id', bed.id);
+
+    if (error) {
+      toast.error('Erro ao desbloquear leito');
+      console.error(error);
+    } else {
+      toast.success(`Leito ${bed.bed_number} desbloqueado`);
+      onUpdate();
+    }
+    
+    setIsUnblocking(false);
+  };
+
+  // Blocked bed state
+  if (bed.is_blocked) {
     return (
-      <Dialog open={isAdmitOpen} onOpenChange={setIsAdmitOpen}>
-        <DialogTrigger asChild>
-          <Card className="bed-empty cursor-pointer hover:border-success/50 transition-colors">
-            <CardContent className="p-4 flex flex-col items-center justify-center min-h-[140px]">
-              <div className="text-lg font-semibold text-muted-foreground mb-2">Leito {bed.bed_number}</div>
-              <div className="p-2 rounded-full bg-success/10">
-                <Plus className="h-5 w-5 text-success" />
-              </div>
-              <span className="text-sm text-muted-foreground mt-2">Vago</span>
-            </CardContent>
-          </Card>
-        </DialogTrigger>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Admitir Paciente - Leito {bed.bed_number}</DialogTitle>
-          </DialogHeader>
-          <AdmitPatientForm bedId={bed.id} onSuccess={() => { setIsAdmitOpen(false); onUpdate(); }} />
-        </DialogContent>
-      </Dialog>
+      <Card className="border-destructive/50 bg-destructive/5 cursor-default">
+        <CardContent className="p-4 flex flex-col items-center justify-center min-h-[140px]">
+          <div className="text-lg font-semibold text-muted-foreground mb-2">Leito {bed.bed_number}</div>
+          <div className="p-2 rounded-full bg-destructive/10">
+            <Lock className="h-5 w-5 text-destructive" />
+          </div>
+          <span className="text-sm font-medium text-destructive mt-2">BLOQUEADO</span>
+          {bed.blocked_reason && (
+            <span className="text-xs text-muted-foreground mt-1 text-center line-clamp-2">
+              {bed.blocked_reason}
+            </span>
+          )}
+          
+          {canBlockBeds && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="mt-3 gap-1"
+              onClick={handleUnblock}
+              disabled={isUnblocking}
+            >
+              {isUnblocking ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Unlock className="h-3 w-3" />
+              )}
+              Desbloquear
+            </Button>
+          )}
+        </CardContent>
+      </Card>
     );
   }
 
+  // Empty bed state
+  if (!patient) {
+    return (
+      <>
+        <Dialog open={isAdmitOpen} onOpenChange={setIsAdmitOpen}>
+          <Card className="bed-empty cursor-pointer hover:border-success/50 transition-colors relative">
+            <CardContent className="p-4 flex flex-col items-center justify-center min-h-[140px]">
+              <div className="text-lg font-semibold text-muted-foreground mb-2">Leito {bed.bed_number}</div>
+              
+              {canBlockBeds && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="absolute top-2 right-2 h-6 w-6"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setIsBlockDialogOpen(true)}>
+                      <Lock className="h-4 w-4 mr-2" />
+                      Bloquear Leito
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              
+              <DialogTrigger asChild>
+                <div className="p-2 rounded-full bg-success/10 cursor-pointer hover:bg-success/20 transition-colors">
+                  <Plus className="h-5 w-5 text-success" />
+                </div>
+              </DialogTrigger>
+              <span className="text-sm text-muted-foreground mt-2">Vago</span>
+            </CardContent>
+          </Card>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Admitir Paciente - Leito {bed.bed_number}</DialogTitle>
+            </DialogHeader>
+            <AdmitPatientForm bedId={bed.id} onSuccess={() => { setIsAdmitOpen(false); onUpdate(); }} />
+          </DialogContent>
+        </Dialog>
+        
+        <BlockBedDialog
+          bedId={bed.id}
+          bedNumber={bed.bed_number}
+          isOpen={isBlockDialogOpen}
+          onClose={() => setIsBlockDialogOpen(false)}
+          onSuccess={onUpdate}
+        />
+      </>
+    );
+  }
+
+  // Occupied bed state
   return (
     <Card 
       className="bed-occupied cursor-pointer hover:shadow-md transition-shadow"

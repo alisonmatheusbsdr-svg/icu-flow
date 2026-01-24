@@ -4,7 +4,7 @@ import { BedCard } from './BedCard';
 import { PatientModal } from '@/components/patient/PatientModal';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Building2, ChevronDown, Users, TrendingUp, AlertTriangle, Heart } from 'lucide-react';
+import { Loader2, Building2, ChevronDown, Users, TrendingUp, AlertTriangle, Heart, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Bed, Patient } from '@/types/database';
 
@@ -32,8 +32,9 @@ interface UnitWithBeds {
   stats: {
     total: number;
     occupied: number;
+    blockedBeds: number;   // Leitos fisicamente bloqueados
     highDischarge: number; // probabilidade >= 80%
-    blocked: number; // TOT ou DVA
+    critical: number;      // TOT ou DVA (pacientes críticos)
     palliative: number;
   };
 }
@@ -194,7 +195,8 @@ export function AllUnitsGrid() {
 
       // Calculate stats
       const occupiedBeds = bedsWithPatients.filter(b => b.patient);
-      const blockedCount = occupiedBeds.filter(b => 
+      const blockedBedsCount = bedsWithPatients.filter(b => b.is_blocked).length;
+      const criticalCount = occupiedBeds.filter(b => 
         b.patient?.has_tot_device || b.patient?.has_active_dva
       ).length;
       const palliativeCount = occupiedBeds.filter(b => b.patient?.is_palliative).length;
@@ -213,8 +215,9 @@ export function AllUnitsGrid() {
         stats: {
           total: unitBeds.length,
           occupied: occupiedBeds.length,
+          blockedBeds: blockedBedsCount,
           highDischarge: highDischargeCount,
-          blocked: blockedCount,
+          critical: criticalCount,
           palliative: palliativeCount
         }
       };
@@ -298,11 +301,19 @@ export function AllUnitsGrid() {
                 </Badge>
               )}
               
-              {/* Blocked */}
-              {stats.blocked > 0 && (
+              {/* Blocked beds */}
+              {stats.blockedBeds > 0 && (
+                <Badge variant="outline" className="gap-1 border-muted-foreground text-muted-foreground">
+                  <Lock className="h-3 w-3" />
+                  {stats.blockedBeds} bloqueado{stats.blockedBeds > 1 ? 's' : ''}
+                </Badge>
+              )}
+              
+              {/* Critical (TOT/DVA) */}
+              {stats.critical > 0 && (
                 <Badge variant="outline" className="gap-1 border-destructive text-destructive">
                   <AlertTriangle className="h-3 w-3" />
-                  {stats.blocked} crítico{stats.blocked > 1 ? 's' : ''}
+                  {stats.critical} crítico{stats.critical > 1 ? 's' : ''}
                 </Badge>
               )}
               
