@@ -50,7 +50,7 @@ export function DashboardHeader() {
   const [isHandoverLoading, setIsHandoverLoading] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   
-  const isCoordinator = hasRole('coordenador');
+  const canViewAllUnits = hasRole('coordenador') || hasRole('diarista');
   const isOnAdmin = location.pathname === '/admin';
   
   // Show handover buttons only for plantonistas with blocking sessions
@@ -139,8 +139,8 @@ export function DashboardHeader() {
                   <SelectValue placeholder="Selecione a UTI" />
                 </SelectTrigger>
                 <SelectContent>
-                  {/* Coordinators can see all units at once */}
-                  {isCoordinator && (
+                  {/* Coordinators and diaristas can see all units at once */}
+                  {canViewAllUnits && (
                     <SelectItem value="all">
                       <div className="flex items-center gap-2">
                         <LayoutGrid className="h-4 w-4" />
