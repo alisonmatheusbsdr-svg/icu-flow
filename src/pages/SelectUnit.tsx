@@ -59,8 +59,8 @@ export default function SelectUnit() {
     }
 
     // Privileged users can go directly to dashboard without selecting a unit
-    // UNLESS they're in assistencial mode (want to select a unit explicitly)
-    if (!authLoading && !unitsLoading && canBypassSelection && !activeSession && !isAssistencialMode) {
+    // Admin now goes directly to dashboard with Visão Geral (no longer needs assistencial mode)
+    if (!authLoading && !unitsLoading && canBypassSelection && !activeSession) {
       navigate('/dashboard');
     }
   }, [user, authLoading, unitsLoading, activeSession, canBypassSelection, isAssistencialMode, navigate]);

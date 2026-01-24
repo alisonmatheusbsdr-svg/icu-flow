@@ -61,7 +61,7 @@ export function UnitProvider({ children }: { children: ReactNode }) {
   const isSessionBlocking = activeSession?.is_blocking ?? false;
   
   // Check if user can view all units at once (coordinators and diaristas)
-  const canViewAllUnits = rolesLoaded && (roles.includes('coordenador') || roles.includes('diarista'));
+  const canViewAllUnits = rolesLoaded && (roles.includes('coordenador') || roles.includes('diarista') || roles.includes('admin'));
 
   // Handover mode states
   const isInHandoverMode = activeSession?.handover_mode ?? false;

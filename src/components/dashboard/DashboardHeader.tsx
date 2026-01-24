@@ -50,7 +50,7 @@ export function DashboardHeader() {
   const [isHandoverLoading, setIsHandoverLoading] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   
-  const canViewAllUnits = hasRole('coordenador') || hasRole('diarista');
+  const canViewAllUnits = hasRole('coordenador') || hasRole('diarista') || hasRole('admin');
   const isOnAdmin = location.pathname === '/admin';
   
   // Show handover buttons only for plantonistas with blocking sessions
@@ -257,7 +257,7 @@ export function DashboardHeader() {
           </Button>
 
           {isOnAdmin && hasRole('admin') && (
-            <Button variant="outline" size="sm" onClick={() => navigate('/select-unit?mode=assistencial')} className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => navigate('/dashboard')} className="gap-2">
               <Stethoscope className="h-4 w-4" />
               Acesso Assistencial
             </Button>
