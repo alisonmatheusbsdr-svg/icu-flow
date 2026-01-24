@@ -96,22 +96,34 @@ export type Database = {
       beds: {
         Row: {
           bed_number: number
+          blocked_at: string | null
+          blocked_by: string | null
+          blocked_reason: string | null
           created_at: string
           id: string
+          is_blocked: boolean
           is_occupied: boolean
           unit_id: string
         }
         Insert: {
           bed_number: number
+          blocked_at?: string | null
+          blocked_by?: string | null
+          blocked_reason?: string | null
           created_at?: string
           id?: string
+          is_blocked?: boolean
           is_occupied?: boolean
           unit_id: string
         }
         Update: {
           bed_number?: number
+          blocked_at?: string | null
+          blocked_by?: string | null
+          blocked_reason?: string | null
           created_at?: string
           id?: string
+          is_blocked?: boolean
           is_occupied?: boolean
           unit_id?: string
         }

@@ -33,6 +33,10 @@ export interface Bed {
   unit_id: string;
   bed_number: number;
   is_occupied: boolean;
+  is_blocked: boolean;
+  blocked_at: string | null;
+  blocked_by: string | null;
+  blocked_reason: string | null;
   created_at: string;
 }
 
