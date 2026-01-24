@@ -17,8 +17,8 @@ export default function Dashboard() {
   const { selectedUnit, isLoading: unitLoading, activeSession, canSwitchUnits, updateActivity, showAllUnits, isHandoverReceiver } = useUnit();
   const lastActivityUpdate = useRef<number>(0);
 
-  // Check if user is a coordinator viewing all units
-  const isCoordinator = hasRole('coordenador');
+  // Check if user can view all units (coordinators and diaristas)
+  const canViewAllUnits = hasRole('coordenador') || hasRole('diarista');
 
   // Check if user needs to select a unit first (plantonistas without active session)
   const needsUnitSelection = !activeSession && !canSwitchUnits;
@@ -55,10 +55,10 @@ export default function Dashboard() {
 
     // Redirect plantonistas without active session to unit selection
     // Coordinators can see all units, so they don't need to select
-    if (!authLoading && !unitLoading && isApproved && needsUnitSelection && !isCoordinator) {
+    if (!authLoading && !unitLoading && isApproved && needsUnitSelection && !canViewAllUnits) {
       navigate('/select-unit');
     }
-  }, [user, authLoading, unitLoading, isApproved, needsUnitSelection, isCoordinator, navigate]);
+  }, [user, authLoading, unitLoading, isApproved, needsUnitSelection, canViewAllUnits, navigate]);
 
   if (authLoading || unitLoading) {
     return (
@@ -80,15 +80,15 @@ export default function Dashboard() {
     return <PendingApproval profile={profile} />;
   }
 
-  // Redirect plantonistas to unit selection (except coordinators)
-  if (needsUnitSelection && !isCoordinator) {
+  // Redirect plantonistas to unit selection (except coordinators and diaristas)
+  if (needsUnitSelection && !canViewAllUnits) {
     return null;
   }
 
   // Determine what to render in the main area
   const renderMainContent = () => {
-    // If coordinator and showing all units (or no unit selected)
-    if (isCoordinator && (showAllUnits || !selectedUnit)) {
+    // If coordinator/diarista and showing all units (or no unit selected)
+    if (canViewAllUnits && (showAllUnits || !selectedUnit)) {
       return <AllUnitsGrid />;
     }
 

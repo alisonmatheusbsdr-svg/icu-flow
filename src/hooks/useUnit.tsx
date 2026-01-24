@@ -60,8 +60,8 @@ export function UnitProvider({ children }: { children: ReactNode }) {
   const canSwitchUnits = rolesLoaded && roles.some(r => PRIVILEGED_ROLES.includes(r));
   const isSessionBlocking = activeSession?.is_blocking ?? false;
   
-  // Check if user is a coordinator (can see all units at once)
-  const isCoordinator = rolesLoaded && roles.includes('coordenador');
+  // Check if user can view all units at once (coordinators and diaristas)
+  const canViewAllUnits = rolesLoaded && (roles.includes('coordenador') || roles.includes('diarista'));
 
   // Handover mode states
   const isInHandoverMode = activeSession?.handover_mode ?? false;
@@ -395,9 +395,9 @@ export function UnitProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Select all units view (for coordinators)
+  // Select all units view (for coordinators and diaristas)
   const selectAllUnits = () => {
-    if (isCoordinator) {
+    if (canViewAllUnits) {
       setSelectedUnit(null);
       setShowAllUnits(true);
     }
