@@ -12,11 +12,13 @@ interface PrintData {
 export function usePrintPatient() {
   const [isPreparing, setIsPreparing] = useState(false);
   const [printData, setPrintData] = useState<PrintData | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   const preparePrint = useCallback(async (
     patient: PatientWithDetails, 
     bedNumber: number, 
-    existingAuthorProfiles: Record<string, Profile>
+    existingAuthorProfiles: Record<string, Profile>,
+    openPreview: boolean = true
   ) => {
     setIsPreparing(true);
     
@@ -54,11 +56,16 @@ export function usePrintPatient() {
         authorProfiles: existingAuthorProfiles
       });
 
-      // Small delay to ensure print container is rendered
-      setTimeout(() => {
-        window.print();
-        setIsPreparing(false);
-      }, 100);
+      if (openPreview) {
+        setShowPreview(true);
+      } else {
+        // Direct print without preview
+        setTimeout(() => {
+          window.print();
+        }, 100);
+      }
+
+      setIsPreparing(false);
 
     } catch (error) {
       console.error('Error preparing print:', error);
@@ -66,14 +73,21 @@ export function usePrintPatient() {
     }
   }, []);
 
+  const closePreview = useCallback(() => {
+    setShowPreview(false);
+  }, []);
+
   const clearPrintData = useCallback(() => {
     setPrintData(null);
+    setShowPreview(false);
   }, []);
 
   return {
     isPreparing,
     printData,
+    showPreview,
     preparePrint,
+    closePreview,
     clearPrintData
   };
 }
