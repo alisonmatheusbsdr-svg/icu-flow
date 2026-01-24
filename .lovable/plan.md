@@ -1,167 +1,190 @@
 
-# Plano: Adicionar Impressão por UTI na Visão Geral do Coordenador
+# Plano: Modo de Passagem de Plantão
 
 ## Objetivo
 
-Permitir que o coordenador imprima os pacientes de uma UTI específica diretamente da "Visão Geral", adicionando um botão de impressão no cabeçalho de cada seção colapsável de UTI.
+Permitir que, durante a passagem de plantão, dois plantonistas visualizem a mesma UTI simultaneamente:
+- **O plantonista ativo** clica em "Liberar para Passagem"
+- **Um segundo plantonista** pode entrar em **modo visualização** (sem edição)
+- **Após a passagem**, o novo assume e o anterior encerra a sessão
 
-## Situação Atual
+## Fluxo de Uso
 
-- **BedGrid**: Já possui a lógica completa de impressão (`handlePrintUnit`) com:
-  - Carregamento de dados clínicos
-  - Geração de resumos IA
-  - Abertura do `UnitPrintPreviewModal`
-  
-- **AllUnitsGrid**: Mostra todas as UTIs, mas não possui opção de impressão
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│  PLANTONISTA ATIVO (Dr. João)                                       │
+│                                                                     │
+│  Header: [UTI Adulto] [25min] [🔓 Liberar para Passagem]            │
+│                           ↓ clique                                  │
+│  Header: [UTI Adulto] [25min] [🔴 Em Passagem] [Encerrar Passagem]  │
+└─────────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│  TELA DE SELEÇÃO DE UTI (Dr. Maria)                                 │
+│                                                                     │
+│  ┌─────────────────────────────────────────────────────────┐        │
+│  │ UTI Adulto                                              │        │
+│  │ 🔴 Em passagem (Dr. João)                               │        │
+│  │                                                         │        │
+│  │ [Entrar para Receber Plantão]   ← só visível em modo    │        │
+│  │                                   passagem              │        │
+│  └─────────────────────────────────────────────────────────┘        │
+└─────────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│  PLANTONISTA RECEBENDO (Dr. Maria) - MODO VISUALIZAÇÃO              │
+│                                                                     │
+│  Header: [UTI Adulto] [👁️ Visualizando]                             │
+│                                                                     │
+│  ⚠️ Banner: "Você está em modo visualização. Aguarde a conclusão    │
+│              da passagem para editar."                              │
+│                                                                     │
+│  [Botões de edição desabilitados]                                   │
+│  [Assumir Plantão] ← ao clicar, assume como bloqueante              │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
-## Abordagem
+## Alterações no Banco de Dados
 
-Extrair a lógica de impressão para um **hook reutilizável** (`useUnitPrint`) e usá-lo tanto no `BedGrid` quanto no `AllUnitsGrid`.
+### 1. Adicionar coluna `handover_mode` na tabela `active_sessions`
 
-## Alterações
+```sql
+ALTER TABLE public.active_sessions 
+ADD COLUMN handover_mode BOOLEAN NOT NULL DEFAULT false;
+```
 
-### 1. Criar Hook `useUnitPrint`
+**Lógica:**
+- `handover_mode = true` → UTI está em passagem, permite segunda sessão não-bloqueante
+- `handover_mode = false` → comportamento normal (exclusivo)
 
-**Novo arquivo:** `src/hooks/useUnitPrint.ts`
+### 2. Modificar unique index para permitir segunda sessão em modo passagem
 
-Extrair toda a lógica de impressão do `BedGrid`:
+O índice atual `idx_active_sessions_blocking_unit` impede mais de uma sessão bloqueante por UTI. Isso já está correto - a sessão de visualização será `is_blocking = false`.
 
+### 3. Adicionar coluna `is_handover_receiver` para identificar quem está recebendo
+
+```sql
+ALTER TABLE public.active_sessions 
+ADD COLUMN is_handover_receiver BOOLEAN NOT NULL DEFAULT false;
+```
+
+**Lógica:**
+- `is_handover_receiver = true` → está recebendo o plantão (modo visualização)
+- `is_handover_receiver = false` → sessão normal
+
+## Alterações no Frontend
+
+### 1. Atualizar `useUnit.tsx`
+
+Adicionar:
+- `isInHandoverMode: boolean` - se a sessão atual está em modo passagem
+- `isHandoverReceiver: boolean` - se o usuário é quem está recebendo
+- `startHandoverMode(): Promise<void>` - plantonista ativo libera para passagem
+- `endHandoverMode(): Promise<void>` - encerra modo passagem
+- `joinAsHandoverReceiver(unitId): Promise<{ error: string | null }>` - entrar como receptor
+- `assumeShift(): Promise<void>` - receptor assume como bloqueante
+
+Atualizar interface `ActiveSession`:
 ```typescript
-export function useUnitPrint() {
-  const [isPrintMode, setIsPrintMode] = useState(false);
-  const [isPrintLoading, setIsPrintLoading] = useState(false);
-  const [printLoadingStatus, setPrintLoadingStatus] = useState('Carregando...');
-  const [printPatients, setPrintPatients] = useState<PatientPrintData[]>([]);
-  const [printUnitName, setPrintUnitName] = useState('');
-
-  const startPrint = async (unitId: string, unitName: string) => {
-    // ... lógica atual do handlePrintUnit
-  };
-
-  const closePrint = () => {
-    setIsPrintMode(false);
-    setPrintPatients([]);
-    setPrintUnitName('');
-  };
-
-  return {
-    isPrintMode,
-    isPrintLoading,
-    printLoadingStatus,
-    printPatients,
-    printUnitName,
-    startPrint,
-    closePrint
-  };
+interface ActiveSession {
+  // ... campos existentes
+  handover_mode: boolean;
+  is_handover_receiver: boolean;
 }
 ```
 
-### 2. Simplificar `BedGrid`
+### 2. Atualizar `DashboardHeader.tsx`
 
-Substituir a lógica interna pelo novo hook:
+Adicionar botões condicionais:
+- **Se plantonista ativo e não em passagem**: `[🔓 Liberar para Passagem]`
+- **Se plantonista ativo e em passagem**: `[🔴 Em Passagem] [Encerrar Passagem]`
+- **Se receptor de passagem**: `[👁️ Visualizando] [Assumir Plantão]`
 
+### 3. Atualizar `SelectUnit.tsx`
+
+Mostrar opção diferenciada quando UTI está em modo passagem:
+- Badge: "🔴 Em passagem" ao invés de "🔒 Ocupada"
+- Botão: "Entrar para Receber Plantão" (visível para plantonistas)
+
+### 4. Criar contexto de permissão de edição
+
+Novo hook ou extensão do `useUnit`:
 ```typescript
-const { 
-  isPrintMode, isPrintLoading, printLoadingStatus, 
-  printPatients, startPrint, closePrint 
-} = useUnitPrint();
-
-const handlePrintUnit = () => startPrint(unitId, unitName);
+const { canEdit } = useUnit();
+// canEdit = false se is_handover_receiver = true
 ```
 
-### 3. Adicionar Impressão no `AllUnitsGrid`
+### 5. Desabilitar edições no modo visualização
 
-**Modificar:** `src/components/dashboard/AllUnitsGrid.tsx`
+Componentes afetados:
+- `PatientEvolutions.tsx` - textarea e botões disabled
+- `TherapeuticPlan.tsx` - botão "Editar" disabled
+- `PatientClinicalData.tsx` - todos os botões de adicionar/editar disabled
+- `PatientTasks.tsx` - checkbox e adicionar disabled
+- `PatientPrecautions.tsx` - toggles disabled
+- `PatientModal.tsx` - botões "Evoluir", "Editar Dados" disabled
 
-#### 3.1 Importar dependências
+Abordagem: passar prop `readOnly={!canEdit}` ou usar contexto global.
 
-```typescript
-import { UnitPrintPreviewModal } from '@/components/print/UnitPrintPreviewModal';
-import { useUnitPrint } from '@/hooks/useUnitPrint';
-import { Button } from '@/components/ui/button';
-import { Printer } from 'lucide-react';
-import '@/components/print/print-styles.css';
-```
+### 6. Banner de modo visualização
 
-#### 3.2 Usar o hook
-
-```typescript
-const { 
-  isPrintMode, isPrintLoading, printLoadingStatus, 
-  printPatients, printUnitName, startPrint, closePrint 
-} = useUnitPrint();
-```
-
-#### 3.3 Adicionar botão no cabeçalho da UTI
-
-No `CollapsibleTrigger`, adicionar um botão de impressão ao lado dos badges:
-
+Adicionar banner no topo do `Dashboard.tsx` quando `isHandoverReceiver`:
 ```tsx
-<div className="flex items-center gap-3">
-  {/* Badges existentes... */}
-  
-  {/* Botão de impressão */}
-  <Button
-    variant="ghost"
-    size="icon"
-    className="h-7 w-7"
-    onClick={(e) => {
-      e.stopPropagation(); // Evita toggle do collapsible
-      startPrint(unit.id, unit.name);
-    }}
-    disabled={stats.occupied === 0}
-  >
-    <Printer className="h-4 w-4" />
-  </Button>
-  
-  <ChevronDown className="h-4 w-4 ..." />
-</div>
-```
-
-#### 3.4 Adicionar Modal
-
-No final do componente, antes do fechamento:
-
-```tsx
-<UnitPrintPreviewModal
-  isOpen={isPrintMode}
-  onClose={closePrint}
-  unitName={printUnitName}
-  patients={printPatients}
-  isLoading={isPrintLoading}
-  loadingStatus={printLoadingStatus}
-/>
+{isHandoverReceiver && (
+  <Alert variant="warning" className="m-4">
+    <Eye className="h-4 w-4" />
+    <AlertDescription>
+      Você está em modo visualização. Clique em "Assumir Plantão" para começar a editar.
+    </AlertDescription>
+  </Alert>
+)}
 ```
 
 ## Arquivos a Criar/Modificar
 
 | Arquivo | Ação |
 |---------|------|
-| `src/hooks/useUnitPrint.ts` | **Criar** - hook reutilizável |
-| `src/components/dashboard/BedGrid.tsx` | **Modificar** - usar o hook |
-| `src/components/dashboard/AllUnitsGrid.tsx` | **Modificar** - adicionar botão e modal |
+| `supabase/migrations/xxx_handover_mode.sql` | **Criar** - adicionar colunas |
+| `src/hooks/useUnit.tsx` | **Modificar** - adicionar lógica de passagem |
+| `src/components/dashboard/DashboardHeader.tsx` | **Modificar** - botões de passagem |
+| `src/pages/SelectUnit.tsx` | **Modificar** - mostrar modo passagem |
+| `src/pages/Dashboard.tsx` | **Modificar** - banner de visualização |
+| `src/components/patient/PatientEvolutions.tsx` | **Modificar** - prop readOnly |
+| `src/components/patient/TherapeuticPlan.tsx` | **Modificar** - prop readOnly |
+| `src/components/patient/PatientClinicalData.tsx` | **Modificar** - prop readOnly |
+| `src/components/patient/PatientTasks.tsx` | **Modificar** - prop readOnly |
+| `src/components/patient/PatientPrecautions.tsx` | **Modificar** - prop readOnly |
+| `src/components/patient/PatientModal.tsx` | **Modificar** - botões disabled |
 
-## Layout Visual do Botão
+## Regras de Negócio
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│ 🏥 UTI Adulto                                                │
-│                     [10/12] [2 altas] [1 bloq] [🖨️] [▼]      │
-├──────────────────────────────────────────────────────────────┤
-│  [Card] [Card] [Card] [Card] [Card] [Card]                   │
-│  [Card] [Card] [Card] [Card] [Card] [Card]                   │
-└──────────────────────────────────────────────────────────────┘
-```
+1. **Apenas plantonista ativo pode liberar passagem**
+   - Botão visível só para quem tem `is_blocking = true`
 
-O ícone 🖨️ representa o novo botão de impressão.
+2. **Apenas um receptor por vez**
+   - Quando alguém entra como receptor, outros veem UTI como ocupada
 
-## Considerações
+3. **Timeout do modo passagem**
+   - Após 30 minutos em modo passagem sem receptor assumir, volta ao normal
 
-1. **`stopPropagation`**: Necessário para evitar que o clique no botão abra/feche o collapsible
-2. **Desabilitar se vazio**: Se não há pacientes (`stats.occupied === 0`), o botão fica desabilitado
-3. **Tooltip opcional**: Pode adicionar tooltip "Imprimir UTI" para clareza
-4. **Reutilização**: O hook permite usar a mesma lógica em ambos os componentes
+4. **Receptor pode assumir a qualquer momento**
+   - Ao assumir, sua sessão vira `is_blocking = true`
+   - Sessão do plantonista anterior é encerrada automaticamente
+
+5. **Plantonista pode cancelar passagem**
+   - Botão "Encerrar Passagem" remove o modo e expulsa o receptor
+
+## Segurança (RLS)
+
+As policies existentes já cobrem:
+- Usuários só podem inserir/atualizar suas próprias sessões
+- Admins/Coordenadores podem deletar qualquer sessão
+
+Adicionar validação no frontend para evitar que receptor tente editar dados.
 
 ## Resultado Esperado
 
-O coordenador poderá clicar no ícone de impressora em qualquer UTI da Visão Geral e abrir o preview de impressão daquela unidade específica.
+- Passagem de plantão segura e controlada
+- Dois usuários podem ver a mesma UTI simultaneamente
+- Quem está recebendo não pode editar (evita conflitos)
+- Transição clara quando o novo plantonista assume
