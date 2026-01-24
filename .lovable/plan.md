@@ -1,154 +1,148 @@
 
 
-# Plano: Diarista com Perfil Igual ao Coordenador
+# Plano: Visão Geral para Admin + Fluxo de Alternância Assistencial/Admin
 
 ## Objetivo
 
-Modificar o perfil do **Diarista** para ter o mesmo comportamento de navegação do **Coordenador**, incluindo:
-- Acesso à **Visão Geral** panorâmica de todas as UTIs
-- Dropdown para alternar entre "Visão Geral" e UTIs específicas
-- Manter a capacidade exclusiva de criar/editar o **Plano Terapêutico**
+1. Dar ao **Admin** acesso à mesma **Visão Geral** panorâmica que Coordenadores e Diaristas possuem quando em modo assistencial
+2. Melhorar o fluxo de alternância entre painel administrativo e acesso assistencial
 
 ## Situação Atual
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│                         COMPORTAMENTO                           │
-├──────────────┬──────────────────────────────────────────────────┤
-│ Plantonista  │ Seleciona UTI → Fica bloqueado → Timeout 30min   │
-├──────────────┼──────────────────────────────────────────────────┤
-│ Diarista     │ Vai direto ao Dashboard com dropdown de UTIs     │
-│              │ NÃO tem "Visão Geral"                            │
-├──────────────┼──────────────────────────────────────────────────┤
-│ Coordenador  │ Dashboard com "Visão Geral" + dropdown de UTIs   │
-│              │ Pode ver todas UTIs simultaneamente              │
-└──────────────┴──────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           FLUXO ATUAL DO ADMIN                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  Login → /admin (painel administrativo)                                     │
+│                                                                             │
+│  [Acesso Assistencial] → /select-unit?mode=assistencial                     │
+│                       → Seleciona UTI específica                            │
+│                       → /dashboard (vê só aquela UTI)                       │
+│                                                                             │
+│  ❌ NÃO tem acesso à "Visão Geral" panorâmica                              │
+│  ❌ Precisa selecionar UTI antes de ver pacientes                          │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Alterações
+## Novo Comportamento
 
-### 1. Modificar `useUnit.tsx` - Adicionar Diarista à Visão Geral
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           NOVO FLUXO DO ADMIN                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  Login → /admin (painel administrativo)                                     │
+│                                                                             │
+│  [Acesso Assistencial] → /dashboard (Visão Geral diretamente!)              │
+│                       → Dropdown para alternar entre:                       │
+│                           • Visão Geral (todas as UTIs)                     │
+│                           • UTI específica                                  │
+│                                                                             │
+│  ✅ Admin tem acesso imediato à Visão Geral panorâmica                     │
+│  ✅ Dropdown com botão "Admin" para voltar facilmente                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+## Alterações Técnicas
+
+### 1. Modificar `useUnit.tsx` - Incluir Admin na Visão Geral
 
 **Arquivo:** `src/hooks/useUnit.tsx`
 
-Linha 64 - A verificação de coordenador para mostrar "Visão Geral" precisa incluir diarista:
+**Linha 64:** Adicionar `admin` à verificação de `canViewAllUnits`:
 
 ```typescript
 // Antes
-const isCoordinator = rolesLoaded && roles.includes('coordenador');
-
-// Depois - renomear para ser mais genérico
 const canViewAllUnits = rolesLoaded && (roles.includes('coordenador') || roles.includes('diarista'));
-```
-
-Linha 398-404 - Ajustar `selectAllUnits` para incluir diarista:
-
-```typescript
-// Antes
-const selectAllUnits = () => {
-  if (isCoordinator) {
-    setSelectedUnit(null);
-    setShowAllUnits(true);
-  }
-};
 
 // Depois
-const selectAllUnits = () => {
-  if (canViewAllUnits) {
-    setSelectedUnit(null);
-    setShowAllUnits(true);
-  }
-};
+const canViewAllUnits = rolesLoaded && (roles.includes('coordenador') || roles.includes('diarista') || roles.includes('admin'));
 ```
 
-### 2. Modificar `Dashboard.tsx` - Incluir Diarista na Visão Geral
+**Linha 400:** A função `selectAllUnits` já usa `canViewAllUnits`, então funcionará automaticamente.
+
+### 2. Modificar `Dashboard.tsx` - Incluir Admin na Visão Geral
 
 **Arquivo:** `src/pages/Dashboard.tsx`
 
-Linha 21 - Verificar se é diarista ou coordenador:
+**Linha 21:** Adicionar `admin` à verificação:
 
 ```typescript
 // Antes
-const isCoordinator = hasRole('coordenador');
+const canViewAllUnits = hasRole('coordenador') || hasRole('diarista');
 
 // Depois
-const canViewAllUnits = hasRole('coordenador') || hasRole('diarista');
+const canViewAllUnits = hasRole('coordenador') || hasRole('diarista') || hasRole('admin');
 ```
 
-Linhas 58, 84, 91 - Usar a nova variável no lugar de `isCoordinator`:
-
-```typescript
-// Em todos os lugares onde usa isCoordinator para redirecionamento
-// Substituir por canViewAllUnits
-```
-
-### 3. Modificar `DashboardHeader.tsx` - Mostrar Dropdown de Visão Geral para Diarista
+### 3. Modificar `DashboardHeader.tsx` - Incluir Admin na Visão Geral
 
 **Arquivo:** `src/components/dashboard/DashboardHeader.tsx`
 
-Linha 53 - Adicionar diarista à verificação:
+**Linha 53:** Adicionar `admin` à verificação:
 
 ```typescript
 // Antes
-const isCoordinator = hasRole('coordenador');
-
-// Depois
 const canViewAllUnits = hasRole('coordenador') || hasRole('diarista');
+
+// Depois
+const canViewAllUnits = hasRole('coordenador') || hasRole('diarista') || hasRole('admin');
 ```
 
-Linha 143 - Usar a nova variável para mostrar "Visão Geral" no dropdown:
+**Linha 260-263:** Modificar botão "Acesso Assistencial" para ir direto ao dashboard:
 
 ```typescript
 // Antes
-{isCoordinator && (
-  <SelectItem value="all">
-    <div className="flex items-center gap-2">
-      <LayoutGrid className="h-4 w-4" />
-      Visão Geral
-    </div>
-  </SelectItem>
-)}
+<Button variant="outline" size="sm" onClick={() => navigate('/select-unit?mode=assistencial')} className="gap-2">
+  <Stethoscope className="h-4 w-4" />
+  Acesso Assistencial
+</Button>
 
 // Depois
-{canViewAllUnits && (
-  // ... mesmo código
-)}
+<Button variant="outline" size="sm" onClick={() => navigate('/dashboard')} className="gap-2">
+  <Stethoscope className="h-4 w-4" />
+  Acesso Assistencial
+</Button>
 ```
 
-## Arquivos a Modificar
+### 4. Modificar `SelectUnit.tsx` - Redirecionar Admin para Dashboard
+
+**Arquivo:** `src/pages/SelectUnit.tsx`
+
+**Linha 63-65:** Modificar lógica para redirecionar admin em modo assistencial também:
+
+```typescript
+// Antes
+if (!authLoading && !unitsLoading && canBypassSelection && !activeSession && !isAssistencialMode) {
+  navigate('/dashboard');
+}
+
+// Depois - Admin em modo assistencial também vai direto ao dashboard
+if (!authLoading && !unitsLoading && canBypassSelection && !activeSession) {
+  navigate('/dashboard');
+}
+```
+
+Isso faz com que, mesmo que o admin tente acessar `/select-unit?mode=assistencial`, seja redirecionado automaticamente para `/dashboard` onde terá a Visão Geral.
+
+## Resumo das Alterações
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useUnit.tsx` | Adicionar `diarista` à lógica de `canViewAllUnits` |
-| `src/pages/Dashboard.tsx` | Substituir `isCoordinator` por `canViewAllUnits` |
-| `src/components/dashboard/DashboardHeader.tsx` | Mostrar "Visão Geral" no dropdown para diarista |
+| `src/hooks/useUnit.tsx` | Adicionar `admin` a `canViewAllUnits` |
+| `src/pages/Dashboard.tsx` | Adicionar `admin` a `canViewAllUnits` |
+| `src/components/dashboard/DashboardHeader.tsx` | Adicionar `admin` a `canViewAllUnits` + simplificar navegação |
+| `src/pages/SelectUnit.tsx` | Redirecionar admin direto para dashboard |
 
-## Funcionalidades Preservadas
+## Resultado Final
 
-O Plano Terapêutico continuará funcionando **exatamente igual**. A verificação em `TherapeuticPlan.tsx` (linha 27) permanece:
+**Fluxo do Admin:**
 
-```typescript
-const canEditPlan = hasRole('diarista') && canEdit;
-```
+1. **Login** → Vai para `/admin` (painel administrativo)
+2. **Clica "Acesso Assistencial"** → Vai direto para `/dashboard` com **Visão Geral**
+3. **No Dashboard** → Usa dropdown para alternar entre:
+   - 📊 **Visão Geral** (todas as UTIs)
+   - 🏥 **UTI específica**
+4. **Clica "Admin"** → Volta para `/admin`
 
-Isso significa que:
-- Apenas **Diaristas** podem criar/editar planos terapêuticos
-- A política RLS no banco já garante isso também
-
-## Resultado Esperado
-
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│                      NOVO COMPORTAMENTO                         │
-├──────────────┬──────────────────────────────────────────────────┤
-│ Plantonista  │ (sem alteração)                                  │
-├──────────────┼──────────────────────────────────────────────────┤
-│ Diarista     │ Dashboard com "Visão Geral" + dropdown de UTIs   │
-│              │ MANTÉM: edição de Plano Terapêutico              │
-├──────────────┼──────────────────────────────────────────────────┤
-│ Coordenador  │ (sem alteração)                                  │
-└──────────────┴──────────────────────────────────────────────────┘
-```
-
-O Diarista agora terá a mesma experiência de navegação do Coordenador, podendo visualizar todas as UTIs simultaneamente na "Visão Geral" ou focar em uma UTI específica através do dropdown.
+O fluxo fica simétrico e fluido, permitindo alternância rápida entre administração e visão clínica panorâmica.
 
