@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Printer, X, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { PrintPatientSheet } from './PrintPatientSheet';
 import type { PatientWithDetails, Profile } from '@/types/database';
+import './print-styles.css';
 
 interface PatientPrintData {
   patient: PatientWithDetails;
@@ -492,7 +493,7 @@ export function UnitPrintPreviewModal({
               {currentPatient && (
                 <div 
                   ref={printContainerRef}
-                  className="mx-auto bg-white shadow-lg"
+                  className="mx-auto bg-white shadow-lg print-preview-container"
                   style={{ 
                     width: '297mm', 
                     minHeight: '210mm',
