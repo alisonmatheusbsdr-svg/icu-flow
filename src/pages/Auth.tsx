@@ -96,7 +96,7 @@ export default function Auth() {
             <div className="p-2 bg-primary rounded-lg">
               <Activity className="h-8 w-8 text-primary-foreground" />
             </div>
-            <h1 className="text-2xl font-bold text-foreground">UTI Handoff Pro</h1>
+            <h1 className="text-2xl font-bold text-foreground">Sinapse | UTI</h1>
           </div>
           <p className="text-muted-foreground">Sistema de Passagem de Plantão</p>
         </div>
