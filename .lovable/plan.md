@@ -1,115 +1,167 @@
 
-
-# Plano: Reverter para 2 Evoluções com Limite Ampliado
+# Plano: Adicionar Impressão por UTI na Visão Geral do Coordenador
 
 ## Objetivo
 
-Voltar para **2 evoluções + resumo IA de 6 linhas**, aumentando o limite de caracteres por evolução para ~420-450, garantindo que quase nunca haverá truncamento de dados clínicos importantes.
+Permitir que o coordenador imprima os pacientes de uma UTI específica diretamente da "Visão Geral", adicionando um botão de impressão no cabeçalho de cada seção colapsável de UTI.
 
-## Justificativa
+## Situação Atual
 
-1. **O resumo IA já cumpre o papel de contexto histórico** - não precisa mostrar 3 evoluções completas
-2. **Evoluções truncadas perdem valor clínico** - podem cortar justamente a conduta
-3. **Com ~420-450 chars por evolução**, cobrimos a maioria dos registros sem corte
+- **BedGrid**: Já possui a lógica completa de impressão (`handlePrintUnit`) com:
+  - Carregamento de dados clínicos
+  - Geração de resumos IA
+  - Abertura do `UnitPrintPreviewModal`
+  
+- **AllUnitsGrid**: Mostra todas as UTIs, mas não possui opção de impressão
 
-## Cálculo de Espaço
+## Abordagem
 
-### Espaço Disponível para Evoluções
-
-Com base no layout A4 landscape (altura útil ~194mm):
-
-| Seção | Altura estimada |
-|-------|-----------------|
-| Cabeçalho | ~10mm |
-| Plano terapêutico | ~15mm |
-| Grid clínico (4 cols) | ~25mm |
-| Grid secundário (3 cols) | ~20mm |
-| Precauções + Pendências | ~15mm |
-| Exames críticos | ~20mm |
-| **Restante para evoluções** | **~89mm** |
-
-### Distribuição do Espaço de Evoluções
-
-Com font 8pt (line-height ~3mm):
-
-| Componente | Linhas | Altura | Caracteres |
-|------------|--------|--------|------------|
-| Resumo IA (6 linhas) | 6-7 | ~21mm | ~600 chars |
-| Evolução ÚLTIMA | 5-6 | ~18mm | **~450 chars** |
-| Evolução PENÚLTIMA | 5-6 | ~18mm | **~450 chars** |
-| Headers + espaçamento | - | ~12mm | - |
-| **Total** | - | ~69mm | - |
-| **Margem de segurança** | - | ~20mm | - |
+Extrair a lógica de impressão para um **hook reutilizável** (`useUnitPrint`) e usá-lo tanto no `BedGrid` quanto no `AllUnitsGrid`.
 
 ## Alterações
 
-### 1. Reverter para 2 Evoluções
+### 1. Criar Hook `useUnitPrint`
 
-**Arquivo:** `src/components/print/PrintPatientSheet.tsx`
+**Novo arquivo:** `src/hooks/useUnitPrint.ts`
 
-Linha 51-52:
+Extrair toda a lógica de impressão do `BedGrid`:
+
 ```typescript
-// De:
-const latestEvolutions = evolutions.slice(0, 3);
-const evolutionLabels = ['ÚLTIMA', 'PENÚLTIMA', 'ANTEPENÚLTIMA'];
+export function useUnitPrint() {
+  const [isPrintMode, setIsPrintMode] = useState(false);
+  const [isPrintLoading, setIsPrintLoading] = useState(false);
+  const [printLoadingStatus, setPrintLoadingStatus] = useState('Carregando...');
+  const [printPatients, setPrintPatients] = useState<PatientPrintData[]>([]);
+  const [printUnitName, setPrintUnitName] = useState('');
 
-// Para:
-const latestEvolutions = evolutions.slice(0, 2);
-const evolutionLabels = ['ÚLTIMA', 'PENÚLTIMA'];
+  const startPrint = async (unitId: string, unitName: string) => {
+    // ... lógica atual do handlePrintUnit
+  };
+
+  const closePrint = () => {
+    setIsPrintMode(false);
+    setPrintPatients([]);
+    setPrintUnitName('');
+  };
+
+  return {
+    isPrintMode,
+    isPrintLoading,
+    printLoadingStatus,
+    printPatients,
+    printUnitName,
+    startPrint,
+    closePrint
+  };
+}
 ```
 
-### 2. Aumentar Limite de Caracteres por Evolução
+### 2. Simplificar `BedGrid`
 
-**Arquivo:** `src/components/print/PrintPatientSheet.tsx`
+Substituir a lógica interna pelo novo hook:
 
-Linha 274:
 ```typescript
-// De:
-{truncate(evo.content, 280)}
+const { 
+  isPrintMode, isPrintLoading, printLoadingStatus, 
+  printPatients, startPrint, closePrint 
+} = useUnitPrint();
 
-// Para:
-{truncate(evo.content, 420)}
+const handlePrintUnit = () => startPrint(unitId, unitName);
 ```
 
-### 3. Ajustar Threshold para IA (Manter ≥3)
+### 3. Adicionar Impressão no `AllUnitsGrid`
 
-**Arquivo:** `src/hooks/usePrintPatient.ts`
+**Modificar:** `src/components/dashboard/AllUnitsGrid.tsx`
 
-Linha 30:
+#### 3.1 Importar dependências
+
 ```typescript
-// De:
-if (evolutions.length >= 4) {
-
-// Para:
-if (evolutions.length >= 3) {
+import { UnitPrintPreviewModal } from '@/components/print/UnitPrintPreviewModal';
+import { useUnitPrint } from '@/hooks/useUnitPrint';
+import { Button } from '@/components/ui/button';
+import { Printer } from 'lucide-react';
+import '@/components/print/print-styles.css';
 ```
 
-**Lógica resultante:**
-- **1-2 evoluções**: Mostra todas inteiras, sem resumo IA
-- **3+ evoluções**: Mostra 2 mais recentes inteiras + resumo IA das anteriores
+#### 3.2 Usar o hook
 
-## Resumo das Alterações
+```typescript
+const { 
+  isPrintMode, isPrintLoading, printLoadingStatus, 
+  printPatients, printUnitName, startPrint, closePrint 
+} = useUnitPrint();
+```
 
-| Arquivo | Linha | Alteração |
-|---------|-------|-----------|
-| `PrintPatientSheet.tsx` | 51 | `slice(0, 3)` → `slice(0, 2)` |
-| `PrintPatientSheet.tsx` | 52 | Remover `'ANTEPENÚLTIMA'` do array |
-| `PrintPatientSheet.tsx` | 274 | `truncate(..., 280)` → `truncate(..., 420)` |
-| `usePrintPatient.ts` | 30 | `>= 4` → `>= 3` |
+#### 3.3 Adicionar botão no cabeçalho da UTI
 
-## Resultado Final
+No `CollapsibleTrigger`, adicionar um botão de impressão ao lado dos badges:
 
-| Elemento | Limite |
-|----------|--------|
-| Plano Terapêutico | 250 chars |
-| Cada Evolução (2x) | **420 chars** |
-| Resumo IA | 6 linhas (~600 chars) |
-| Cada Exame Crítico (4x) | 80 chars |
+```tsx
+<div className="flex items-center gap-3">
+  {/* Badges existentes... */}
+  
+  {/* Botão de impressão */}
+  <Button
+    variant="ghost"
+    size="icon"
+    className="h-7 w-7"
+    onClick={(e) => {
+      e.stopPropagation(); // Evita toggle do collapsible
+      startPrint(unit.id, unit.name);
+    }}
+    disabled={stats.occupied === 0}
+  >
+    <Printer className="h-4 w-4" />
+  </Button>
+  
+  <ChevronDown className="h-4 w-4 ..." />
+</div>
+```
 
-## Teste Recomendado
+#### 3.4 Adicionar Modal
 
-Após implementação, testar "Imprimir UTI" e verificar:
-1. Leito 1 (20 evoluções): resumo IA + 2 evoluções maiores
-2. Verificar se não há overflow no layout A4 landscape
-3. Confirmar que evoluções com ~400 chars não são truncadas
+No final do componente, antes do fechamento:
 
+```tsx
+<UnitPrintPreviewModal
+  isOpen={isPrintMode}
+  onClose={closePrint}
+  unitName={printUnitName}
+  patients={printPatients}
+  isLoading={isPrintLoading}
+  loadingStatus={printLoadingStatus}
+/>
+```
+
+## Arquivos a Criar/Modificar
+
+| Arquivo | Ação |
+|---------|------|
+| `src/hooks/useUnitPrint.ts` | **Criar** - hook reutilizável |
+| `src/components/dashboard/BedGrid.tsx` | **Modificar** - usar o hook |
+| `src/components/dashboard/AllUnitsGrid.tsx` | **Modificar** - adicionar botão e modal |
+
+## Layout Visual do Botão
+
+```text
+┌──────────────────────────────────────────────────────────────┐
+│ 🏥 UTI Adulto                                                │
+│                     [10/12] [2 altas] [1 bloq] [🖨️] [▼]      │
+├──────────────────────────────────────────────────────────────┤
+│  [Card] [Card] [Card] [Card] [Card] [Card]                   │
+│  [Card] [Card] [Card] [Card] [Card] [Card]                   │
+└──────────────────────────────────────────────────────────────┘
+```
+
+O ícone 🖨️ representa o novo botão de impressão.
+
+## Considerações
+
+1. **`stopPropagation`**: Necessário para evitar que o clique no botão abra/feche o collapsible
+2. **Desabilitar se vazio**: Se não há pacientes (`stats.occupied === 0`), o botão fica desabilitado
+3. **Tooltip opcional**: Pode adicionar tooltip "Imprimir UTI" para clareza
+4. **Reutilização**: O hook permite usar a mesma lógica em ambos os componentes
+
+## Resultado Esperado
+
+O coordenador poderá clicar no ícone de impressora em qualquer UTI da Visão Geral e abrir o preview de impressão daquela unidade específica.
