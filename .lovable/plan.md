@@ -1,68 +1,67 @@
 
-# Plano: Melhorar Visibilidade das Cores no Modal de Desfecho
+# Plano: Adicionar Opção "Alta" no Modal de Desfecho
 
-## Problema Identificado
+## Contexto
 
-No modal "Registrar Desfecho", quando uma opção está em hover/foco, o fundo teal (`--accent: 175 60% 40%`) entra em conflito com as cores de texto das opções (especialmente `text-green-600` da "Alta para Enfermaria"), tornando o texto difícil de ler.
+O usuário deseja reorganizar as opções de desfecho do paciente, adicionando a opção **"Alta"** (alta direta para casa) e reordenando as opções existentes.
 
-## Solução
+## Nova Estrutura de Desfechos
 
-Alterar as cores das opções de desfecho para serem mais contrastantes e usar uma abordagem de "ícone colorido + texto neutro" para garantir legibilidade em qualquer estado:
+| Opção | Descrição | Ícone | Cor |
+|-------|-----------|-------|-----|
+| **Alta** | Alta para casa direto da UTI (raro) | `Heart` | Verde claro |
+| **Alta para Enfermaria** | Alta do paciente para enfermaria | `Home` | Verde (emerald) |
+| **Transferência Interna** | Transferência entre UTIs | `ArrowRightLeft` | Azul |
+| **Transferência Externa** | Transferência para outro serviço | `Building2` | Âmbar |
+| **Óbito** | Registro de óbito | `Cross` | Vermelho |
 
-| Opção | Antes | Depois |
-|-------|-------|--------|
-| Alta para Enfermaria | `text-green-600` (texto verde) | Ícone verde + texto neutro |
-| Óbito | `text-red-600` | Ícone vermelho + texto neutro |
-| Transferência Externa | `text-blue-600` | Ícone azul + texto neutro |
-| Transferência Interna | `text-orange-600` | Ícone laranja + texto neutro |
+## Alterações Necessárias
 
-## Alterações
+### Arquivo: `src/components/patient/PatientDischargeDialog.tsx`
 
-**Arquivo:** `src/components/patient/PatientDischargeDialog.tsx`
+**1. Atualizar tipo DischargeOutcome (linha 42)**
 
-### 1. Atualizar estrutura das opções (linhas 44-49)
-
-Separar a cor do ícone da cor do texto:
+Adicionar `'alta'` ao tipo:
 
 ```typescript
-const outcomeOptions: { 
-  value: DischargeOutcome; 
-  label: string; 
-  icon: React.ReactNode; 
-  iconColor: string;
-}[] = [
+type DischargeOutcome = 'alta' | 'alta_enfermaria' | 'transferencia_interna' | 'transferencia_externa' | 'obito';
+```
+
+**2. Importar ícone adicional (linha 30)**
+
+Adicionar `HeartPulse` para representar alta domiciliar:
+
+```typescript
+import { Loader2, Home, Cross, ArrowRightLeft, Building2, HeartPulse } from 'lucide-react';
+```
+
+**3. Atualizar array de opções (linhas 44-49)**
+
+Reorganizar na ordem solicitada:
+
+```typescript
+const outcomeOptions: { value: DischargeOutcome; label: string; icon: React.ReactNode; iconColor: string }[] = [
+  { value: 'alta', label: 'Alta', icon: <HeartPulse className="h-4 w-4" />, iconColor: 'text-green-500' },
   { value: 'alta_enfermaria', label: 'Alta para Enfermaria', icon: <Home className="h-4 w-4" />, iconColor: 'text-emerald-600' },
-  { value: 'obito', label: 'Óbito', icon: <Cross className="h-4 w-4" />, iconColor: 'text-red-600' },
-  { value: 'transferencia_externa', label: 'Transferência Externa', icon: <Building2 className="h-4 w-4" />, iconColor: 'text-amber-600' },
   { value: 'transferencia_interna', label: 'Transferência Interna', icon: <ArrowRightLeft className="h-4 w-4" />, iconColor: 'text-blue-600' },
+  { value: 'transferencia_externa', label: 'Transferência Externa', icon: <Building2 className="h-4 w-4" />, iconColor: 'text-amber-600' },
+  { value: 'obito', label: 'Óbito', icon: <Cross className="h-4 w-4" />, iconColor: 'text-red-600' },
 ];
 ```
 
-### 2. Atualizar renderização do SelectItem (linhas 136-143)
+## Compatibilidade
 
-Aplicar cor apenas no ícone, mantendo texto legível:
+O valor `'alta'` já existe no enum `patient_outcome` do banco de dados, portanto não são necessárias alterações de schema:
 
-```tsx
-<SelectItem key={option.value} value={option.value}>
-  <span className="flex items-center gap-2">
-    <span className={option.iconColor}>{option.icon}</span>
-    <span>{option.label}</span>
-  </span>
-</SelectItem>
+```text
+patient_outcome: ["alta", "obito", "transferencia", "alta_enfermaria", "transferencia_externa", "transferencia_interna"]
 ```
-
-## Cores Escolhidas
-
-| Desfecho | Cor do Ícone | Justificativa |
-|----------|--------------|---------------|
-| Alta para Enfermaria | `emerald-600` | Verde vibrante, associado a alta/positivo |
-| Óbito | `red-600` | Vermelho, alerta crítico |
-| Transferência Externa | `amber-600` | Laranja/âmbar para movimento externo |
-| Transferência Interna | `blue-600` | Azul para movimento interno |
 
 ## Resultado Esperado
 
-- Texto sempre legível (cor neutra herdada do tema)
-- Ícones coloridos mantêm a identificação visual rápida
-- Funciona corretamente em hover/foco (fundo teal + texto branco)
-- Consistente em modo claro e escuro
+O modal de desfecho exibirá 5 opções na ordem:
+1. Alta (ícone de coração/pulso verde claro)
+2. Alta para Enfermaria (ícone de casa verde)
+3. Transferência Interna (ícone de setas azul)
+4. Transferência Externa (ícone de prédio âmbar)
+5. Óbito (ícone de cruz vermelho)
