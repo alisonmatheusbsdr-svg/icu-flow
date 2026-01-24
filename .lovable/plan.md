@@ -1,93 +1,111 @@
 
-# Plano: Unificar Layout do Preview de Impressão
+# Plano: Criar Cenários de Teste com Múltiplas Evoluções
 
-## Resumo
+## Objetivo
 
-O preview de impressão atualmente mostra o conteúdo em formato de texto simples porque os estilos CSS das classes `print-*` só são aplicados durante a impressão (`@media print`). A solução é duplicar esses estilos para o contexto de tela (`@media screen`) dentro do container de preview.
+Testar os limites da sumarização IA e do layout de impressão com diferentes volumes de evoluções (5, 10, 20) para identificar possíveis problemas de overflow ou perda de informação.
 
-## Diagnóstico Detalhado
+## Análise da Lógica Atual
 
-O componente `PrintPatientSheet` utiliza classes CSS como:
-- `print-header` - cabeçalho azul escuro
-- `print-clinical-grid` - grid de 4 colunas
-- `print-therapeutic-plan` - caixa amarela do plano
-- `print-section-title`, `print-day-badge`, etc.
+### Fluxo de Sumarização (Edge Function)
+1. Recebe todas as evoluções ordenadas por data (mais recentes primeiro)
+2. Se < 3 evoluções: retorna null (sem resumo)
+3. Se >= 3: pula as 2 primeiras (mais recentes) e resume o restante
+4. Limite de saída: max_tokens: 200, "NO MÁXIMO 3 linhas"
 
-Essas classes são estilizadas de duas formas:
-1. **Na impressão**: os estilos são injetados inline na nova janela (funciona perfeitamente)
-2. **No preview**: dependem do arquivo `print-styles.css` que define estilos **apenas** em `@media print`
+### Cenários de Teste Propostos
 
-## Solução Proposta
+| Cenário | Evoluções | IA Resume | Mostra Inteiro |
+|---------|-----------|-----------|----------------|
+| Atual (Leito 8) | 6 | 4 evoluções | 2 mais recentes |
+| Teste 5 | 5 | 3 evoluções | 2 mais recentes |
+| Teste 10 | 10 | 8 evoluções | 2 mais recentes |
+| Teste 20 | 20 | 18 evoluções | 2 mais recentes |
 
-Adicionar estilos para `@media screen` no arquivo `print-styles.css`, aplicados quando o conteúdo está dentro de um container de preview específico.
+### Pacientes Selecionados para Teste
 
-## Alterações Necessárias
+Para não perder dados existentes, vou adicionar evoluções aos pacientes que já têm poucas:
 
-### 1. Atualizar `print-styles.css`
+| Leito | Paciente | Evoluções Atuais | Adicionar | Total Final |
+|-------|----------|------------------|-----------|-------------|
+| **1** | M.S.O. | 0 | **20** | 20 (teste extremo) |
+| **2** | J.A.L. | 1 | **9** | 10 (teste médio) |
+| **6** | L.P.C. | 1 | **4** | 5 (teste mínimo) |
 
-Adicionar uma nova seção para preview em tela com os mesmos estilos do print, usando um seletor específico para identificar quando está em modo preview:
+## Dados a Inserir
 
-```css
-/* Preview styles for screen display */
-@media screen {
-  .print-preview-container .print-patient-sheet { ... }
-  .print-preview-container .print-header { ... }
-  /* todos os outros estilos */
-}
+### Leito 1 - M.S.O. (20 evoluções)
+
+Paciente com sepse grave + IOT. Evoluções simulando internação longa de 15 dias:
+
+- **D1-D3**: Admissão, instabilidade inicial, início de DVA
+- **D4-D7**: Pico da gravidade, ajustes de sedação e DVA
+- **D8-D10**: Início de estabilização, tentativa de desmame
+- **D11-D14**: Melhora progressiva, redução de suporte
+- **D15+**: Evoluções recentes mostrando tendência de alta
+
+Cada evolução terá ~100-150 palavras de conteúdo clínico realista.
+
+### Leito 2 - J.A.L. (9 evoluções adicionais = 10 total)
+
+Paciente com DPOC exacerbado em VNI. Evoluções de 10 dias:
+
+- Evoluções detalhando tentativas de desmame de VNI
+- Intercorrências (broncoespasmo, retenção de CO2)
+- Fisioterapia respiratória
+
+### Leito 6 - L.P.C. (4 evoluções adicionais = 5 total)
+
+Paciente com IAM. Evoluções de 5 dias:
+
+- Evolução cardiológica pós-infarto
+- Monitorização de arritmias
+- Início de reabilitação
+
+## Inserções no Banco
+
+As evoluções serão inseridas com timestamps retroativos simulando plantões a cada 12h, começando de 15 dias atrás até o presente.
+
+### Estrutura de cada inserção:
+```sql
+INSERT INTO evolutions (patient_id, content, created_by, created_at)
+VALUES (
+  'uuid_paciente',
+  'Conteúdo clínico detalhado...',
+  'uuid_autor',
+  'timestamp_retroativo'
+);
 ```
 
-### 2. Atualizar `UnitPrintPreviewModal.tsx`
+## Testes a Realizar Após Inserção
 
-- Adicionar a classe `print-preview-container` no container que envolve o `PrintPatientSheet`
-- Importar o arquivo CSS `print-styles.css` no componente
+1. **Testar Preview Individual**: Abrir paciente do Leito 1 → Imprimir → Verificar preview
+2. **Testar Impressão da UTI**: Clicar em "Imprimir UTI" → Verificar todos os pacientes
+3. **Verificar Logs da Edge Function**: Confirmar que está resumindo corretamente 18 evoluções
 
-### 3. Atualizar `PrintPreviewModal.tsx`
+## Potenciais Problemas a Identificar
 
-- Aplicar as mesmas alterações para manter consistência no preview individual de paciente
-
-## Detalhes Técnicos
-
-### Estrutura de Estilos a Adicionar (print-styles.css)
-
-Os estilos de preview precisam replicar exatamente os estilos de print, incluindo:
-
-| Classe | Função |
-|--------|--------|
-| `.print-patient-sheet` | Container principal com fundo branco |
-| `.print-header` | Cabeçalho azul (#1e3a5f) com flex layout |
-| `.print-therapeutic-plan` | Box amarelo (#fff3cd) com borda |
-| `.print-clinical-grid` | Grid 4 colunas para dispositivos/acessos/DVA/resp |
-| `.print-secondary-grid` | Grid 3 colunas para antibióticos/profilaxias/dieta |
-| `.print-clinical-section` | Seções com borda e fundo cinza claro |
-| `.print-section-title` | Títulos uppercase em cinza |
-| `.print-day-badge` | Badges de dias em cinza |
-| `.print-precautions` | Container de precauções |
-| `.print-precaution-*` | Badges coloridos (sepse/choque em vermelho, LPP em amarelo) |
-| `.print-tasks` | Container de pendências |
-| `.print-evolutions` | Seção de evoluções com resumo IA |
-
-### Arquivos Modificados
-
-1. **`src/components/print/print-styles.css`**
-   - Adicionar ~100 linhas de estilos para `.print-preview-container` em `@media screen`
-
-2. **`src/components/print/UnitPrintPreviewModal.tsx`**
-   - Importar `./print-styles.css`
-   - Adicionar classe `print-preview-container` ao container do preview (linha ~494)
-
-3. **`src/components/print/PrintPreviewModal.tsx`**
-   - Importar `./print-styles.css`
-   - Adicionar classe `print-preview-container` ao container do preview (linha ~295)
+1. **Timeout da IA**: Com 18 evoluções longas, o prompt pode ficar grande demais
+2. **Qualidade do Resumo**: Verificar se 3 linhas conseguem capturar 15 dias de evolução
+3. **Overflow Visual**: Verificar se a seção de evoluções no print não ultrapassa o espaço
+4. **Performance**: Tempo de resposta ao gerar previews com muitos pacientes
 
 ## Resultado Esperado
 
-Após a implementação, o modal de preview mostrará exatamente o mesmo layout estruturado que aparece na impressão final:
-- Header azul escuro com informações do paciente
-- Box amarelo do plano terapêutico
-- Grid de 4 colunas com dispositivos, acessos, DVA e suporte respiratório
-- Grid de 3 colunas com antibióticos, profilaxias e dieta
-- Badges coloridos de precauções
-- Checklist de pendências
-- Seção de evoluções com resumo IA
+Após os testes, você poderá:
+- Definir um limite máximo recomendado de evoluções para sumarização
+- Ajustar o prompt da IA se necessário (ex: resumo mais longo para internações longas)
+- Identificar se precisa truncar evoluções antigas antes de enviar para IA
 
-O usuário terá uma representação fiel do documento final antes de imprimir.
+## Detalhes Técnicos
+
+### Autor das evoluções
+Usarei o profile ID `674b8704-c5bb-4d1e-b37d-6be9f3ca63c4` para todas as inserções.
+
+### IDs dos pacientes
+- Leito 1: `a1b2c3d4-1111-1111-1111-111111111111`
+- Leito 2: `a1b2c3d4-2222-2222-2222-222222222222`
+- Leito 6: `a1b2c3d4-6666-6666-6666-666666666666`
+
+### Timestamps
+Evoluções distribuídas a cada ~12h, começando de `now() - interval '15 days'` até o presente.
