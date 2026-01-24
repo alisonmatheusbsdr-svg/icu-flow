@@ -1,216 +1,142 @@
 
-## Plano: Sistema de Impressão de Documentos UTI
 
-### Visão Geral
+## Plano: Dados Fictícios para UTI 1 - HMA
 
-Criar um sistema de impressão em formato **paisagem** que condense todas as informações clínicas de um paciente em uma única página, com suporte para impressão individual e de toda a UTI.
+### Objetivo
 
----
-
-### Layout do Documento (Paisagem A4)
-
-```text
-+-------------------------------------------------------------------------------------------+
-|  LEITO 05 | A.B.C. | 65a | D12                                                            |
-+-------------------------------------------------------------------------------------------+
-|  PLANO TERAPÊUTICO: Desmame ventilatório. Alta para enfermaria se manter estabilidade... |
-+-------------------------------------------------------------------------------------------+
-|                                                                                           |
-|  DISPOSITIVOS         | ACESSOS VENOSOS       | DVA              | SUPORTE RESP          |
-|  ☑ SNE (D8)          | CVC Jugular (D5)      | Nora 10ml/h      | TOT D7                 |
-|  ☑ SVD (D12)         | AVP MSE (D2)          | 0.15µg/kg/min    | PEEP 10, FiO2 40%      |
-|  ☑ PAI (D3)          |                       |                  | VM: PSV                |
-|                       |                       |                  |                        |
-+-------------------------------------------------------------------------------------------+
-|  ANTIBIÓTICOS                    | PROFILAXIAS              | DIETA                      |
-|  Meropenem D5  |  Vancomicina D3 | TEV | LPP (Alto)          | SNE                        |
-|                                  | Cabeceira elevada        |                            |
-+-------------------------------------------------------------------------------------------+
-|  PRECAUÇÕES: 🔴 Sepse | 🟡 LPP (Alto) | 🟣 Aerossóis                                      |
-+-------------------------------------------------------------------------------------------+
-|  PENDÊNCIAS: ☐ Solicitar TC crânio | ☐ Avaliar troca de ATB | ☑ Colher HMC (realizado)  |
-+-------------------------------------------------------------------------------------------+
-|                                                                                           |
-|  📋 RESUMO (IA): Paciente em desmame ventilatório após 7 dias de IOT por SDRA.           |
-|  Melhora progressiva, redução de FiO2 e parâmetros. Aguardando resolução infecciosa.     |
-|                                                                                           |
-|  📝 ÚLTIMA EVOLUÇÃO (24/01 14:30 - Dr. João):                                            |
-|  Estável. Em PSV com boa tolerância. Gasometria sem alterações...                        |
-|                                                                                           |
-|  📝 PENÚLTIMA EVOLUÇÃO (24/01 08:00 - Dr. Maria):                                        |
-|  Mantém parâmetros. Reduzido FiO2 de 50% para 40%...                                     |
-+-------------------------------------------------------------------------------------------+
-```
+Popular todos os 10 leitos da UTI 1 - HMA com casos clínicos variados, garantindo diversidade de evoluções para testar o resumo por IA e o layout de impressão.
 
 ---
 
-### Fluxo de Impressão
+### Distribuição de Evoluções (Crítico para Testes)
 
-1. **Impressão Individual (Modal do Paciente)**
-   - Botão "Imprimir" no header do modal
-   - Gera documento apenas daquele paciente
-
-2. **Impressão de Toda UTI (Dashboard)**
-   - Botão "Imprimir UTI" no header da unidade
-   - Gera documento com todos os leitos ocupados
-   - Cada leito em uma página separada (page-break)
-
----
-
-### Arquitetura Técnica
-
-#### Novos Arquivos
-
-| Arquivo | Descrição |
-|---------|-----------|
-| `src/components/print/PrintPatientSheet.tsx` | Componente de layout para impressão de um paciente |
-| `src/components/print/PrintableUnitDocument.tsx` | Wrapper que agrupa múltiplos pacientes para impressão em lote |
-| `src/components/print/print-styles.css` | Estilos CSS específicos para impressão |
-| `supabase/functions/summarize-evolutions/index.ts` | Edge function que usa IA para resumir evoluções |
-
-#### Modificações
-
-| Arquivo | Mudança |
-|---------|---------|
-| `src/components/patient/PatientModal.tsx` | Adicionar botão "Imprimir" |
-| `src/components/dashboard/BedGrid.tsx` | Adicionar botão "Imprimir UTI" no header |
-| `src/index.css` | Importar estilos de impressão |
+| Leito | Paciente | Qtd. Evoluções | Comportamento Esperado |
+|-------|----------|----------------|------------------------|
+| 1 | M.S.O. 72a | 0 | "Sem evoluções registradas" |
+| 2 | J.A.L. 45a | 1 | Mostra evolução única na íntegra |
+| 3 | A.R.S. 68a | 2 | Mostra ambas na íntegra |
+| 4 | C.M.B. 55a | 3 | Resumo IA + 2 últimas |
+| 5 | R.T.F. 38a | 4 | Resumo IA + 2 últimas |
+| 6 | L.P.C. 82a | 1 | Mostra evolução única na íntegra |
+| 7 | F.G.N. 29a | 2 | Mostra ambas na íntegra |
+| 8 | S.M.A. 61a | 6 | Resumo IA robusto + 2 últimas |
+| 9 | P.H.D. 50a | 5 | Resumo IA + 2 últimas |
+| 10 | E.C.R. 77a | 0 | "Sem evoluções registradas" |
 
 ---
 
-### Detalhes de Implementação
+### Cenários Clínicos dos 10 Leitos
 
-#### 1. PrintPatientSheet Component
-
-Componente React que renderiza o layout condensado:
-
-```tsx
-interface PrintPatientSheetProps {
-  patient: PatientWithDetails;
-  bedNumber: number;
-  evolutionSummary?: string;
-  isLoadingSummary?: boolean;
-}
-```
-
-**Seções:**
-- Header: Leito, Iniciais, Idade, Dias de internação
-- Plano Terapêutico (destaque)
-- Grid de dados clínicos (4 colunas):
-  - Dispositivos com dias (D{n})
-  - Acessos venosos com dias
-  - Drogas vasoativas com dose
-  - Suporte respiratório
-- Segunda linha (3 colunas):
-  - Antibióticos com dias
-  - Profilaxias
-  - Dieta
-- Precauções (badges coloridos)
-- Pendências (checkboxes)
-- Evoluções:
-  - Resumo IA (se disponível)
-  - 2 últimas evoluções na íntegra
-
-#### 2. Edge Function: summarize-evolutions
-
-Usa a API Lovable AI (Gemini) para gerar resumo contextualizado:
-
-```typescript
-// Prompt otimizado para contexto clínico
-const prompt = `
-Você é um médico intensivista. Resuma as evoluções clínicas abaixo em no máximo 3 linhas,
-focando em: diagnóstico atual, tendência clínica, e próximos passos.
-Evoluções:
-${evolutions.map(e => e.content).join('\n---\n')}
-`;
-```
-
-- Usa modelo `google/gemini-2.5-flash` (rápido e econômico)
-- Cache do resumo por 1 hora (localStorage)
-- Fallback: mostrar apenas últimas evoluções se IA falhar
-
-#### 3. CSS de Impressão
-
-```css
-@media print {
-  /* Esconder elementos não-impressos */
-  .no-print, header, nav, footer { display: none !important; }
-  
-  /* Configuração de página paisagem */
-  @page { 
-    size: A4 landscape; 
-    margin: 10mm; 
-  }
-  
-  /* Cada paciente em página separada */
-  .print-patient-sheet { 
-    page-break-after: always; 
-  }
-  
-  /* Tipografia otimizada para impressão */
-  body { 
-    font-size: 10pt;
-    line-height: 1.3;
-    color: black !important;
-  }
-}
-```
-
-#### 4. Fluxo de Impressão
-
-```text
-+----------------+     +------------------+     +----------------+
-| Clique em      | --> | Carrega dados    | --> | Chama Edge     |
-| "Imprimir UTI" |     | completos        |     | Function IA    |
-+----------------+     +------------------+     +----------------+
-                                                       |
-                                                       v
-+----------------+     +------------------+     +----------------+
-| window.print() | <-- | Renderiza        | <-- | Recebe resumo  |
-|                |     | PrintableDoc     |     | das evoluções  |
-+----------------+     +------------------+     +----------------+
-```
+| Leito | Iniciais | Idade | Perfil Clínico | Prob. Alta | Dados |
+|-------|----------|-------|----------------|------------|-------|
+| 1 | M.S.O. | 72a | TOT + DVA + Sepse | 0% (bloqueado) | Máximo: 5 dispositivos, 3 ATB, 2 DVA, CVC+PICC |
+| 2 | J.A.L. | 45a | VNI - DPOC | ~40% | Moderado: 2 dispositivos, 2 ATB, 1 acesso |
+| 3 | A.R.S. | 68a | CN - Pós-op | ~80% | Mínimo: 1 dispositivo, 1 ATB |
+| 4 | C.M.B. | 55a | Paliativo (CCPP) | N/A (cinza) | Conforto: dieta oral, sem ATB |
+| 5 | R.T.F. | 38a | TQT - Desmame difícil | 0% (bloqueado) | Alto: 4 dispositivos, 2 ATB, 1 DVA |
+| 6 | L.P.C. | 82a | Máscara - IAM | ~50% | Moderado: 3 dispositivos, 1 ATB, precauções LPP |
+| 7 | F.G.N. | 29a | Ar ambiente - Trauma | ~90% | Baixo: 1 dispositivo, sem ATB |
+| 8 | S.M.A. | 61a | TOT - SDRA grave | 0% (bloqueado) | Máximo: 6 dispositivos, 4 ATB, 2 DVA |
+| 9 | P.H.D. | 50a | CNAF - Pneumonia | ~35% | Alto: 3 dispositivos, 4 ATB |
+| 10 | E.C.R. | 77a | Ar ambiente - Alta hoje | ~95% | Mínimo absoluto: apenas dieta oral |
 
 ---
 
-### Tratamento de Evoluções Extensas
+### Dados a Inserir
 
-| Cenário | Comportamento |
-|---------|---------------|
-| 0 evoluções | "Sem evoluções registradas" |
-| 1-2 evoluções | Mostrar todas na íntegra |
-| 3+ evoluções | Resumo IA + 2 últimas na íntegra |
-| IA indisponível | Mostrar apenas 2 últimas (sem resumo) |
-| Texto muito longo | Truncar com "..." após ~300 caracteres por evolução |
+#### Pacientes (10 registros)
+- Idades: 29-82 anos
+- Pesos: 45-95 kg
+- Internação: 1-21 dias
+- Dietas: zero (TOT), oral (ar ambiente), sne (moderados), npt (grave)
+
+#### Suporte Respiratório (10 registros)
+- ar_ambiente (Leitos 7, 10)
+- cn (Leito 3)
+- cnaf (Leito 9)
+- mascara (Leito 6)
+- vni (Leito 2)
+- tot (Leitos 1, 8)
+- tqt (Leito 5)
+- Sem suporte (Leito 4 - paliativo)
+
+#### Dispositivos Invasivos (~25 registros)
+- SVD, SNE, SNG, PAI, DVE, Drenos
+- Datas variadas (D1 a D15)
+
+#### Acessos Venosos (~15 registros)
+- CVC (jugular, subclávia, femoral)
+- PICC, AVP, Hemodiálise
+- Lumens: mono, duplo, triplo
+
+#### Drogas Vasoativas (~6 registros)
+- Noradrenalina (Leitos 1, 5, 8)
+- Dobutamina (Leitos 1, 8)
+- Vasopressina (Leito 8)
+
+#### Antibióticos (~18 registros)
+- Meropenem, Vancomicina, Piperacilina, Ceftriaxona, Polimixina B
+- Dias: D1 a D14
+
+#### Profilaxias (~20 registros)
+- TEV, LPP, Cabeceira elevada, Higiene oral
+
+#### Precauções (~15 registros)
+- Riscos: LPP (baixo/médio/alto), Queda, Broncoaspiração
+- Condições: Sepse, Choque, Delirium
+- Isolamentos: Contato, Gotículas, Aerossóis
+
+#### Planos Terapêuticos (10 registros)
+- Cada paciente com plano específico
+
+#### Evoluções (~24 registros)
+Distribuição conforme tabela acima:
+- 0 evoluções: Leitos 1, 10
+- 1 evolução: Leitos 2, 6
+- 2 evoluções: Leitos 3, 7
+- 3+ evoluções: Leitos 4, 5, 8, 9
+
+#### Tarefas (~15 registros)
+- Mix de completas e pendentes
+- Leito 1: muitas pendências
+- Leito 10: nenhuma pendência
+
+#### Exames (~25 registros)
+- Imagem: TC crânio, RX tórax, USG abdome
+- Laboratorial: Gasometria, Hemograma, Função renal
+- Cultura: Hemocultura, Urocultura, Aspirado traqueal
+- Alguns marcados como críticos
 
 ---
 
-### Ordenação das Informações
+### IDs do Banco de Dados
 
-1. **Header** (Leito + identificação)
-2. **Plano Terapêutico** (destaque amarelo)
-3. **Dados Clínicos** (grid compacto)
-4. **Precauções + Pendências**
-5. **Evoluções** (resumo + últimas)
+**Unit ID**: `eba57f64-858e-48bc-9ea1-9f401654b1b8`
+
+**Bed IDs**:
+| Leito | Bed ID |
+|-------|--------|
+| 1 | `79ae2fc7-4b98-4ad0-956c-42e90d9a94be` |
+| 2 | `4a395b8c-1a73-4391-82a7-7903940fae52` |
+| 3 | `afce766f-8120-4295-9df8-2d845f1bc5eb` |
+| 4 | `fd15022f-e03e-4031-a98d-081c5bc74a97` |
+| 5 | `829bc3f6-44f9-4e71-a9a4-f91ceab8145c` |
+| 6 | `d7b1729a-f7cc-4b2d-8682-45c436e0d925` |
+| 7 | `6c58264c-6e38-421a-9a3a-bc3a29f44c1c` |
+| 8 | `0dc5caf2-a5b7-4f86-9be1-d9c232f72fb1` |
+| 9 | `1c787f84-549a-4d4b-9480-d38b27cbd165` |
+| 10 | `74f07518-aa43-4d0f-a875-db8f5b407c83` |
+
+**Profile ID (created_by)**: `674b8704-c5bb-4d1e-b37d-6be9f3ca63c4`
 
 ---
 
-### Considerações de UX
+### Resultado Esperado
 
-- **Loading State**: Mostrar spinner enquanto gera resumo IA
-- **Botão Print**: Desabilitado até resumo carregar (com timeout de 10s)
-- **Preview**: Ao clicar, abre nova aba com layout de impressão (opcional)
-- **Fallback Gracioso**: Se IA falhar, continua com impressão sem resumo
+Após inserção dos dados:
+1. Dashboard mostrará 10 leitos ocupados com badges variados
+2. Probabilidades de alta: 0% (3), ~35-50% (3), ~80-95% (3), N/A paliativo (1)
+3. Impressão individual testará todos os cenários de layout
+4. Impressão da UTI testará o resumo IA em pacientes com 3+ evoluções
+5. Exames aparecerão no modal de cada paciente
 
----
-
-### Estimativa de Complexidade
-
-| Item | Esforço |
-|------|---------|
-| PrintPatientSheet (layout) | Médio |
-| Edge Function IA | Baixo |
-| Integração com Modal | Baixo |
-| Integração com BedGrid | Médio |
-| CSS de impressão | Baixo |
-| **Total** | **~4-5 iterações** |
