@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useUnit } from '@/hooks/useUnit';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { CharacterCounter } from '@/components/ui/character-counter';
@@ -17,12 +18,13 @@ interface TherapeuticPlanProps {
 
 export function TherapeuticPlan({ patient, onUpdate }: TherapeuticPlanProps) {
   const { user, hasRole } = useAuth();
+  const { canEdit } = useUnit();
   const [newPlan, setNewPlan] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isPlanEditing, setIsPlanEditing] = useState(false);
 
   const currentPlan = patient.therapeutic_plans?.[0];
-  const canEditPlan = hasRole('diarista');
+  const canEditPlan = hasRole('diarista') && canEdit;
 
   const handleSavePlan = async () => {
     if (!newPlan.trim() || !user) return;

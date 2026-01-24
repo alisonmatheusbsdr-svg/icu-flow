@@ -6,14 +6,15 @@ import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { BedGrid } from '@/components/dashboard/BedGrid';
 import { AllUnitsGrid } from '@/components/dashboard/AllUnitsGrid';
 import { PendingApproval } from '@/components/dashboard/PendingApproval';
-import { Loader2 } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Loader2, Eye } from 'lucide-react';
 
 const ACTIVITY_DEBOUNCE_MS = 60 * 1000; // 1 minute debounce
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user, isLoading: authLoading, isApproved, profile, hasRole } = useAuth();
-  const { selectedUnit, isLoading: unitLoading, activeSession, canSwitchUnits, updateActivity, showAllUnits } = useUnit();
+  const { selectedUnit, isLoading: unitLoading, activeSession, canSwitchUnits, updateActivity, showAllUnits, isHandoverReceiver } = useUnit();
   const lastActivityUpdate = useRef<number>(0);
 
   // Check if user is a coordinator viewing all units
@@ -112,6 +113,17 @@ export default function Dashboard() {
       <DashboardHeader />
       
       <main className="container mx-auto px-4 py-6">
+        {/* Handover receiver banner */}
+        {isHandoverReceiver && (
+          <Alert className="mb-4 border-amber-500 bg-amber-50 dark:bg-amber-950">
+            <Eye className="h-4 w-4 text-amber-600" />
+            <AlertDescription className="text-amber-800 dark:text-amber-200">
+              <strong>Modo Visualização:</strong> Você está recebendo o plantão. Os dados são apenas para leitura. 
+              Clique em <strong>"Assumir Plantão"</strong> no cabeçalho quando estiver pronto para começar a editar.
+            </AlertDescription>
+          </Alert>
+        )}
+        
         {renderMainContent()}
       </main>
     </div>

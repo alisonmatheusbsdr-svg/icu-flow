@@ -4,9 +4,10 @@ import { useUnit } from '@/hooks/useUnit';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Activity, LogOut, Settings, Printer, Lock, Clock, Stethoscope, Building2, LayoutGrid } from 'lucide-react';
+import { Activity, LogOut, Settings, Printer, Lock, Clock, Stethoscope, Building2, LayoutGrid, UserCheck, Eye, ArrowRightLeft, XCircle } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -30,11 +31,28 @@ export function DashboardHeader() {
   const navigate = useNavigate();
   const location = useLocation();
   const { profile, roles, signOut, hasRole } = useAuth();
-  const { units, selectedUnit, selectUnit, canSwitchUnits, activeSession, showAllUnits, selectAllUnits } = useUnit();
+  const { 
+    units, 
+    selectedUnit, 
+    selectUnit, 
+    canSwitchUnits, 
+    activeSession, 
+    showAllUnits, 
+    selectAllUnits,
+    isInHandoverMode,
+    isHandoverReceiver,
+    startHandoverMode,
+    endHandoverMode,
+    assumeShift
+  } = useUnit();
   const [timeRemaining, setTimeRemaining] = useState<{ text: string; isUrgent: boolean } | null>(null);
+  const [isHandoverLoading, setIsHandoverLoading] = useState(false);
   
   const isCoordinator = hasRole('coordenador');
   const isOnAdmin = location.pathname === '/admin';
+  
+  // Show handover buttons only for plantonistas with blocking sessions
+  const showHandoverControls = activeSession?.is_blocking && !canSwitchUnits;
 
   const roleLabels: Record<string, string> = {
     admin: 'Admin',
@@ -64,6 +82,27 @@ export function DashboardHeader() {
   const handleLogout = async () => {
     await signOut();
     navigate('/auth');
+  };
+
+  const handleStartHandover = async () => {
+    setIsHandoverLoading(true);
+    await startHandoverMode();
+    toast.success('Modo de passagem ativado. Outro plantonista pode entrar para visualizar.');
+    setIsHandoverLoading(false);
+  };
+
+  const handleEndHandover = async () => {
+    setIsHandoverLoading(true);
+    await endHandoverMode();
+    toast.success('Modo de passagem encerrado.');
+    setIsHandoverLoading(false);
+  };
+
+  const handleAssumeShift = async () => {
+    setIsHandoverLoading(true);
+    await assumeShift();
+    toast.success('Plantão assumido com sucesso!');
+    setIsHandoverLoading(false);
   };
 
   return (
@@ -126,7 +165,7 @@ export function DashboardHeader() {
           )}
 
           {/* Inactivity countdown indicator */}
-          {activeSession && timeRemaining && (
+          {activeSession && timeRemaining && !isHandoverReceiver && (
             <Badge 
               variant="outline" 
               className={cn(
@@ -140,9 +179,71 @@ export function DashboardHeader() {
               {timeRemaining.text}
             </Badge>
           )}
+
+          {/* Handover mode indicator for receiver */}
+          {isHandoverReceiver && (
+            <Badge 
+              variant="outline" 
+              className="gap-1.5 px-2.5 py-1 text-xs font-normal border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-950"
+            >
+              <Eye className="h-3 w-3" />
+              Visualizando
+            </Badge>
+          )}
+
+          {/* Handover mode indicator for active plantonista */}
+          {isInHandoverMode && !isHandoverReceiver && (
+            <Badge 
+              variant="outline" 
+              className="gap-1.5 px-2.5 py-1 text-xs font-normal border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-950 animate-pulse"
+            >
+              <ArrowRightLeft className="h-3 w-3" />
+              Em Passagem
+            </Badge>
+          )}
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Handover controls for plantonista */}
+          {showHandoverControls && !isInHandoverMode && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleStartHandover}
+              disabled={isHandoverLoading}
+              className="gap-2"
+            >
+              <ArrowRightLeft className="h-4 w-4" />
+              Liberar para Passagem
+            </Button>
+          )}
+
+          {showHandoverControls && isInHandoverMode && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleEndHandover}
+              disabled={isHandoverLoading}
+              className="gap-2 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+            >
+              <XCircle className="h-4 w-4" />
+              Encerrar Passagem
+            </Button>
+          )}
+
+          {/* Assume shift button for receiver */}
+          {isHandoverReceiver && (
+            <Button 
+              size="sm" 
+              onClick={handleAssumeShift}
+              disabled={isHandoverLoading}
+              className="gap-2"
+            >
+              <UserCheck className="h-4 w-4" />
+              Assumir Plantão
+            </Button>
+          )}
+
           <Button variant="outline" size="sm" className="gap-2">
             <Printer className="h-4 w-4" />
             Imprimir
