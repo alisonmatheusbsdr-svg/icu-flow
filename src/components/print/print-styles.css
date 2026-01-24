@@ -297,6 +297,48 @@
     color: #999;
     font-style: italic;
   }
+
+  /* Critical Exams Section */
+  .print-exams {
+    margin: 6px 0;
+    padding: 6px;
+    background: #fff8e1 !important;
+    border: 1px solid #ffb300;
+    border-radius: 4px;
+    font-size: 8pt;
+  }
+
+  .print-exams-list {
+    margin-top: 4px;
+  }
+
+  .print-exam-item {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 2px 0;
+    border-bottom: 1px dashed #ffcc80;
+  }
+
+  .print-exam-item:last-child {
+    border-bottom: none;
+  }
+
+  .print-exam-name {
+    font-weight: bold;
+    min-width: 100px;
+  }
+
+  .print-exam-date {
+    color: #666;
+    font-size: 7pt;
+    min-width: 40px;
+  }
+
+  .print-exam-content {
+    flex: 1;
+    color: #d32f2f;
+  }
 }
 
 /* Screen preview styles (for debugging) */
@@ -562,5 +604,47 @@
     font-size: 8pt;
     color: #999;
     font-style: italic;
+  }
+
+  /* Critical Exams Section - Preview */
+  .print-preview-container .print-exams {
+    margin: 6px 0;
+    padding: 6px;
+    background: #fff8e1 !important;
+    border: 1px solid #ffb300;
+    border-radius: 4px;
+    font-size: 8pt;
+  }
+
+  .print-preview-container .print-exams-list {
+    margin-top: 4px;
+  }
+
+  .print-preview-container .print-exam-item {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 2px 0;
+    border-bottom: 1px dashed #ffcc80;
+  }
+
+  .print-preview-container .print-exam-item:last-child {
+    border-bottom: none;
+  }
+
+  .print-preview-container .print-exam-name {
+    font-weight: bold;
+    min-width: 100px;
+  }
+
+  .print-preview-container .print-exam-date {
+    color: #666;
+    font-size: 7pt;
+    min-width: 40px;
+  }
+
+  .print-preview-container .print-exam-content {
+    flex: 1;
+    color: #d32f2f;
   }
 }

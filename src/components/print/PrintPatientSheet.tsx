@@ -48,7 +48,8 @@ export function PrintPatientSheet({
   const daysAdmitted = getDays(patient.admission_date);
   const currentPlan = patient.therapeutic_plans?.[0]?.content || null;
   const evolutions = patient.evolutions || [];
-  const latestEvolutions = evolutions.slice(0, 2);
+  const latestEvolutions = evolutions.slice(0, 3);
+  const evolutionLabels = ['ÚLTIMA', 'PENÚLTIMA', 'ANTEPENÚLTIMA'];
 
   // Get respiratory support details
   const respSupport = patient.respiratory_support;
@@ -98,7 +99,7 @@ export function PrintPatientSheet({
       {currentPlan && (
         <div className="print-therapeutic-plan">
           <span className="print-therapeutic-plan-label">PLANO:</span>
-          {truncate(currentPlan, 200)}
+          {truncate(currentPlan, 250)}
         </div>
       )}
 
@@ -267,10 +268,10 @@ export function PrintPatientSheet({
             return (
               <div key={evo.id} className="print-evolution-entry">
                 <div className="print-evolution-header">
-                  📝 {idx === 0 ? 'ÚLTIMA' : 'PENÚLTIMA'} ({format(new Date(evo.created_at), "dd/MM HH:mm", { locale: ptBR })} - {authorName})
+                  📝 {evolutionLabels[idx] || `EVO ${idx + 1}`} ({format(new Date(evo.created_at), "dd/MM HH:mm", { locale: ptBR })} - {authorName})
                 </div>
                 <div className="print-evolution-content">
-                  {truncate(evo.content, 300)}
+                  {truncate(evo.content, 280)}
                 </div>
               </div>
             );
@@ -281,6 +282,27 @@ export function PrintPatientSheet({
           </div>
         )}
       </div>
+
+      {/* Critical Exams Section */}
+      {patient.patient_exams && patient.patient_exams.filter(e => e.is_critical).length > 0 && (
+        <div className="print-exams">
+          <strong>⚠️ EXAMES CRÍTICOS:</strong>
+          <div className="print-exams-list">
+            {patient.patient_exams
+              .filter(e => e.is_critical)
+              .slice(0, 4)
+              .map(exam => (
+                <div key={exam.id} className="print-exam-item">
+                  <span className="print-exam-name">{exam.exam_name}</span>
+                  <span className="print-exam-date">
+                    {format(new Date(exam.exam_date), "dd/MM", { locale: ptBR })}
+                  </span>
+                  <span className="print-exam-content">{truncate(exam.content || '', 80)}</span>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
