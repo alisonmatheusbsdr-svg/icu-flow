@@ -399,7 +399,7 @@ export function UnitPrintPreviewModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-[95vw] w-[1100px] h-[85vh] p-0 overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/50">
+        <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/50 pr-12">
           <h2 className="text-lg font-semibold">Preview de Impressão - {unitName}</h2>
           <div className="flex items-center gap-2">
             <Button 
