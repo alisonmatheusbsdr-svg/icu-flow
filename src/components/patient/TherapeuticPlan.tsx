@@ -3,9 +3,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { CharacterCounter } from '@/components/ui/character-counter';
 import { toast } from 'sonner';
 import { FileText } from 'lucide-react';
 import type { PatientWithDetails } from '@/types/database';
+
+const PLAN_CHAR_LIMIT = 250;
 
 interface TherapeuticPlanProps {
   patient: PatientWithDetails;
@@ -71,6 +74,7 @@ export function TherapeuticPlan({ patient, onUpdate }: TherapeuticPlanProps) {
             rows={4}
             className="bg-background"
           />
+          <CharacterCounter current={newPlan.length} max={PLAN_CHAR_LIMIT} />
           <div className="flex gap-2">
             <Button size="sm" onClick={handleSavePlan} disabled={isLoading || !newPlan.trim()}>
               Salvar
