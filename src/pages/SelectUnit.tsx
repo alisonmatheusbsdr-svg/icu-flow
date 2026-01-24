@@ -230,7 +230,7 @@ export default function SelectUnit() {
               <Building2 className="h-6 w-6 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="font-semibold text-lg">UTI Handoff Pro</h1>
+              <h1 className="font-semibold text-lg">Sinapse | UTI</h1>
               <p className="text-sm text-muted-foreground">Selecione a UTI para este plantão</p>
             </div>
           </div>

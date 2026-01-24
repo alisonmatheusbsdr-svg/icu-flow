@@ -118,7 +118,7 @@ export function DashboardHeader() {
             <div className="p-1.5 bg-primary rounded-lg">
               <Activity className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="font-semibold text-foreground">UTI Handoff Pro</span>
+            <span className="font-semibold text-foreground">Sinapse | UTI</span>
           </button>
 
           {/* Show dropdown for privileged users, fixed badge for plantonistas - hide on admin page */}
