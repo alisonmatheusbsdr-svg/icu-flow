@@ -18,7 +18,7 @@ export default function Dashboard() {
   const lastActivityUpdate = useRef<number>(0);
 
   // Check if user can view all units (coordinators and diaristas)
-  const canViewAllUnits = hasRole('coordenador') || hasRole('diarista');
+  const canViewAllUnits = hasRole('coordenador') || hasRole('diarista') || hasRole('admin');
 
   // Check if user needs to select a unit first (plantonistas without active session)
   const needsUnitSelection = !activeSession && !canSwitchUnits;
