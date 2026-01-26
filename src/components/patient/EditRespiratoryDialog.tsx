@@ -17,12 +17,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { MODALITY_CONFIG, CLINICAL_STATUS_CONFIG, type RespiratorySupport } from './RespiratorySection';
+import type { DietType } from '@/types/database';
 
 interface EditRespiratoryDialogProps {
   patientId: string;
   respiratorySupport: RespiratorySupport | null;
+  currentDietType?: DietType;
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
@@ -52,11 +64,14 @@ const CUFF_STATUS = [
 export function EditRespiratoryDialog({
   patientId,
   respiratorySupport,
+  currentDietType,
   isOpen,
   onClose,
   onSuccess,
 }: EditRespiratoryDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [showDietAlert, setShowDietAlert] = useState(false);
+  const [pendingSubmitData, setPendingSubmitData] = useState<any>(null);
   
   // Form state
   const [modality, setModality] = useState(respiratorySupport?.modality || 'ar_ambiente');
@@ -113,44 +128,11 @@ export function EditRespiratoryDialog({
     }
   }, [respiratorySupport, isOpen]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Validation for TOT modality
-    if (modality === 'tot') {
-      if (!intubationDate) {
-        toast.error('Data da IOT é obrigatória');
-        return;
-      }
-      if (!fio2 || parseFloat(fio2) < 21) {
-        toast.error('FiO₂ é obrigatória para TOT (mínimo 21%)');
-        return;
-      }
-    }
-    
+  // Save respiratory data (extracted for reuse)
+  const saveRespiratoryData = async (data: any) => {
     setIsLoading(true);
 
     try {
-      const data = {
-        patient_id: patientId,
-        modality,
-        spo2_target: spo2Target ? parseFloat(spo2Target) : null,
-        flow_rate: flowRate ? parseFloat(flowRate) : null,
-        fio2: fio2 ? parseFloat(fio2) : null,
-        vni_type: vniType || null,
-        vni_tolerance: vniTolerance || null,
-        intubation_date: intubationDate || null,
-        ventilator_mode: ventilatorMode || null,
-        peep: peep ? parseFloat(peep) : null,
-        volume_or_pressure: volumeOrPressure ? parseFloat(volumeOrPressure) : null,
-        is_sedated: isSedated,
-        cannula_type: cannulaType || null,
-        cuff_status: cuffStatus || null,
-        on_ventilation: onVentilation,
-        clinical_status: clinicalStatus || null,
-        is_active: true,
-      };
-
       if (respiratorySupport?.id) {
         // Update existing
         const { error } = await supabase
@@ -184,6 +166,78 @@ export function EditRespiratoryDialog({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Handle diet alert response
+  const handleDietAlertResponse = async (changeDiet: boolean) => {
+    setShowDietAlert(false);
+    
+    if (changeDiet) {
+      // Change diet to zero
+      const { error } = await supabase
+        .from('patients')
+        .update({ diet_type: 'zero' })
+        .eq('id', patientId);
+      
+      if (!error) {
+        toast.info('Dieta alterada para Zero');
+      }
+    }
+    
+    // Continue with saving respiratory data
+    if (pendingSubmitData) {
+      await saveRespiratoryData(pendingSubmitData);
+      setPendingSubmitData(null);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validation for TOT modality
+    if (modality === 'tot') {
+      if (!intubationDate) {
+        toast.error('Data da IOT é obrigatória');
+        return;
+      }
+      if (!fio2 || parseFloat(fio2) < 21) {
+        toast.error('FiO₂ é obrigatória para TOT (mínimo 21%)');
+        return;
+      }
+    }
+    
+    const data = {
+      patient_id: patientId,
+      modality,
+      spo2_target: spo2Target ? parseFloat(spo2Target) : null,
+      flow_rate: flowRate ? parseFloat(flowRate) : null,
+      fio2: fio2 ? parseFloat(fio2) : null,
+      vni_type: vniType || null,
+      vni_tolerance: vniTolerance || null,
+      intubation_date: intubationDate || null,
+      ventilator_mode: ventilatorMode || null,
+      peep: peep ? parseFloat(peep) : null,
+      volume_or_pressure: volumeOrPressure ? parseFloat(volumeOrPressure) : null,
+      is_sedated: isSedated,
+      cannula_type: cannulaType || null,
+      cuff_status: cuffStatus || null,
+      on_ventilation: onVentilation,
+      clinical_status: clinicalStatus || null,
+      is_active: true,
+    };
+
+    // Check if changing to TOT and patient is on oral diet
+    const isChangingToTOT = modality === 'tot' && respiratorySupport?.modality !== 'tot';
+    const isOnOralDiet = currentDietType === 'oral';
+    
+    if (isChangingToTOT && isOnOralDiet) {
+      setPendingSubmitData(data);
+      setShowDietAlert(true);
+      return; // Wait for user response
+    }
+    
+    // Continue with normal save
+    await saveRespiratoryData(data);
   };
 
   // Render dynamic fields based on modality
@@ -482,6 +536,28 @@ export function EditRespiratoryDialog({
           </div>
         </form>
       </DialogContent>
+
+      {/* Diet Alert Dialog */}
+      <AlertDialog open={showDietAlert} onOpenChange={setShowDietAlert}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Alterar Dieta?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O paciente está atualmente em dieta oral. 
+              Pacientes intubados geralmente não podem receber dieta via oral.
+              Deseja alterar para Dieta Zero?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => handleDietAlertResponse(false)}>
+              Manter Oral
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => handleDietAlertResponse(true)}>
+              Alterar para Zero
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

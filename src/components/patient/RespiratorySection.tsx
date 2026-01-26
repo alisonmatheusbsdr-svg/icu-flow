@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Wind, Edit2, AlertTriangle } from 'lucide-react';
 import { EditRespiratoryDialog } from './EditRespiratoryDialog';
+import type { DietType } from '@/types/database';
 
 export interface RespiratorySupport {
   id: string;
@@ -32,6 +33,7 @@ export interface RespiratorySupport {
 interface RespiratorySectionProps {
   patientId: string;
   respiratorySupport: RespiratorySupport | null;
+  currentDietType?: DietType;
   onUpdate: () => void;
 }
 
@@ -54,7 +56,7 @@ export const CLINICAL_STATUS_CONFIG: Record<string, { label: string; color: stri
   'paliativo': { label: 'Paliativo / conforto', color: 'hsl(var(--muted-foreground))' },
 };
 
-export function RespiratorySection({ patientId, respiratorySupport, onUpdate }: RespiratorySectionProps) {
+export function RespiratorySection({ patientId, respiratorySupport, currentDietType, onUpdate }: RespiratorySectionProps) {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -241,6 +243,7 @@ export function RespiratorySection({ patientId, respiratorySupport, onUpdate }: 
       <EditRespiratoryDialog
         patientId={patientId}
         respiratorySupport={respiratorySupport}
+        currentDietType={currentDietType}
         isOpen={isEditOpen}
         onClose={() => setIsEditOpen(false)}
         onSuccess={onUpdate}

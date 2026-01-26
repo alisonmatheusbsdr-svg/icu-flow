@@ -1042,6 +1042,7 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
       <RespiratorySection
         patientId={patient.id}
         respiratorySupport={patient.respiratory_support || null}
+        currentDietType={patient.diet_type}
         onUpdate={onUpdate}
       />
 
