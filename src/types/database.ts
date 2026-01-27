@@ -184,6 +184,18 @@ export interface PatientExam {
   created_at: string;
 }
 
+export interface PatientRegulation {
+  id: string;
+  patient_id: string;
+  support_type: string;
+  status: 'aguardando' | 'confirmado' | 'negado';
+  requested_at: string;
+  updated_at: string;
+  is_active: boolean;
+  notes: string | null;
+  created_by: string;
+}
+
 // Extended types with relations
 export interface BedWithPatient extends Bed {
   patient?: PatientWithDetails | null;
@@ -201,6 +213,7 @@ export interface PatientWithDetails extends Patient {
   respiratory_support?: RespiratorySupport | null;
   patient_tasks?: PatientTask[];
   patient_precautions?: PatientPrecaution[];
+  patient_regulation?: PatientRegulation[];
 }
 export interface ProfileWithRole extends Profile {
   user_roles?: UserRole[];

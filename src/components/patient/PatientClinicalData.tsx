@@ -24,6 +24,7 @@ import { EditableDayBadge } from './EditableDayBadge';
 import { VenousAccessSection, ACCESS_TYPES, INSERTION_SITES } from './VenousAccessSection';
 import { RespiratorySection } from './RespiratorySection';
 import { PatientExamsDialog } from './PatientExamsDialog';
+import { PatientRegulation } from './PatientRegulation';
 import type { PatientWithDetails, DietType } from '@/types/database';
 
 // Derived devices - these are automatically shown based on other sections
@@ -1335,6 +1336,15 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
             <span className="text-sm text-muted-foreground">Nenhuma dieta definida</span>
           )}
         </div>
+      </div>
+
+      {/* Regulation Section */}
+      <div className="section-card">
+        <PatientRegulation
+          patientId={patient.id}
+          regulations={patient.patient_regulation || []}
+          onUpdate={onUpdate}
+        />
       </div>
 
       {/* Exams Dialog - opens filtered to Cultures */}
