@@ -6,7 +6,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Building2, Lock, Unlock, Users, LogOut, ArrowRightLeft, UserCheck } from 'lucide-react';
+import { Loader2, Lock, Unlock, Users, LogOut, ArrowRightLeft, UserCheck } from 'lucide-react';
+import { SinapseLogo } from '@/components/SinapseLogo';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -226,9 +227,7 @@ export default function SelectUnit() {
       <header className="bg-card border-b border-border">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary rounded-lg">
-              <Building2 className="h-6 w-6 text-primary-foreground" />
-            </div>
+            <SinapseLogo size="md" />
             <div>
               <h1 className="font-semibold text-lg">Sinapse | UTI</h1>
               <p className="text-sm text-muted-foreground">Selecione a UTI para este plantão</p>

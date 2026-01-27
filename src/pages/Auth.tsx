@@ -8,7 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Activity, Stethoscope, UserPlus, LogIn } from 'lucide-react';
+import { Stethoscope, UserPlus, LogIn, Activity } from 'lucide-react';
+import { SinapseLogo } from '@/components/SinapseLogo';
 import type { AppRole } from '@/types/database';
 
 export default function Auth() {
@@ -92,10 +93,8 @@ export default function Auth() {
       <div className="w-full max-w-md space-y-6">
         {/* Logo/Header */}
         <div className="text-center space-y-2">
-          <div className="flex items-center justify-center gap-2">
-            <div className="p-2 bg-primary rounded-lg">
-              <Activity className="h-8 w-8 text-primary-foreground" />
-            </div>
+          <div className="flex items-center justify-center gap-3">
+            <SinapseLogo size="lg" />
             <h1 className="text-2xl font-bold text-foreground">Sinapse | UTI</h1>
           </div>
           <p className="text-muted-foreground">Sistema de Passagem de Plantão</p>

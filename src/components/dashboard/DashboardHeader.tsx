@@ -4,7 +4,8 @@ import { useUnit } from '@/hooks/useUnit';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Activity, LogOut, Settings, User, Lock, Clock, Stethoscope, Building2, LayoutGrid, UserCheck, Eye, ArrowRightLeft, XCircle } from 'lucide-react';
+import { LogOut, Settings, User, Lock, Clock, Stethoscope, Building2, LayoutGrid, UserCheck, Eye, ArrowRightLeft, XCircle } from 'lucide-react';
+import { SinapseLogo } from '@/components/SinapseLogo';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -115,9 +116,7 @@ export function DashboardHeader() {
             onClick={() => navigate('/dashboard')} 
             className="flex items-center gap-2 hover:opacity-80 transition-opacity"
           >
-            <div className="p-1.5 bg-primary rounded-lg">
-              <Activity className="h-5 w-5 text-primary-foreground" />
-            </div>
+            <SinapseLogo size="sm" />
             <span className="font-semibold text-foreground">Sinapse | UTI</span>
           </button>
 
