@@ -1,203 +1,134 @@
 
 
-# Plano: Seção de Regulação para UTIs com Suportes Externos
+# Plano: Atualizar a Logo do Sinapse | UTI
 
-## Objetivo
+## Nova Logo
 
-Criar uma nova seção no modal do paciente para registrar e gerenciar solicitações de vagas em UTIs especializadas com suportes externos (Neurologia, Cardiologia, Crônicos, Torácica, etc.).
+A nova logo é um **"S" estilizado** com elementos de sinapse/conexões neurais, usando um gradiente azul-teal que combina perfeitamente com a paleta de cores do sistema.
 
-## Localização
+## Locais Onde a Logo Será Atualizada
 
-A seção será adicionada abaixo das "Precauções" no componente `PatientClinicalData`, na área indicada na imagem:
+| Local | Descrição |
+|-------|-----------|
+| **DashboardHeader** | Logo no canto superior esquerdo do dashboard |
+| **Auth (Login)** | Logo centralizada na tela de login |
+| **SelectUnit** | Logo no header da seleção de UTI |
+| **Favicon** | Ícone da aba do navegador |
+| **Meta tags (og:image)** | Imagem de compartilhamento social |
 
-```
-┌─────────────────────────────────────────────────────────┐
-│ PENDÊNCIAS                                              │
-│ ☐ Trocar CVC (D21)                                      │
-│ ☐ Repetir culturas de vigilância                        │
-│ ☐ Discutir caso com família                             │
-│ ☐ Avaliar necessidade de TQT                            │
-├─────────────────────────────────────────────────────────┤
-│ ⚠ PRECAUÇÕES                                        [+] │
-│ [Sepse x] [Choque x] [LPP x] [Isolamento Aerossóis x]  │
-├─────────────────────────────────────────────────────────┤
-│ 🏥 REGULAÇÃO                                        [+] │  ← NOVA SEÇÃO
-│ [Neuro - Aguardando 📅 27/01] [Cardio - Negado x]      │
-└─────────────────────────────────────────────────────────┘
-```
+## Mudança Visual
 
-## Funcionalidades
+| Antes | Depois |
+|-------|--------|
+| Ícone `Activity` (Lucide) em caixa azul | Nova logo em formato de imagem |
 
-| Ação | Descrição |
-|------|-----------|
-| Adicionar | Escolher tipo de suporte (dropdown) e registrar solicitação |
-| Status | Aguardando, Confirmado, Negado |
-| Remover | Clicar no "x" para cancelar/remover solicitação |
-| Visualizar | Badges coloridas mostrando tipo + status + data |
+## Arquivos a Modificar
 
-## Tipos de Suporte Externo
+1. **Copiar a imagem para o projeto**
+   - Copiar para `src/assets/sinapse-logo.png` (para imports em componentes React)
+   - Copiar também para `public/sinapse-logo.png` (para favicon e meta tags)
 
-- **Neurologia** (Neurocirurgia, AVC)
-- **Cardiologia** (Hemodinâmica, Pós-op cardíaco)
-- **Crônicos** (Ventilação prolongada)
-- **Torácica** (Cirurgia torácica)
-- **Oncologia** (Tratamento oncológico)
-- **Nefrologia** (Diálise, Transplante renal)
-- **Outros** (Campo livre)
+2. **`src/components/dashboard/DashboardHeader.tsx`**
+   - Substituir o ícone `Activity` pela nova imagem
+   - Ajustar tamanho para aproximadamente 32x32px
 
-## Cores dos Status
+3. **`src/pages/Auth.tsx`**
+   - Substituir o ícone `Activity` pela nova imagem
+   - Tamanho maior (~40x40px) para destaque na tela de login
 
-| Status | Cor | Significado |
-|--------|-----|-------------|
-| Aguardando | Amarelo/Âmbar | Solicitação ativa, aguardando resposta |
-| Confirmado | Verde | Vaga confirmada, aguardando transferência |
-| Negado | Vermelho | Solicitação negada |
+4. **`src/pages/SelectUnit.tsx`**
+   - Substituir o ícone `Building2` pela nova logo
+   - Manter consistência visual com outras páginas
+
+5. **`index.html`**
+   - Atualizar o favicon para usar a nova logo
+   - Atualizar og:image para compartilhamento social
 
 ---
 
 ## Seção Técnica
 
-### 1. Nova Tabela no Banco de Dados
+### Estrutura do Componente de Logo
 
-```sql
-CREATE TABLE patient_regulation (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-  support_type TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'aguardando',
-  requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  is_active BOOLEAN NOT NULL DEFAULT TRUE,
-  notes TEXT,
-  created_by UUID NOT NULL
-);
-
-ALTER TABLE patient_regulation ENABLE ROW LEVEL SECURITY;
-
--- Políticas RLS
-CREATE POLICY "Approved users can view regulation"
-  ON patient_regulation FOR SELECT
-  USING (is_approved(auth.uid()));
-
-CREATE POLICY "Approved users can insert regulation"
-  ON patient_regulation FOR INSERT
-  WITH CHECK (is_approved(auth.uid()) AND created_by = auth.uid());
-
-CREATE POLICY "Approved users can update regulation"
-  ON patient_regulation FOR UPDATE
-  USING (is_approved(auth.uid()));
-
-CREATE POLICY "Approved users can delete regulation"
-  ON patient_regulation FOR DELETE
-  USING (is_approved(auth.uid()));
-```
-
-### 2. Atualizar Types (src/types/database.ts)
-
-Adicionar nova interface:
+Para manter consistência, será criado um componente reutilizável:
 
 ```typescript
-export interface PatientRegulation {
-  id: string;
-  patient_id: string;
-  support_type: string;
-  status: 'aguardando' | 'confirmado' | 'negado';
-  requested_at: string;
-  updated_at: string;
-  is_active: boolean;
-  notes: string | null;
-  created_by: string;
+// src/components/SinapseLogo.tsx
+import sinapseLogoSrc from '@/assets/sinapse-logo.png';
+
+interface SinapseLogoProps {
+  size?: 'sm' | 'md' | 'lg';
+  className?: string;
 }
-```
 
-Adicionar ao `PatientWithDetails`:
-
-```typescript
-export interface PatientWithDetails extends Patient {
-  // ... existing fields ...
-  patient_regulation?: PatientRegulation[];
-}
-```
-
-### 3. Novo Componente (src/components/patient/PatientRegulation.tsx)
-
-Componente seguindo o padrão do `PatientPrecautions`:
-
-- Header com ícone 🏥 e botão "+"
-- Dialog para adicionar nova solicitação
-- Dropdown com tipos de suporte
-- Lista de badges removíveis com status colorido
-- Popover para editar status (Aguardando → Confirmado/Negado)
-
-Estrutura do componente:
-
-```typescript
-const SUPPORT_TYPES = [
-  { type: 'NEUROLOGIA', label: 'Neurologia', emoji: '🧠' },
-  { type: 'CARDIOLOGIA', label: 'Cardiologia', emoji: '❤️' },
-  { type: 'CRONICOS', label: 'Crônicos', emoji: '🏥' },
-  { type: 'TORACICA', label: 'Torácica', emoji: '🫁' },
-  { type: 'ONCOLOGIA', label: 'Oncologia', emoji: '🎗️' },
-  { type: 'NEFROLOGIA', label: 'Nefrologia', emoji: '💧' },
-] as const;
-
-const STATUS_STYLES = {
-  aguardando: 'bg-amber-100 text-amber-800 border-amber-300',
-  confirmado: 'bg-green-100 text-green-800 border-green-300',
-  negado: 'bg-red-100 text-red-800 border-red-300',
+const sizes = {
+  sm: 'h-6 w-6',   // Header
+  md: 'h-8 w-8',   // SelectUnit
+  lg: 'h-10 w-10' // Auth/Login
 };
+
+export function SinapseLogo({ size = 'md', className }: SinapseLogoProps) {
+  return (
+    <img 
+      src={sinapseLogoSrc} 
+      alt="Sinapse Logo" 
+      className={cn(sizes[size], className)}
+    />
+  );
+}
 ```
 
-### 4. Atualizar PatientModal.tsx
+### Atualizações nos Componentes
 
-Buscar dados de regulação junto com os outros dados do paciente:
-
-```typescript
-// Na função fetchPatient, adicionar:
-const regulationRes = await supabase
-  .from('patient_regulation')
-  .select('*')
-  .eq('patient_id', patientId)
-  .eq('is_active', true);
-
-// Adicionar ao patientWithDetails:
-patient_regulation: regulationRes.data || []
-```
-
-### 5. Atualizar PatientClinicalData.tsx
-
-Importar e renderizar o novo componente após as Precauções:
-
+**DashboardHeader.tsx:**
 ```tsx
-import { PatientRegulation } from './PatientRegulation';
+// Antes:
+<div className="p-1.5 bg-primary rounded-lg">
+  <Activity className="h-5 w-5 text-primary-foreground" />
+</div>
 
-// No JSX, após PatientPrecautions:
-<PatientRegulation 
-  patient={patient} 
-  onUpdate={onUpdate} 
-/>
+// Depois:
+<SinapseLogo size="sm" />
+```
+
+**Auth.tsx:**
+```tsx
+// Antes:
+<div className="p-2 bg-primary rounded-lg">
+  <Activity className="h-8 w-8 text-primary-foreground" />
+</div>
+
+// Depois:
+<SinapseLogo size="lg" />
+```
+
+**SelectUnit.tsx:**
+```tsx
+// Antes:
+<div className="p-2 bg-primary rounded-lg">
+  <Building2 className="h-6 w-6 text-primary-foreground" />
+</div>
+
+// Depois:
+<SinapseLogo size="md" />
+```
+
+### Favicon
+
+```html
+<!-- index.html -->
+<link rel="icon" type="image/png" href="/sinapse-logo.png" />
 ```
 
 ### Arquivos a Criar/Modificar
 
 | Arquivo | Ação |
 |---------|------|
-| Migração SQL | Criar tabela `patient_regulation` com RLS |
-| `src/types/database.ts` | Adicionar interface `PatientRegulation` |
-| `src/components/patient/PatientRegulation.tsx` | **Novo** - Componente da seção |
-| `src/components/patient/PatientModal.tsx` | Buscar dados de regulação |
-| `src/components/patient/PatientClinicalData.tsx` | Renderizar nova seção |
-
-### Fluxo de Uso
-
-```
-1. Usuário abre modal do paciente
-2. Clica em [+] na seção "Regulação"
-3. Dialog abre com dropdown de tipos de suporte
-4. Seleciona "Neurologia" (por exemplo)
-5. Clica "Adicionar" → Badge aparece: [Neuro - Aguardando 📅 27/01]
-6. Clica na badge para editar status → Popover com opções
-7. Seleciona "Confirmado" → Badge fica verde
-8. Ou clica no "x" para remover/cancelar
-```
+| `src/assets/sinapse-logo.png` | **Novo** - Imagem da logo |
+| `public/sinapse-logo.png` | **Novo** - Logo para favicon/meta |
+| `src/components/SinapseLogo.tsx` | **Novo** - Componente reutilizável |
+| `src/components/dashboard/DashboardHeader.tsx` | Usar novo componente |
+| `src/pages/Auth.tsx` | Usar novo componente |
+| `src/pages/SelectUnit.tsx` | Usar novo componente |
+| `index.html` | Atualizar favicon e meta tags |
 
