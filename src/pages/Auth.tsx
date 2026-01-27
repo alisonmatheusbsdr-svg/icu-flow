@@ -94,7 +94,7 @@ export default function Auth() {
         {/* Logo/Header */}
         <div className="text-center space-y-2">
           <div className="flex items-center justify-center gap-3">
-            <SinapseLogo size="xl" />
+            <SinapseLogo size="lg" />
             <h1 className="text-2xl font-bold text-foreground">Sinapse | UTI</h1>
           </div>
           <p className="text-muted-foreground">Sistema de Passagem de Plantão</p>
