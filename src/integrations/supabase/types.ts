@@ -284,6 +284,50 @@ export type Database = {
           },
         ]
       }
+      patient_regulation: {
+        Row: {
+          created_by: string
+          id: string
+          is_active: boolean
+          notes: string | null
+          patient_id: string
+          requested_at: string
+          status: string
+          support_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_by: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          patient_id: string
+          requested_at?: string
+          status?: string
+          support_type: string
+          updated_at?: string
+        }
+        Update: {
+          created_by?: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          patient_id?: string
+          requested_at?: string
+          status?: string
+          support_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "patient_regulation_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       patient_tasks: {
         Row: {
           completed_at: string | null
