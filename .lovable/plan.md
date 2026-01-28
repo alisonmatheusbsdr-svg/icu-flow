@@ -1,51 +1,47 @@
 
-# Plano: Simplificar Badge de Regulação no BedCard
+# Plano: Esconder Badge VAGA quando há Impossibilidade Clínica
 
-## Objetivo
+## Problema
 
-Manter apenas o badge verde "VAGA" no BedCard quando há uma regulação em `aguardando_transferencia`. Remover todos os outros badges relacionados a regulação (impossibilidade clínica, prazo vencido, cancelamento pendente, nova listagem).
+Atualmente, o badge verde "VAGA" aparece para qualquer regulação em `aguardando_transferencia`, mesmo quando a equipe já sinalizou impossibilidade clínica. Isso causa confusão pois indica que o paciente está pronto para ir quando na verdade não está.
+
+## Solução
+
+Adicionar uma condição para verificar se **não há** sinalização de impossibilidade clínica (`clinical_hold_at` é null) antes de mostrar o badge.
 
 ## Alteração
 
 ### Arquivo: `src/components/dashboard/BedCard.tsx`
 
-**Antes (linhas 270-361):** Lógica complexa com múltiplos badges condicionais:
-- CANCELAMENTO PEND. (vermelho)
-- NOVA LISTAGEM SOLIC. (azul)
-- PRAZO VENCIDO (vermelho pulsante)
-- AGUARD. MELHORA (amarelo)
-- VAGA (verde pulsante)
-
-**Depois:** Simplificado para mostrar apenas o badge "VAGA":
-
+**Linha 271-275 - Condição atual:**
 ```tsx
-{/* Awaiting transfer notification badge */}
-{(() => {
-  const awaitingTransfer = patient.patient_regulation?.find(
-    r => r.is_active && r.status === 'aguardando_transferencia'
-  );
-  if (!awaitingTransfer) return null;
-
-  // Only show green vacancy badge
-  return (
-    <div className="mt-2 p-2 bg-green-100 dark:bg-green-950/40 rounded-md border border-green-300 dark:border-green-800 animate-pulse">
-      <div className="flex items-center gap-1.5 text-green-700 dark:text-green-300 text-xs font-medium">
-        <Truck className="h-3.5 w-3.5" />
-        VAGA - {getSupportLabel(awaitingTransfer.support_type)}
-      </div>
-    </div>
-  );
-})()}
+const awaitingTransfer = patient.patient_regulation?.find(
+  r => r.is_active && r.status === 'aguardando_transferencia'
+);
+if (!awaitingTransfer) return null;
 ```
 
-## Resultado
+**Nova condição:**
+```tsx
+const awaitingTransfer = patient.patient_regulation?.find(
+  r => r.is_active && 
+       r.status === 'aguardando_transferencia' &&
+       !r.clinical_hold_at  // Não tem impossibilidade clínica sinalizada
+);
+if (!awaitingTransfer) return null;
+```
 
-- Dashboard mais limpo e menos poluído visualmente
-- Equipe vê apenas quando há vaga disponível
-- Detalhes de status (impossibilidade clínica, prazos, etc.) ficam apenas dentro do modal do paciente na seção "Regulação"
+## Lógica de Negócio
 
-## Limpeza de Código
+O badge "VAGA" só aparece quando:
+1. A regulação está ativa (`is_active = true`)
+2. O status é "aguardando transferência" (`status = 'aguardando_transferencia'`)
+3. **Não há** sinalização de impossibilidade clínica (`clinical_hold_at = null`)
 
-Remover imports não utilizados após a simplificação:
-- `isDeadlineExpired` e `formatDate` de `@/lib/regulation-config` (se não usados em outro lugar)
-- `Clock` e `AlertTriangle` de `lucide-react` (se não usados em outro lugar)
+Quando a equipe sinaliza melhora clínica pendente, o `clinical_hold_at` é preenchido e o badge some do dashboard. Quando a equipe confirma que o paciente melhorou (ou o NIR limpa o hold), o badge volta a aparecer.
+
+## Resultado Esperado
+
+- Paciente com vaga **sem** impossibilidade: badge verde "VAGA" aparece
+- Paciente com vaga **com** impossibilidade clínica: badge **não** aparece
+- Dashboard reflete apenas pacientes realmente prontos para transferência
