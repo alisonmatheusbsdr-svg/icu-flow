@@ -1,201 +1,143 @@
 
 
-# Plano: Expandir Dashboard NIR com Visão Panorâmica
+# Plano: Adaptar Visão Geral do NIR para Exibir Leitos Vagos (Igual ao Coordenador)
 
 ## Objetivo
 
-Permitir que o NIR visualize **todos os pacientes** internados com barra de probabilidade de alta, mantendo o botão "Regulação" apenas para pacientes que possuem regulação ativa.
+Modificar a "Visão Geral" do NIRDashboard para exibir **todos os leitos** (ocupados e vagos), utilizando o mesmo design visual do `AllUnitsGrid` usado pelo Diarista e Coordenador.
 
 ---
 
 ## Situação Atual
 
-- O `NIRDashboard` filtra e mostra **apenas** pacientes com regulação ativa
-- O `NIRBedCard` sempre exibe o botão "Regulação"
-- Não há indicador de probabilidade de alta para o NIR
+| Componente | Modo Regulação | Modo Visão Geral |
+|------------|----------------|------------------|
+| **NIRDashboard** | Mostra apenas leitos com regulação | Mostra apenas leitos ocupados |
+| **AllUnitsGrid** (Coord/Diarista) | N/A | Mostra **todos os leitos** (ocupados + vagos) |
+
+A imagem de referência mostra o design do coordenador com:
+- Cards de leitos ocupados com paciente, badges e barra de probabilidade
+- Cards de leitos vagos com ícone "+" verde e texto "Vago"
+- Header por unidade mostrando ocupação (ex: 2/10), altas prováveis e críticos
 
 ---
 
 ## Solução
 
-### 1. Adicionar Toggle de Modo de Visualização
+### Modificar NIRDashboard.tsx
 
-| Modo | Comportamento |
-|------|---------------|
-| **Regulação** | Modo atual - só pacientes com regulação (default) |
-| **Visão Geral** | Todos os leitos ocupados com probabilidade de alta |
+**1. Ajustar função `filterBeds`:**
+- No modo "Visão Geral": retornar **todos os leitos** (não só ocupados)
+- Isso inclui leitos vagos e bloqueados
 
-### 2. Buscar Dados Clínicos Adicionais
-
-Adicionar queries para os dados que alimentam a probabilidade de alta:
-- `active_antibiotics_count`
-- `active_devices_count`
-- `has_central_access`
-- `has_sepsis_or_shock`
-- `has_tot_device`
-
-### 3. Atualizar NIRBedCard
-
-- Adicionar mini-barra de probabilidade de alta (reutilizar lógica do BedCard)
-- Tornar o botão "Regulação" condicional (só aparece se houver regulação ativa)
-
----
-
-## Arquivos a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/nir/NIRDashboard.tsx` | Toggle de modo, queries adicionais, stats de ocupação |
-| `src/components/nir/NIRBedCard.tsx` | Barra de probabilidade, botão condicional |
-
----
-
-## Detalhes Técnicos
-
-### NIRDashboard.tsx
-
-**Novo estado e toggle:**
-```tsx
-const [viewMode, setViewMode] = useState<'regulation' | 'overview'>('regulation');
-```
-
-**Queries adicionais (dentro do fetchAllData):**
-```typescript
-// Buscar dados clínicos para cálculo de probabilidade
-const [antibioticsResult, devicesResult, venousResult, precautionsResult] = await Promise.all([
-  supabase.from('antibiotics').select('patient_id').in('patient_id', patientIds).eq('is_active', true),
-  supabase.from('invasive_devices').select('patient_id, device_type').in('patient_id', patientIds).eq('is_active', true),
-  supabase.from('venous_access').select('patient_id, access_type').in('patient_id', patientIds).eq('is_active', true),
-  supabase.from('patient_precautions').select('patient_id, precaution_type').in('patient_id', patientIds).eq('is_active', true)
-]);
-```
-
-**Nova lógica de filtro:**
 ```typescript
 const filterBeds = (beds: BedWithPatient[]): BedWithPatient[] => {
-  // Modo visão geral: todos os leitos ocupados
   if (viewMode === 'overview') {
-    return beds.filter(b => b.patient !== null);
+    return beds; // Retornar TODOS os leitos, incluindo vagos
   }
-  
   // Modo regulação: apenas com regulação ativa (lógica atual)
-  return beds.filter(b => {
-    const regs = b.patient?.patient_regulation || [];
-    if (regs.length === 0) return false;
-    if (statusFilter === 'all') return true;
-    return regs.some(r => r.status === statusFilter);
-  });
+  ...
 };
 ```
 
-**Stats panorâmicos (modo visão geral):**
+**2. Atualizar renderização do grid:**
+- Quando `bed.patient === null`: renderizar card de leito vago (estilo `BedCard` vago)
+- Quando `bed.is_blocked`: renderizar card de leito bloqueado
+
+---
+
+### Criar Componente NIREmptyBedCard
+
+Novo componente simples para renderizar leitos vagos no contexto do NIR (sem ações de admissão):
+
 ```tsx
-// Calcular estatísticas globais
-const totalOccupied = unitsWithBeds.reduce((sum, u) => sum + u.stats.occupied, 0);
-const totalCritical = /* pacientes com TOT ou DVA */;
-const totalProbableDischarges = /* pacientes com probabilidade >= 80% */;
-```
+// src/components/nir/NIREmptyBedCard.tsx
+export function NIREmptyBedCard({ bed }: { bed: Bed }) {
+  // Leito bloqueado
+  if (bed.is_blocked) {
+    return (
+      <Card className="border-destructive/50 bg-destructive/5">
+        <CardContent className="p-4 flex flex-col items-center justify-center min-h-[140px]">
+          <div className="text-lg font-semibold text-muted-foreground mb-2">Leito {bed.bed_number}</div>
+          <Lock className="h-5 w-5 text-destructive" />
+          <span className="text-sm font-medium text-destructive mt-2">BLOQUEADO</span>
+        </CardContent>
+      </Card>
+    );
+  }
 
-### NIRBedCard.tsx
-
-**Adicionar props para dados clínicos:**
-```typescript
-interface PatientWithModality extends Patient {
-  // Existentes
-  respiratory_modality?: string;
-  has_active_dva?: boolean;
-  patient_regulation?: PatientRegulation[];
-  
-  // Novos para cálculo de probabilidade
-  active_antibiotics_count?: number;
-  active_devices_count?: number;
-  has_central_access?: boolean;
-  has_sepsis_or_shock?: boolean;
-  has_tot_device?: boolean;
+  // Leito vago
+  return (
+    <Card className="bed-empty">
+      <CardContent className="p-4 flex flex-col items-center justify-center min-h-[140px]">
+        <div className="text-lg font-semibold text-muted-foreground mb-2">Leito {bed.bed_number}</div>
+        <div className="p-2 rounded-full bg-success/10">
+          <Plus className="h-5 w-5 text-success" />
+        </div>
+        <span className="text-sm text-muted-foreground mt-2">Vago</span>
+      </CardContent>
+    </Card>
+  );
 }
-```
-
-**Reutilizar lógica de calculateDischargeProbability do BedCard:**
-```typescript
-// Copiar função calculateDischargeProbability
-const { probability, status, color } = calculateDischargeProbability(patient);
-```
-
-**Botão condicional:**
-```tsx
-{/* Botão de regulação - só aparece se houver regulação ativa */}
-{activeRegulations.length > 0 && (
-  <Button
-    variant={urgentStatus || hasUrgentSignal ? 'default' : 'outline'}
-    size="sm"
-    className="w-full gap-2 ..."
-    onClick={() => setIsDialogOpen(true)}
-  >
-    <Building2 className="h-4 w-4" />
-    Regulação
-    {pendingCount > 0 && <Badge>{pendingCount}</Badge>}
-  </Button>
-)}
-
-{/* Mini barra de probabilidade de alta */}
-<div className="mt-2 flex items-center gap-2">
-  <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-    <div 
-      className={cn("h-full transition-all", colorClasses[color])}
-      style={{ width: `${barWidth}%` }}
-    />
-  </div>
-  <span className="text-xs text-muted-foreground">
-    {status === 'palliative' ? 'CP' : `${probability}%`}
-  </span>
-</div>
 ```
 
 ---
 
-## Interface Visual
+### Atualizar Renderização no NIRDashboard
 
-### Header com Toggle
+Modificar a seção de grid para renderizar o componente correto:
 
-```text
-┌─────────────────────────────────────────────────────┐
-│ 🏢 Painel de Regulação                              │
-│                                                     │
-│ [🔄 Regulação] [📊 Visão Geral]                     │
-│                                                     │
-│ (modo Regulação)          (modo Visão Geral)        │
-│ 5 Aguard. | 3 Reg.        45 Ocup. | 8 Altas | 12 ♠│
-└─────────────────────────────────────────────────────┘
+```tsx
+{filteredBeds.map((bed) => (
+  bed.patient ? (
+    <NIRBedCard
+      key={bed.id}
+      bed={bed}
+      patient={bed.patient}
+      onUpdate={fetchAllData}
+      showProbabilityBar={viewMode === 'overview'}
+    />
+  ) : (
+    <NIREmptyBedCard key={bed.id} bed={bed} />
+  )
+))}
 ```
 
-### Cards no Modo Visão Geral
+---
 
-```text
-┌────────────┐  ┌────────────┐  ┌────────────┐
-│ Leito 1    │  │ Leito 2    │  │ Leito 3    │
-│ JAB  D12   │  │ MCS  D5    │  │ PFS  D3    │
-│ 67 anos    │  │ 45 anos    │  │ 72 anos    │
-│ [TOT][DVA] │  │ [VNI]      │  │ [AA]       │
-│ ▓▓▓▓▓▓▓▓▓▓ │  │ ▓▓▓▓▓▓░░░░ │  │ ▓▓▓▓▓▓▓▓▓░ │
-│ 0%         │  │ 65%        │  │ 90%        │
-│ [Regulação]│  │            │  │            │
-└────────────┘  └────────────┘  └────────────┘
-  (c/ regulação)  (s/ regulação)  (s/ regulação)
-```
+## Arquivos a Modificar/Criar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/nir/NIRDashboard.tsx` | Ajustar `filterBeds` para retornar todos os leitos no modo overview; atualizar grid para renderizar componente vazio |
+| `src/components/nir/NIREmptyBedCard.tsx` | **Criar** - Componente para exibir leitos vagos/bloqueados no NIR |
 
 ---
 
 ## Resultado Esperado
 
-| Modo | O que o NIR vê |
-|------|----------------|
-| **Regulação** | Apenas pacientes com regulação ativa (comportamento atual) |
-| **Visão Geral** | Todos os pacientes com barra de probabilidade de alta |
+### Modo Visão Geral (Após alteração)
 
-### Benefícios para o NIR:
+```text
+┌─────────────────────────────────────────────────────────┐
+│ UTI 1 - HMA                     [2/10] [1 alta] [1 crítico] │
+├─────────────────────────────────────────────────────────┤
+│ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ │
+│ │ Leito 1│ │ Leito 2│ │ Leito 3│ │ Leito 4│ │ Leito 5│ │
+│ │ AMBS   │ │ JMS    │ │   +    │ │   +    │ │   +    │ │
+│ │ 35 anos│ │ 65 anos│ │ Vago   │ │ Vago   │ │ Vago   │ │
+│ │[AA][DVA]││ [AA]   │ │        │ │        │ │        │ │
+│ │▓▓▓ 0%  │ │▓▓ 100% │ │        │ │        │ │        │ │
+│ └────────┘ └────────┘ └────────┘ └────────┘ └────────┘ │
+└─────────────────────────────────────────────────────────┘
+```
 
-1. **Previsibilidade** - Ver quais pacientes estão próximos de alta (barra verde >80%)
-2. **Criticidade** - Identificar pacientes críticos (TOT/DVA) que não sairão tão cedo
-3. **Planejamento** - Visão panorâmica para antecipar fluxo de leitos
-4. **Foco** - Toggle para voltar ao modo regulação quando precisar agir
+### Benefícios
+
+| Aspecto | Benefício |
+|---------|-----------|
+| **Consistência visual** | Mesmo design do coordenador/diarista |
+| **Visão completa** | NIR vê ocupação real + leitos disponíveis |
+| **Previsibilidade** | Identificar quantos leitos estarão vagos em breve |
+| **Planejamento de fluxo** | Melhor gestão de admissões e transferências |
 
