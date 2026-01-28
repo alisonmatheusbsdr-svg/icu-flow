@@ -1,143 +1,144 @@
 
-
-# Plano: Adaptar Visão Geral do NIR para Exibir Leitos Vagos (Igual ao Coordenador)
+# Plano: Permitir NIR Visualizar Dados do Paciente
 
 ## Objetivo
 
-Modificar a "Visão Geral" do NIRDashboard para exibir **todos os leitos** (ocupados e vagos), utilizando o mesmo design visual do `AllUnitsGrid` usado pelo Diarista e Coordenador.
+Permitir que o NIR clique no card do paciente para abrir o `PatientModal` em modo de visualização (read-only). O NIR poderá ver todos os dados clínicos, mas não poderá editá-los.
 
 ---
 
 ## Situação Atual
 
-| Componente | Modo Regulação | Modo Visão Geral |
-|------------|----------------|------------------|
-| **NIRDashboard** | Mostra apenas leitos com regulação | Mostra apenas leitos ocupados |
-| **AllUnitsGrid** (Coord/Diarista) | N/A | Mostra **todos os leitos** (ocupados + vagos) |
+| Componente | Comportamento |
+|------------|---------------|
+| `NIRBedCard` | Não tem click handler no card - apenas botão "Regulação" |
+| `NIRDashboard` | Não tem `PatientModal` - apenas renderiza cards |
+| `BedGrid` | Usa `PatientModal` com estados `selectedPatientId` e `selectedBedNumber` |
 
-A imagem de referência mostra o design do coordenador com:
-- Cards de leitos ocupados com paciente, badges e barra de probabilidade
-- Cards de leitos vagos com ícone "+" verde e texto "Vago"
-- Header por unidade mostrando ocupação (ex: 2/10), altas prováveis e críticos
+O NIR não consegue acessar a tela do paciente porque:
+1. O `NIRBedCard` não é clicável
+2. O `NIRDashboard` não tem o `PatientModal` integrado
 
 ---
 
 ## Solução
 
-### Modificar NIRDashboard.tsx
+### 1. Modificar NIRBedCard
 
-**1. Ajustar função `filterBeds`:**
-- No modo "Visão Geral": retornar **todos os leitos** (não só ocupados)
-- Isso inclui leitos vagos e bloqueados
-
-```typescript
-const filterBeds = (beds: BedWithPatient[]): BedWithPatient[] => {
-  if (viewMode === 'overview') {
-    return beds; // Retornar TODOS os leitos, incluindo vagos
-  }
-  // Modo regulação: apenas com regulação ativa (lógica atual)
-  ...
-};
-```
-
-**2. Atualizar renderização do grid:**
-- Quando `bed.patient === null`: renderizar card de leito vago (estilo `BedCard` vago)
-- Quando `bed.is_blocked`: renderizar card de leito bloqueado
-
----
-
-### Criar Componente NIREmptyBedCard
-
-Novo componente simples para renderizar leitos vagos no contexto do NIR (sem ações de admissão):
+Adicionar prop `onPatientClick` e tornar o card clicável:
 
 ```tsx
-// src/components/nir/NIREmptyBedCard.tsx
-export function NIREmptyBedCard({ bed }: { bed: Bed }) {
-  // Leito bloqueado
-  if (bed.is_blocked) {
-    return (
-      <Card className="border-destructive/50 bg-destructive/5">
-        <CardContent className="p-4 flex flex-col items-center justify-center min-h-[140px]">
-          <div className="text-lg font-semibold text-muted-foreground mb-2">Leito {bed.bed_number}</div>
-          <Lock className="h-5 w-5 text-destructive" />
-          <span className="text-sm font-medium text-destructive mt-2">BLOQUEADO</span>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // Leito vago
-  return (
-    <Card className="bed-empty">
-      <CardContent className="p-4 flex flex-col items-center justify-center min-h-[140px]">
-        <div className="text-lg font-semibold text-muted-foreground mb-2">Leito {bed.bed_number}</div>
-        <div className="p-2 rounded-full bg-success/10">
-          <Plus className="h-5 w-5 text-success" />
-        </div>
-        <span className="text-sm text-muted-foreground mt-2">Vago</span>
-      </CardContent>
-    </Card>
-  );
+interface NIRBedCardProps {
+  bed: Bed;
+  patient: PatientWithModality;
+  onUpdate: () => void;
+  showProbabilityBar?: boolean;
+  onPatientClick?: (patientId: string, bedNumber: number) => void; // Nova prop
 }
+
+// No card
+<Card 
+  className="bed-occupied cursor-pointer hover:shadow-md transition-shadow"
+  onClick={() => onPatientClick?.(patient.id, bed.bed_number)}
+>
 ```
 
----
+### 2. Modificar NIRDashboard
 
-### Atualizar Renderização no NIRDashboard
-
-Modificar a seção de grid para renderizar o componente correto:
+Adicionar estados e PatientModal:
 
 ```tsx
-{filteredBeds.map((bed) => (
-  bed.patient ? (
-    <NIRBedCard
-      key={bed.id}
-      bed={bed}
-      patient={bed.patient}
-      onUpdate={fetchAllData}
-      showProbabilityBar={viewMode === 'overview'}
-    />
-  ) : (
-    <NIREmptyBedCard key={bed.id} bed={bed} />
-  )
-))}
+// Novos estados
+const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+const [selectedBedNumber, setSelectedBedNumber] = useState<number>(0);
+
+// Handler
+const handlePatientClick = (patientId: string, bedNumber: number) => {
+  setSelectedPatientId(patientId);
+  setSelectedBedNumber(bedNumber);
+};
+
+const handleCloseModal = () => {
+  setSelectedPatientId(null);
+  setSelectedBedNumber(0);
+  fetchAllData(); // Refresh após fechar
+};
+
+// Passar callback para NIRBedCard
+<NIRBedCard
+  ...
+  onPatientClick={handlePatientClick}
+/>
+
+// Adicionar PatientModal no final
+<PatientModal
+  patientId={selectedPatientId}
+  bedNumber={selectedBedNumber}
+  isOpen={!!selectedPatientId}
+  onClose={handleCloseModal}
+/>
 ```
 
 ---
 
-## Arquivos a Modificar/Criar
+## Comportamento do PatientModal para NIR
+
+O `PatientModal` já usa o hook `useUnit().canEdit` para controlar permissões:
+- Botões de edição só aparecem se `canEdit === true`
+- NIR não tem sessão de unidade ativa, então `canEdit` será `false`
+- NIR verá os dados em modo read-only automaticamente
+
+---
+
+## Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/nir/NIRDashboard.tsx` | Ajustar `filterBeds` para retornar todos os leitos no modo overview; atualizar grid para renderizar componente vazio |
-| `src/components/nir/NIREmptyBedCard.tsx` | **Criar** - Componente para exibir leitos vagos/bloqueados no NIR |
+| `src/components/nir/NIRBedCard.tsx` | Adicionar prop `onPatientClick`, tornar card clicável |
+| `src/components/nir/NIRDashboard.tsx` | Adicionar estados, handler e PatientModal |
+
+---
+
+## Interface Visual
+
+### Antes (sem click)
+```text
+┌────────────┐
+│ Leito 1    │
+│ JAB  D12   │  ← Não clicável
+│ 67 anos    │
+│ [TOT][DVA] │
+│ [Regulação]│  ← Único ponto de interação
+└────────────┘
+```
+
+### Depois (clicável)
+```text
+┌────────────┐
+│ Leito 1    │
+│ JAB  D12   │  ← Click abre PatientModal (read-only)
+│ 67 anos    │
+│ [TOT][DVA] │
+│ [Regulação]│  ← Mantém funcionalidade de regulação
+└────────────┘
+```
 
 ---
 
 ## Resultado Esperado
 
-### Modo Visão Geral (Após alteração)
+| Ação | Resultado |
+|------|-----------|
+| Click no card | Abre PatientModal em modo read-only |
+| NIR vê | Todos os dados clínicos, evoluções, exames |
+| NIR não vê | Botões "Editar", "Evoluir", "Registrar Desfecho" |
+| Click em "Regulação" | Continua abrindo dialog de regulação (não propagando click) |
 
-```text
-┌─────────────────────────────────────────────────────────┐
-│ UTI 1 - HMA                     [2/10] [1 alta] [1 crítico] │
-├─────────────────────────────────────────────────────────┤
-│ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ │
-│ │ Leito 1│ │ Leito 2│ │ Leito 3│ │ Leito 4│ │ Leito 5│ │
-│ │ AMBS   │ │ JMS    │ │   +    │ │   +    │ │   +    │ │
-│ │ 35 anos│ │ 65 anos│ │ Vago   │ │ Vago   │ │ Vago   │ │
-│ │[AA][DVA]││ [AA]   │ │        │ │        │ │        │ │
-│ │▓▓▓ 0%  │ │▓▓ 100% │ │        │ │        │ │        │ │
-│ └────────┘ └────────┘ └────────┘ └────────┘ └────────┘ │
-└─────────────────────────────────────────────────────────┘
-```
+---
 
-### Benefícios
+## Segurança
 
-| Aspecto | Benefício |
-|---------|-----------|
-| **Consistência visual** | Mesmo design do coordenador/diarista |
-| **Visão completa** | NIR vê ocupação real + leitos disponíveis |
-| **Previsibilidade** | Identificar quantos leitos estarão vagos em breve |
-| **Planejamento de fluxo** | Melhor gestão de admissões e transferências |
-
+- NIR já possui RLS de leitura para pacientes e dados clínicos
+- O `PatientModal` respeita `canEdit` do `useUnit` hook
+- Sem sessão de unidade = sem permissão de edição
+- Apenas visualização, sem alterações
