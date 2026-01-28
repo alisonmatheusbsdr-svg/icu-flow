@@ -1,26 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// Allowed origins for CORS
-const allowedOrigins = [
-  "https://sinapsehealthcare.app",
-  "https://sinapsehealthcare.lovable.app",
-  "https://id-preview--deb97400-6ef9-479c-a47d-70385f8c2cdb.lovable.app",
-  "https://lovable.dev",
-  "http://localhost:8080",
-  "http://localhost:5173",
-  "http://localhost:3000"
-];
-
+// Dynamic CORS headers - reflects origin or uses wildcard for server-to-server
 function getCorsHeaders(origin: string | null) {
-  const allowedOrigin = origin && allowedOrigins.some(o => origin.startsWith(o.replace(/:\d+$/, '')) || origin === o)
-    ? origin
-    : allowedOrigins[0];
-  
   return {
-    "Access-Control-Allow-Origin": allowedOrigin,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Credentials": "true",
+    "Access-Control-Allow-Origin": origin || "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
   };
 }
 
@@ -36,11 +22,11 @@ serve(async (req) => {
 
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    // Authentication check
+    // Authentication check using getClaims (works with signing-keys)
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       console.error("Missing authorization header");
@@ -56,22 +42,27 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
-    if (userError || !user) {
-      console.error("Invalid token:", userError?.message);
+    // Use getClaims for JWT validation
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
+    
+    if (claimsError || !claimsData?.claims) {
+      console.error("Invalid token:", claimsError?.message);
       return new Response(
         JSON.stringify({ summary: null, error: "Invalid token" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
+    const userId = claimsData.claims.sub as string;
+
     // Verify user is approved
     const { data: isApproved } = await supabaseClient.rpc("is_approved", {
-      _user_id: user.id
+      _user_id: userId
     });
 
     if (!isApproved) {
-      console.error("User not approved:", user.id);
+      console.error("User not approved:", userId);
       return new Response(
         JSON.stringify({ summary: null, error: "User not approved" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -128,7 +119,7 @@ Regras:
 
 ${formattedEvolutions}`;
 
-    console.log(`Summarizing ${evolutionCount} evolutions (max ${maxLines} lines) for user ${user.id}...`);
+    console.log(`Summarizing ${evolutionCount} evolutions (max ${maxLines} lines) for user ${userId}...`);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
