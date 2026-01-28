@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { NIRBedCard } from './NIRBedCard';
+import { NIREmptyBedCard } from './NIREmptyBedCard';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Loader2, Building2, ChevronDown, Clock, FileCheck, Truck, CheckCircle2, XCircle, ListFilter, LayoutGrid, Heart, Activity } from 'lucide-react';
+import { Loader2, Building2, ChevronDown, Clock, FileCheck, Truck, CheckCircle2, XCircle, ListFilter, LayoutGrid, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { STATUS_CONFIG, ACTIVE_STATUSES } from '@/lib/regulation-config';
 import type { Bed, Patient, PatientRegulation, RegulationStatus } from '@/types/database';
@@ -280,9 +281,9 @@ export function NIRDashboard() {
 
   // Filter beds based on status filter and view mode
   const filterBeds = (beds: BedWithPatient[]): BedWithPatient[] => {
-    // Modo visão geral: todos os leitos ocupados
+    // Modo visão geral: todos os leitos (ocupados + vagos)
     if (viewMode === 'overview') {
-      return beds.filter(b => b.patient !== null);
+      return beds;
     }
 
     // Modo regulação: apenas com regulação ativa
@@ -538,13 +539,17 @@ export function NIRDashboard() {
                 ) : (
                   <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 pt-3">
                     {filteredBeds.map((bed) => (
-                      <NIRBedCard
-                        key={bed.id}
-                        bed={bed}
-                        patient={bed.patient!}
-                        onUpdate={fetchAllData}
-                        showProbabilityBar={viewMode === 'overview'}
-                      />
+                      bed.patient ? (
+                        <NIRBedCard
+                          key={bed.id}
+                          bed={bed}
+                          patient={bed.patient}
+                          onUpdate={fetchAllData}
+                          showProbabilityBar={viewMode === 'overview'}
+                        />
+                      ) : (
+                        <NIREmptyBedCard key={bed.id} bed={bed} />
+                      )
                     ))}
                   </div>
                 )}
