@@ -39,6 +39,18 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Require setup key for authentication
+  const setupKey = req.headers.get('X-Setup-Key');
+  const expectedKey = Deno.env.get('SETUP_SECRET_KEY');
+  
+  if (!expectedKey || setupKey !== expectedKey) {
+    console.error('Unauthorized: Invalid or missing setup key');
+    return new Response(
+      JSON.stringify({ error: 'Unauthorized: Invalid or missing setup key' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
