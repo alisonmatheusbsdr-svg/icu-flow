@@ -108,7 +108,7 @@ export function MobileNav({
           </SheetTitle>
         </SheetHeader>
 
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col min-h-[calc(100vh-60px)]">
           {/* User Info */}
           <div className="p-4 border-b bg-muted/30">
             <div className="flex items-center gap-3">
