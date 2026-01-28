@@ -302,9 +302,13 @@
   }
 }
 
-/* Touch-friendly inputs */
-@media (max-width: 768px) {
-  input, select, textarea, button {
-    min-height: 44px;
+/* Touch-friendly inputs - using tailwind layer */
+@layer base {
+  @media (max-width: 768px) {
+    input:not([type="checkbox"]):not([type="radio"]),
+    select,
+    textarea {
+      min-height: 44px;
+    }
   }
 }
