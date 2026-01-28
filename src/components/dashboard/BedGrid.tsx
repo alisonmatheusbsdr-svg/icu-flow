@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import '@/components/print/print-styles.css';
-import type { Bed, Patient, PatientWithDetails, Profile } from '@/types/database';
+import type { Bed, Patient, PatientWithDetails, Profile, PatientRegulation } from '@/types/database';
 
 interface BedGridProps {
   unitId: string;
@@ -52,6 +52,7 @@ interface BedWithPatient extends Bed {
     has_central_access?: boolean;
     has_sepsis_or_shock?: boolean;
     has_tot_device?: boolean;
+    patient_regulation?: PatientRegulation[];
   }) | null;
 }
 
@@ -91,6 +92,7 @@ export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
       let devices: InvasiveDevice[] = [];
       let venousAccess: VenousAccess[] = [];
       let precautions: Precaution[] = [];
+      let regulations: PatientRegulation[] = [];
       
       if (occupiedBedIds.length > 0) {
         const { data } = await supabase
@@ -104,7 +106,7 @@ export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
         if (patients.length > 0) {
           const patientIds = patients.map(p => p.id);
           
-          const [respResult, dvaResult, atbResult, devResult, venResult, precResult] = await Promise.all([
+          const [respResult, dvaResult, atbResult, devResult, venResult, precResult, regResult] = await Promise.all([
             supabase
               .from('respiratory_support')
               .select('patient_id, modality')
@@ -134,6 +136,11 @@ export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
               .from('patient_precautions')
               .select('patient_id, precaution_type')
               .in('patient_id', patientIds)
+              .eq('is_active', true),
+            supabase
+              .from('patient_regulation')
+              .select('*')
+              .in('patient_id', patientIds)
               .eq('is_active', true)
           ]);
           
@@ -143,6 +150,7 @@ export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
           devices = devResult.data || [];
           venousAccess = venResult.data || [];
           precautions = precResult.data || [];
+          regulations = (regResult.data || []) as PatientRegulation[];
         }
       }
 
@@ -186,7 +194,8 @@ export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
             active_devices_count: patientDevices.length,
             has_central_access: hasCentralAccess,
             has_sepsis_or_shock: hasSepsisOrShock,
-            has_tot_device: hasTotDevice
+            has_tot_device: hasTotDevice,
+            patient_regulation: regulations.filter(r => r.patient_id === patient.id)
           }
         };
       });
