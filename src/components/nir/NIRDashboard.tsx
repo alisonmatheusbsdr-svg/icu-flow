@@ -349,7 +349,7 @@ export function NIRDashboard() {
             <ToggleGroupItem 
               value="regulation" 
               aria-label="Modo Regulação"
-              className="gap-1.5 data-[state=on]:bg-background data-[state=on]:shadow-sm px-3"
+              className="gap-1.5 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=off]:text-muted-foreground px-3"
             >
               <ListFilter className="h-4 w-4" />
               <span className="hidden sm:inline">Regulação</span>
@@ -357,7 +357,7 @@ export function NIRDashboard() {
             <ToggleGroupItem 
               value="overview" 
               aria-label="Visão Geral"
-              className="gap-1.5 data-[state=on]:bg-background data-[state=on]:shadow-sm px-3"
+              className="gap-1.5 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=off]:text-muted-foreground px-3"
             >
               <LayoutGrid className="h-4 w-4" />
               <span className="hidden sm:inline">Visão Geral</span>
