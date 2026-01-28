@@ -4,7 +4,7 @@ import { useUnit } from '@/hooks/useUnit';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { LogOut, Settings, User, Lock, Clock, Stethoscope, Building2, LayoutGrid, UserCheck, Eye, ArrowRightLeft, XCircle } from 'lucide-react';
+import { LogOut, Settings, User, Lock, Clock, Stethoscope, Building2, LayoutGrid, UserCheck, Eye, ArrowRightLeft, XCircle, Users } from 'lucide-react';
 import { SinapseLogo } from '@/components/SinapseLogo';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -291,6 +291,14 @@ export function DashboardHeader() {
             <Button variant="outline" size="sm" onClick={() => navigate('/admin')} className="gap-2">
               <Settings className="h-4 w-4" />
               Admin
+            </Button>
+          )}
+
+          {/* Team management button for coordinators (not admins, they have full admin access) */}
+          {!isOnAdmin && hasRole('coordenador') && !hasRole('admin') && (
+            <Button variant="outline" size="sm" onClick={() => navigate('/equipe')} className="gap-2">
+              <Users className="h-4 w-4" />
+              Equipe
             </Button>
           )}
 

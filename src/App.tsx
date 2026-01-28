@@ -10,6 +10,7 @@ import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import SelectUnit from "./pages/SelectUnit";
 import Admin from "./pages/Admin";
+import TeamManagement from "./pages/TeamManagement";
 import PatientDetails from "./pages/PatientDetails";
 import NotFound from "./pages/NotFound";
 
@@ -30,6 +31,7 @@ const App = () => (
               <Route path="/select-unit" element={<SelectUnit />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/admin" element={<Admin />} />
+              <Route path="/equipe" element={<TeamManagement />} />
               <Route path="/patient/:patientId" element={<PatientDetails />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
