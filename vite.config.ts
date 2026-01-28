@@ -23,9 +23,29 @@ export default defineConfig(({ mode }) => ({
         theme_color: "#1e3a5f",
         background_color: "#f8fafc",
         display: "standalone",
+        display_override: ["window-controls-overlay", "standalone", "minimal-ui"],
         orientation: "portrait-primary",
         start_url: "/",
         scope: "/",
+        categories: ["medical", "health", "productivity", "business"],
+        prefer_related_applications: false,
+        related_applications: [],
+        shortcuts: [
+          {
+            name: "Dashboard",
+            short_name: "Início",
+            description: "Ir para o dashboard principal",
+            url: "/dashboard",
+            icons: [{ src: "/icons/icon-192x192.png", sizes: "192x192" }],
+          },
+          {
+            name: "Administração",
+            short_name: "Admin",
+            description: "Painel administrativo",
+            url: "/admin",
+            icons: [{ src: "/icons/icon-192x192.png", sizes: "192x192" }],
+          },
+        ],
         icons: [
           {
             src: "/icons/icon-192x192.png",
