@@ -38,6 +38,7 @@ const ROLES: { value: AppRole; label: string }[] = [
   { value: 'plantonista', label: 'Plantonista' },
   { value: 'diarista', label: 'Diarista' },
   { value: 'coordenador', label: 'Coordenador' },
+  { value: 'nir', label: 'NIR (Regulação)' },
   { value: 'admin', label: 'Administrador' },
 ];
 

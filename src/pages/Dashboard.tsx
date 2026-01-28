@@ -5,6 +5,7 @@ import { useUnit } from '@/hooks/useUnit';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { BedGrid } from '@/components/dashboard/BedGrid';
 import { AllUnitsGrid } from '@/components/dashboard/AllUnitsGrid';
+import { NIRDashboard } from '@/components/nir/NIRDashboard';
 import { PendingApproval } from '@/components/dashboard/PendingApproval';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Eye } from 'lucide-react';
@@ -14,7 +15,7 @@ const ACTIVITY_DEBOUNCE_MS = 60 * 1000; // 1 minute debounce
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user, isLoading: authLoading, isApproved, profile, hasRole } = useAuth();
-  const { selectedUnit, isLoading: unitLoading, activeSession, canSwitchUnits, updateActivity, showAllUnits, isHandoverReceiver } = useUnit();
+  const { selectedUnit, isLoading: unitLoading, activeSession, canSwitchUnits, updateActivity, showAllUnits, isHandoverReceiver, isNIR } = useUnit();
   const lastActivityUpdate = useRef<number>(0);
 
   // Check if user can view all units (coordinators and diaristas)
@@ -87,6 +88,11 @@ export default function Dashboard() {
 
   // Determine what to render in the main area
   const renderMainContent = () => {
+    // NIR users get their special dashboard
+    if (isNIR && (showAllUnits || !selectedUnit)) {
+      return <NIRDashboard />;
+    }
+
     // If coordinator/diarista and showing all units (or no unit selected)
     if (canViewAllUnits && (showAllUnits || !selectedUnit)) {
       return <AllUnitsGrid />;

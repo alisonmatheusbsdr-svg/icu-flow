@@ -29,6 +29,7 @@ interface UnitContextType {
   showAllUnits: boolean;
   isInHandoverMode: boolean;
   isHandoverReceiver: boolean;
+  isNIR: boolean;
   canEdit: boolean;
   selectUnit: (unit: Unit) => void;
   selectAllUnits: () => void;
@@ -45,7 +46,7 @@ interface UnitContextType {
 const UnitContext = createContext<UnitContextType | undefined>(undefined);
 
 const HEARTBEAT_INTERVAL = 5 * 60 * 1000; // 5 minutes
-const PRIVILEGED_ROLES = ['admin', 'coordenador', 'diarista'];
+const PRIVILEGED_ROLES = ['admin', 'coordenador', 'diarista', 'nir'];
 
 export function UnitProvider({ children }: { children: ReactNode }) {
   const { user, isApproved, roles, rolesLoaded } = useAuth();
@@ -60,15 +61,18 @@ export function UnitProvider({ children }: { children: ReactNode }) {
   const canSwitchUnits = rolesLoaded && roles.some(r => PRIVILEGED_ROLES.includes(r));
   const isSessionBlocking = activeSession?.is_blocking ?? false;
   
-  // Check if user can view all units at once (coordinators and diaristas)
-  const canViewAllUnits = rolesLoaded && (roles.includes('coordenador') || roles.includes('diarista') || roles.includes('admin'));
+  // Check if user can view all units at once (coordinators, diaristas, and NIR)
+  const canViewAllUnits = rolesLoaded && (roles.includes('coordenador') || roles.includes('diarista') || roles.includes('admin') || roles.includes('nir'));
 
   // Handover mode states
   const isInHandoverMode = activeSession?.handover_mode ?? false;
   const isHandoverReceiver = activeSession?.is_handover_receiver ?? false;
   
-  // Can edit: true unless user is a handover receiver
-  const canEdit = !isHandoverReceiver;
+  // Check if user is NIR (read-only for clinical data, can edit regulation)
+  const isNIR = rolesLoaded && roles.includes('nir');
+  
+  // Can edit: true unless user is a handover receiver OR is NIR
+  const canEdit = !isHandoverReceiver && !isNIR;
 
   // Fetch units
   const fetchUnits = useCallback(async () => {
@@ -418,6 +422,7 @@ export function UnitProvider({ children }: { children: ReactNode }) {
       showAllUnits,
       isInHandoverMode,
       isHandoverReceiver,
+      isNIR,
       canEdit,
       selectUnit,
       selectAllUnits,
