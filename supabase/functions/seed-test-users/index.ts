@@ -1,9 +1,29 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// NOTE: This is a testing function that should NOT be deployed to production
+// It intentionally has no authentication to allow test user setup
+// After testing, consider removing this function from deployment
+
+// Allowed origins for CORS - restricted even for test functions
+const allowedOrigins = [
+  "https://id-preview--deb97400-6ef9-479c-a47d-70385f8c2cdb.lovable.app",
+  "https://lovable.dev",
+  "http://localhost:8080",
+  "http://localhost:5173",
+  "http://localhost:3000"
+];
+
+function getCorsHeaders(origin: string | null) {
+  const allowedOrigin = origin && allowedOrigins.some(o => origin.startsWith(o.replace(/:\d+$/, '')) || origin === o)
+    ? origin
+    : allowedOrigins[0];
+  
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Credentials": "true",
+  };
+}
 
 const testUsers = [
   { email: "diarista@teste.com", role: "diarista", nome: "Dr. Diarista Teste", crm: "CRM/TEST-001" },
@@ -12,6 +32,9 @@ const testUsers = [
 ];
 
 Deno.serve(async (req) => {
+  const origin = req.headers.get("Origin");
+  const corsHeaders = getCorsHeaders(origin);
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
