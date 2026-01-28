@@ -1,293 +1,146 @@
 
 
-# Plano: Impossibilidade Clinica, Cancelamento e Expiracao de Prazo
+# Plano: Centralizar Acoes de Regulacao no Modal do Paciente
 
-## Visao Geral
+## Objetivo
 
-A equipe assistencial precisa de duas novas acoes quando a vaga esta confirmada (`aguardando_transferencia`):
+Mover todas as acoes de regulacao (aguardar melhora clinica, cancelamento, solicitar nova listagem) para dentro da secao "Regulacao" no modal do paciente (`PatientRegulation.tsx`), removendo essas opcoes de outros lugares como o dialog de alta e badges clicaveis.
 
-1. **Aguardar Melhora Clinica** - Paciente nao pode transferir agora, vaga mantida ate melhora
-2. **Cancelar Regulacao** - Equipe cancela definitivamente a solicitacao
-3. **Prazo Vencido** - Quando o prazo expira, equipe e sinalizada para nova decisao
+## Alteracoes Propostas
 
-Todas exigem justificativa e envolvem dupla checagem com o NIR.
+### 1. Remover Sugestao de Transferencia do PatientDischargeDialog
 
-```text
-┌──────────────────────────────────────────────────────────────────────────────────────────────┐
-│                           FLUXO COMPLETO COM EXPIRACAO                                       │
-├──────────────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                              │
-│  EQUIPE                              NIR                              EQUIPE                 │
-│  ──────                              ───                              ──────                 │
-│                                                                                              │
-│  Sinaliza impossibilidade ──────────► Define prazo (calendario) ──┐                         │
-│  clinica com justificativa           Ex: "ate 30/01"              │                         │
-│                                                                   │                         │
-│                                                                   v                         │
-│                                      ┌────────────────────────────────────────┐             │
-│                                      │ Sistema monitora a data limite         │             │
-│                                      └────────────────────────────────────────┘             │
-│                                                   │                                         │
-│                              ┌────────────────────┴────────────────────┐                    │
-│                              │                                         │                    │
-│                              v                                         v                    │
-│                    Antes do prazo vencer                     Prazo venceu                   │
-│                    ────────────────────                      ────────────                   │
-│                    Equipe pode:                              Badge VERMELHO:                │
-│                    • Confirmar transferencia                 "PRAZO VENCIDO"               │
-│                    • Solicitar mais tempo                              │                    │
-│                                                                        v                    │
-│                                                              ┌─────────────────────────────┐│
-│                                                              │ Equipe deve decidir:        ││
-│                                                              │ • Confirmar Transferencia   ││
-│                                                              │ • Solicitar Nova Listagem   ││
-│                                                              │ • Cancelar Regulacao        ││
-│                                                              └─────────────────────────────┘│
-│                                                                                              │
-└──────────────────────────────────────────────────────────────────────────────────────────────┘
-```
+**Arquivo:** `src/components/patient/PatientDischargeDialog.tsx`
 
-## Experiencia do Usuario
+Remover:
+- A logica que busca regulacao `awaitingTransferReg`
+- O card verde com sugestao de transferencia rapida
+- O texto "ou selecione outro desfecho"
 
-### Equipe - Quando Prazo Esta Vigente
+O dialog ficara apenas com o select de desfecho e o botao de confirmar, como era originalmente.
 
-Badge amarelo indica que esta aguardando melhora:
+### 2. Modificar PatientRegulation para Incluir Acoes
 
-```text
-┌─────────────────────────────────────┐
-│ Leito 3                        5d   │
-│ M.S.O. - 67 anos                    │
-│                                     │
-│ ┌─────────────────────────────────┐ │
-│ │ ⏳ AGUARD. MELHORA - Neurologia │ │  <- Badge amarelo
-│ │    Prazo: ate 30/01             │ │
-│ └─────────────────────────────────┘ │
-└─────────────────────────────────────┘
-```
+**Arquivo:** `src/components/patient/PatientRegulation.tsx`
 
-### Equipe - Quando Prazo Venceu
+Quando a regulacao estiver em `aguardando_transferencia`, mostrar botoes de acao dentro do Popover:
 
-Badge vermelho pulsante alerta que precisa de acao:
+- **Confirmar Transferencia** - Verde (confirma saida do paciente)
+- **Aguardar Melhora Clinica** - Amarelo (abre dialog de justificativa)
+- **Cancelar Regulacao** - Vermelho (abre dialog de justificativa)
 
-```text
-┌─────────────────────────────────────┐
-│ Leito 3                        5d   │
-│ M.S.O. - 67 anos                    │
-│                                     │
-│ ┌─────────────────────────────────┐ │
-│ │ ⚠️ PRAZO VENCIDO - Neurologia   │ │  <- Badge vermelho pulsante
-│ │    Venceu em 30/01              │ │
-│ └─────────────────────────────────┘ │
-└─────────────────────────────────────┘
-```
+Quando houver prazo vencido (`clinical_hold_deadline` expirado), mostrar alerta e opcoes:
 
-### Dialog de Prazo Vencido (Equipe)
+- **Paciente Melhorou** - Confirma transferencia
+- **Solicitar Nova Listagem** - Com justificativa
+- **Cancelar Regulacao** - Com justificativa
 
-Quando equipe clica no badge de prazo vencido:
+### 3. Integrar RegulationTeamActions no PatientRegulation
 
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│ Prazo de Melhora Clinica Vencido                           [x]  │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│ Neurologia - Prazo venceu em 30/01                              │
-│                                                                 │
-│ A vaga pode ter expirado. Escolha uma acao:                     │
-│                                                                 │
-│ ┌─────────────────────────────────────────────────────────────┐ │
-│ │ ✅ Paciente melhorou - Confirmar Transferencia              │ │
-│ └─────────────────────────────────────────────────────────────┘ │
-│                                                                 │
-│ ┌─────────────────────────────────────────────────────────────┐ │
-│ │ 🔄 Solicitar Nova Listagem                                  │ │
-│ │    (Nova senha sera solicitada ao NIR)                      │ │
-│ │                                                             │ │
-│ │    Justificativa para nova listagem *                       │ │
-│ │    ┌───────────────────────────────────────────────────┐    │ │
-│ │    │ Paciente ainda instavel, porem com melhora...    │    │ │
-│ │    └───────────────────────────────────────────────────┘    │ │
-│ └─────────────────────────────────────────────────────────────┘ │
-│                                                                 │
-│ ┌─────────────────────────────────────────────────────────────┐ │
-│ │ ❌ Cancelar Regulacao                                       │ │
-│ │    (Desistir da transferencia)                              │ │
-│ └─────────────────────────────────────────────────────────────┘ │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+Em vez de ter um dialog separado (`RegulationTeamActions.tsx`), as acoes serao exibidas diretamente no Popover de cada regulacao dentro do `PatientRegulation.tsx`. O dialog so abre quando precisa de justificativa.
 
-### NIR - Ve Solicitacao de Nova Listagem
+### 4. Simplificar Badges no BedCard
 
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│ 🧠 Neurologia                               [Aguard. Transf.]   │
-│                                                                 │
-│ ┌─────────────────────────────────────────────────────────────┐ │
-│ │ 🔄 SOLICITACAO DE NOVA LISTAGEM                             │ │
-│ │ "Paciente ainda instavel, porem com melhora parcial..."     │ │
-│ │ Solicitado em: 31/01 as 08:00                               │ │
-│ └─────────────────────────────────────────────────────────────┘ │
-│                                                                 │
-│ [ Solicitar Nova Senha ]  [ Cancelar Vaga ]                     │
-└─────────────────────────────────────────────────────────────────┘
-```
+**Arquivo:** `src/components/dashboard/BedCard.tsx`
+
+Os badges permanecem visuais (para alertar a equipe), mas nao abrem dialogs ao clicar. Sao apenas indicadores:
+
+- Badge verde "VAGA" - Indica que ha vaga disponivel
+- Badge amarelo "AGUARD. MELHORA" - Indica impossibilidade clinica
+- Badge vermelho "PRAZO VENCIDO" - Alerta visual para prazo expirado
+- Badge "CANCELAMENTO PEND." - Indica solicitacao de cancelamento
+
+O usuario clica no card para abrir o modal e faz as acoes na secao de Regulacao.
 
 ---
 
 ## Secao Tecnica
 
-### 1. Alteracoes no Banco de Dados
-
-```sql
-ALTER TABLE patient_regulation
--- Impossibilidade clinica (equipe sinaliza)
-ADD COLUMN IF NOT EXISTS clinical_hold_at TIMESTAMPTZ,
-ADD COLUMN IF NOT EXISTS clinical_hold_by UUID,
-ADD COLUMN IF NOT EXISTS clinical_hold_reason TEXT,
--- Prazo definido pelo NIR
-ADD COLUMN IF NOT EXISTS clinical_hold_deadline DATE,
-ADD COLUMN IF NOT EXISTS clinical_hold_deadline_set_by UUID,
--- Solicitacao de nova listagem (quando prazo vence)
-ADD COLUMN IF NOT EXISTS relisting_requested_at TIMESTAMPTZ,
-ADD COLUMN IF NOT EXISTS relisting_requested_by UUID,
-ADD COLUMN IF NOT EXISTS relisting_reason TEXT,
--- Cancelamento solicitado pela equipe
-ADD COLUMN IF NOT EXISTS team_cancel_requested_at TIMESTAMPTZ,
-ADD COLUMN IF NOT EXISTS team_cancel_requested_by UUID,
-ADD COLUMN IF NOT EXISTS team_cancel_reason TEXT;
-```
-
-### 2. Atualizar Tipos TypeScript
-
-**`src/types/database.ts`**:
-
-```typescript
-export interface PatientRegulation {
-  // ... campos existentes ...
-  // Impossibilidade clinica
-  clinical_hold_at: string | null;
-  clinical_hold_by: string | null;
-  clinical_hold_reason: string | null;
-  clinical_hold_deadline: string | null;
-  clinical_hold_deadline_set_by: string | null;
-  // Nova listagem (apos prazo vencer)
-  relisting_requested_at: string | null;
-  relisting_requested_by: string | null;
-  relisting_reason: string | null;
-  // Cancelamento solicitado pela equipe
-  team_cancel_requested_at: string | null;
-  team_cancel_requested_by: string | null;
-  team_cancel_reason: string | null;
-}
-```
-
-### 3. Logica de Verificacao de Prazo
-
-**Funcao utilitaria em `src/lib/regulation-config.ts`**:
-
-```typescript
-export function isDeadlineExpired(deadline: string | null): boolean {
-  if (!deadline) return false;
-  const deadlineDate = new Date(deadline);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return deadlineDate < today;
-}
-
-export function getDeadlineStatus(reg: PatientRegulation): 'none' | 'pending' | 'expired' {
-  if (!reg.clinical_hold_deadline) return 'none';
-  return isDeadlineExpired(reg.clinical_hold_deadline) ? 'expired' : 'pending';
-}
-```
-
-### 4. Criar Componente RegulationTeamActions
-
-**`src/components/patient/RegulationTeamActions.tsx`**
-
-Componente com todas as acoes possiveis para a equipe:
-- Confirmar Transferencia (existente)
-- Aguardar Melhora Clinica (novo - requer justificativa)
-- Solicitar Nova Listagem (novo - quando prazo venceu, requer justificativa)
-- Cancelar Regulacao (novo - requer justificativa)
-
-### 5. Modificar BedCard
-
-**`src/components/dashboard/BedCard.tsx`**
-
-Badges visuais baseados no estado:
+### Modificacoes no PatientRegulation.tsx
 
 ```tsx
-// Status da regulacao
-const awaitingTransferReg = patient.patient_regulation?.find(
-  r => r.is_active && r.status === 'aguardando_transferencia'
-);
+// Adicionar imports
+import { RegulationTeamActions } from './RegulationTeamActions';
+import { DeadlineExpiredDialog } from './DeadlineExpiredDialog';
+import { isDeadlineExpired } from '@/lib/regulation-config';
 
-if (awaitingTransferReg) {
-  const hasDeadline = awaitingTransferReg.clinical_hold_deadline;
-  const isExpired = hasDeadline && isDeadlineExpired(awaitingTransferReg.clinical_hold_deadline);
-  
-  if (isExpired) {
-    // Badge vermelho pulsante - PRAZO VENCIDO
-    return <Badge className="bg-red-500 animate-pulse">PRAZO VENCIDO</Badge>;
-  } else if (awaitingTransferReg.clinical_hold_at) {
-    // Badge amarelo - AGUARDANDO MELHORA
-    return <Badge className="bg-amber-500">AGUARD. MELHORA - ate {formatDate(deadline)}</Badge>;
-  } else {
-    // Badge verde - VAGA DISPONIVEL (existente)
-    return <Badge className="bg-green-500 animate-pulse">VAGA</Badge>;
-  }
-}
+// Adicionar estados
+const [actionRegulation, setActionRegulation] = useState<PatientRegulationType | null>(null);
+const [deadlineExpiredReg, setDeadlineExpiredReg] = useState<PatientRegulationType | null>(null);
+
+// Dentro do Popover de cada regulacao, adicionar condicional:
+{reg.status === 'aguardando_transferencia' && canManageRequests && (
+  <div className="space-y-2 pt-2 border-t">
+    {/* Se prazo venceu */}
+    {reg.clinical_hold_deadline && isDeadlineExpired(reg.clinical_hold_deadline) ? (
+      <div className="p-2 bg-red-50 rounded-lg">
+        <p className="text-xs text-red-600 font-medium mb-2">
+          Prazo vencido! Escolha uma acao:
+        </p>
+        <Button size="sm" onClick={() => setDeadlineExpiredReg(reg)}>
+          Ver Opcoes
+        </Button>
+      </div>
+    ) : (
+      /* Acoes normais quando vaga disponivel */
+      <Button 
+        size="sm" 
+        className="w-full gap-1"
+        onClick={() => setActionRegulation(reg)}
+      >
+        Acoes de Transferencia
+      </Button>
+    )}
+  </div>
+)}
 ```
 
-### 6. Criar Dialog de Prazo Vencido
+### Modificacoes no PatientDischargeDialog.tsx
 
-**`src/components/patient/DeadlineExpiredDialog.tsx`**
+Remover linhas 72-74 (awaitingTransferReg), linhas 139-143 (handleQuickTransfer), e linhas 163-215 (card de sugestao de transferencia).
 
-Dialog que aparece quando equipe clica no badge de prazo vencido:
-- Opcao 1: Confirmar Transferencia (paciente melhorou)
-- Opcao 2: Solicitar Nova Listagem (com justificativa)
-- Opcao 3: Cancelar Regulacao (com justificativa)
+### Arquivos a Modificar
 
-### 7. Modificar NIRRegulationDialog
+| Arquivo | Alteracao |
+|---------|-----------|
+| `src/components/patient/PatientRegulation.tsx` | Adicionar botoes de acao no Popover |
+| `src/components/patient/PatientDischargeDialog.tsx` | Remover sugestao de transferencia rapida |
+| `src/components/dashboard/BedCard.tsx` | Remover onClick dos badges de regulacao |
 
-**`src/components/nir/NIRRegulationDialog.tsx`**
+### Fluxo Final
 
-Adicionar tratamento para:
-- `clinical_hold_at` preenchido: mostrar date picker para definir prazo
-- `relisting_requested_at` preenchido: mostrar opcoes de nova listagem ou cancelar
-- `team_cancel_requested_at` preenchido: confirmar cancelamento
-
-### 8. Atualizar BedGrid
-
-**`src/components/dashboard/BedGrid.tsx`**
-
-Incluir todos os novos campos na query de `patient_regulation`.
-
-### 9. Arquivos a Criar/Modificar
-
-| Arquivo | Acao |
-|---------|------|
-| **Migracao SQL** | Criar - todos os novos campos |
-| `src/types/database.ts` | Modificar - adicionar novos campos |
-| `src/lib/regulation-config.ts` | Modificar - funcoes de verificacao de prazo |
-| `src/components/patient/RegulationTeamActions.tsx` | Criar - acoes da equipe |
-| `src/components/patient/DeadlineExpiredDialog.tsx` | Criar - dialog de prazo vencido |
-| `src/components/dashboard/BedCard.tsx` | Modificar - badges dinamicos |
-| `src/components/patient/PatientDischargeDialog.tsx` | Modificar - integrar acoes |
-| `src/components/nir/NIRRegulationDialog.tsx` | Modificar - date picker e nova listagem |
-| `src/components/nir/NIRBedCard.tsx` | Modificar - indicadores visuais |
-| `src/components/dashboard/BedGrid.tsx` | Modificar - carregar novos campos |
-
-### 10. Ordem de Implementacao
-
-1. Criar migracao SQL para novos campos
-2. Atualizar tipos em `database.ts`
-3. Adicionar funcoes de verificacao de prazo em `regulation-config.ts`
-4. Criar componente `RegulationTeamActions.tsx`
-5. Criar componente `DeadlineExpiredDialog.tsx`
-6. Modificar `BedCard.tsx` com badges dinamicos
-7. Modificar `PatientDischargeDialog.tsx` para usar novos componentes
-8. Modificar `NIRRegulationDialog.tsx` com date picker e acoes de nova listagem
-9. Atualizar `BedGrid.tsx` para carregar novos campos
-10. Atualizar `NIRBedCard.tsx` com indicadores
+```text
+┌───────────────────────────────────────────────────────────────────────┐
+│                          FLUXO CENTRALIZADO                           │
+├───────────────────────────────────────────────────────────────────────┤
+│                                                                       │
+│  BedCard (Dashboard)                                                  │
+│  ──────────────────                                                   │
+│  Mostra badges visuais (VAGA, AGUARD. MELHORA, etc.)                 │
+│  Usuario clica no card → abre PatientModal                           │
+│                                                                       │
+│  PatientModal                                                         │
+│  ────────────                                                         │
+│  Secao "Regulacao" (PatientRegulation.tsx)                           │
+│       │                                                               │
+│       ├──► Clica na regulacao → Popover com detalhes                 │
+│       │       │                                                       │
+│       │       ├──► [Alterar Especialidade] (existente)               │
+│       │       ├──► [Acoes de Transferencia] (quando aguard. transf.) │
+│       │       │           │                                           │
+│       │       │           ├──► Confirmar Transferencia               │
+│       │       │           ├──► Aguardar Melhora Clinica              │
+│       │       │           └──► Cancelar Regulacao                    │
+│       │       │                                                       │
+│       │       └──► [Remover] (existente)                             │
+│       │                                                               │
+│       └──► Botao [+] para adicionar nova regulacao                   │
+│                                                                       │
+│  Dialog de Desfecho (separado)                                        │
+│  ─────────────────────────────                                        │
+│  Apenas registro de desfecho (alta, obito, transferencia)            │
+│  Sem sugestoes de regulacao                                           │
+│                                                                       │
+└───────────────────────────────────────────────────────────────────────┘
+```
 
