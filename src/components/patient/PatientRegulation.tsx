@@ -5,6 +5,16 @@ import { useUnit } from '@/hooks/useUnit';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Building2, Plus, X, Calendar, Info, Pencil, AlertTriangle, Truck, Clock, RefreshCw, CheckCircle } from 'lucide-react';
@@ -30,6 +40,7 @@ export function PatientRegulation({ patientId, regulations, onUpdate }: PatientR
   const [changeSpecialtyReg, setChangeSpecialtyReg] = useState<PatientRegulationType | null>(null);
   const [actionRegulation, setActionRegulation] = useState<PatientRegulationType | null>(null);
   const [deadlineExpiredReg, setDeadlineExpiredReg] = useState<PatientRegulationType | null>(null);
+  const [removeRegulation, setRemoveRegulation] = useState<PatientRegulationType | null>(null);
 
   // Care team (non-NIR) can add/remove requests and change specialty
   const canManageRequests = canEdit && !isNIR;
@@ -321,7 +332,7 @@ export function PatientRegulation({ patientId, regulations, onUpdate }: PatientR
                           variant="ghost" 
                           size="sm"
                           className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => handleRemove(reg.id)}
+                          onClick={() => setRemoveRegulation(reg)}
                         >
                           <X className="h-4 w-4" />
                         </Button>
@@ -417,6 +428,34 @@ export function PatientRegulation({ patientId, regulations, onUpdate }: PatientR
           }}
         />
       )}
+
+      {/* Dialog de confirmação para remover regulação */}
+      <AlertDialog open={!!removeRegulation} onOpenChange={(open) => !open && setRemoveRegulation(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover Regulação</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja remover a solicitação de regulação para{' '}
+              <strong>{removeRegulation && getSupportLabel(removeRegulation.support_type)}</strong>?
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (removeRegulation) {
+                  handleRemove(removeRegulation.id);
+                  setRemoveRegulation(null);
+                }
+              }}
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
