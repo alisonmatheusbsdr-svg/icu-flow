@@ -287,7 +287,6 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
             isOpen={isDischargeDialogOpen}
             onClose={() => setIsDischargeDialogOpen(false)}
             onSuccess={onClose}
-            regulations={patient.patient_regulation}
           />
         )}
 
