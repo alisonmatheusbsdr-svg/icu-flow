@@ -253,6 +253,19 @@ export interface PatientWithDetails extends Patient {
   patient_precautions?: PatientPrecaution[];
   patient_regulation?: PatientRegulation[];
 }
+
+export interface ActiveSession {
+  id: string;
+  user_id: string;
+  unit_id: string;
+  is_blocking: boolean;
+  handover_mode: boolean;
+  is_handover_receiver: boolean;
+  last_activity: string;
+  started_at: string;
+  created_at: string;
+}
+
 export interface ProfileWithRole extends Profile {
   user_roles?: UserRole[];
 }
