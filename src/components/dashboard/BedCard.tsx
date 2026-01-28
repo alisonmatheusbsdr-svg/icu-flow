@@ -270,7 +270,9 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
         {/* Awaiting transfer notification badge - only show green VAGA */}
         {(() => {
           const awaitingTransfer = patient.patient_regulation?.find(
-            r => r.is_active && r.status === 'aguardando_transferencia'
+            r => r.is_active && 
+                 r.status === 'aguardando_transferencia' &&
+                 !r.clinical_hold_at  // Não mostrar se há impossibilidade clínica
           );
           if (!awaitingTransfer) return null;
 
