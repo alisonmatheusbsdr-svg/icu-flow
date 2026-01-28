@@ -6,8 +6,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Button } from '@/components/ui/button';
 import { AdmitPatientForm } from './AdmitPatientForm';
 import { BlockBedDialog } from './BlockBedDialog';
-import { RegulationTeamActions } from '@/components/patient/RegulationTeamActions';
-import { DeadlineExpiredDialog } from '@/components/patient/DeadlineExpiredDialog';
 import { Wind, Heart, Plus, Pill, Ban, Lock, MoreVertical, Unlock, Loader2, Truck, Clock, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -102,9 +100,6 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
   const [isAdmitOpen, setIsAdmitOpen] = useState(false);
   const [isBlockDialogOpen, setIsBlockDialogOpen] = useState(false);
   const [isUnblocking, setIsUnblocking] = useState(false);
-  const [selectedRegulation, setSelectedRegulation] = useState<PatientRegulation | null>(null);
-  const [isTeamActionsOpen, setIsTeamActionsOpen] = useState(false);
-  const [isDeadlineExpiredOpen, setIsDeadlineExpiredOpen] = useState(false);
   const { hasRole } = useAuth();
 
   const canBlockBeds = hasRole('admin') || hasRole('coordenador');
@@ -310,17 +305,10 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
             );
           }
 
-          // Deadline expired - pulsing red badge, clickable
+          // Deadline expired - pulsing red badge (visual only)
           if (deadlineExpired) {
             return (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedRegulation(awaitingTransfer);
-                  setIsDeadlineExpiredOpen(true);
-                }}
-                className="mt-2 p-2 w-full bg-red-100 dark:bg-red-950/40 rounded-md border border-red-300 dark:border-red-800 animate-pulse hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors text-left"
-              >
+              <div className="mt-2 p-2 bg-red-100 dark:bg-red-950/40 rounded-md border border-red-300 dark:border-red-800 animate-pulse">
                 <div className="flex items-center gap-1.5 text-red-700 dark:text-red-300 text-xs font-medium">
                   <AlertTriangle className="h-3.5 w-3.5" />
                   PRAZO VENCIDO - {getSupportLabel(awaitingTransfer.support_type)}
@@ -328,7 +316,7 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
                 <div className="text-[10px] text-red-600 dark:text-red-400 mt-0.5">
                   Venceu em {formatDate(awaitingTransfer.clinical_hold_deadline!)}
                 </div>
-              </button>
+              </div>
             );
           }
 
@@ -362,24 +350,14 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
             );
           }
 
-          // Default: vacancy available - green pulsing badge, clickable
+          // Default: vacancy available - green pulsing badge (visual only)
           return (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelectedRegulation(awaitingTransfer);
-                setIsTeamActionsOpen(true);
-              }}
-              className="mt-2 p-2 w-full bg-green-100 dark:bg-green-950/40 rounded-md border border-green-300 dark:border-green-800 animate-pulse hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors text-left"
-            >
+            <div className="mt-2 p-2 bg-green-100 dark:bg-green-950/40 rounded-md border border-green-300 dark:border-green-800 animate-pulse">
               <div className="flex items-center gap-1.5 text-green-700 dark:text-green-300 text-xs font-medium">
                 <Truck className="h-3.5 w-3.5" />
                 VAGA - {getSupportLabel(awaitingTransfer.support_type)}
               </div>
-              <div className="text-[10px] text-green-600 dark:text-green-400 mt-0.5">
-                Clique para tomar ação
-              </div>
-            </button>
+            </div>
           );
         })()}
         
@@ -413,38 +391,6 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
           );
         })()}
       </CardContent>
-
-      {/* Team Actions Dialog */}
-      {selectedRegulation && (
-        <>
-          <RegulationTeamActions
-            regulation={selectedRegulation}
-            isOpen={isTeamActionsOpen}
-            onClose={() => {
-              setIsTeamActionsOpen(false);
-              setSelectedRegulation(null);
-            }}
-            onUpdate={() => {
-              setIsTeamActionsOpen(false);
-              setSelectedRegulation(null);
-              onUpdate();
-            }}
-          />
-          <DeadlineExpiredDialog
-            regulation={selectedRegulation}
-            isOpen={isDeadlineExpiredOpen}
-            onClose={() => {
-              setIsDeadlineExpiredOpen(false);
-              setSelectedRegulation(null);
-            }}
-            onUpdate={() => {
-              setIsDeadlineExpiredOpen(false);
-              setSelectedRegulation(null);
-              onUpdate();
-            }}
-          />
-        </>
-      )}
     </Card>
   );
 }

@@ -7,10 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Building2, Plus, X, Calendar, Info, Pencil, AlertTriangle } from 'lucide-react';
+import { Building2, Plus, X, Calendar, Info, Pencil, AlertTriangle, Truck, Clock, RefreshCw, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { ChangeSpecialtyDialog } from './ChangeSpecialtyDialog';
-import { STATUS_CONFIG, SUPPORT_TYPES, getSupportLabel, formatDate, FINAL_STATUSES } from '@/lib/regulation-config';
+import { RegulationTeamActions } from './RegulationTeamActions';
+import { DeadlineExpiredDialog } from './DeadlineExpiredDialog';
+import { STATUS_CONFIG, SUPPORT_TYPES, getSupportLabel, formatDate, FINAL_STATUSES, isDeadlineExpired } from '@/lib/regulation-config';
 import type { PatientRegulation as PatientRegulationType, RegulationStatus } from '@/types/database';
 
 interface PatientRegulationProps {
@@ -26,6 +28,8 @@ export function PatientRegulation({ patientId, regulations, onUpdate }: PatientR
   const [selectedType, setSelectedType] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [changeSpecialtyReg, setChangeSpecialtyReg] = useState<PatientRegulationType | null>(null);
+  const [actionRegulation, setActionRegulation] = useState<PatientRegulationType | null>(null);
+  const [deadlineExpiredReg, setDeadlineExpiredReg] = useState<PatientRegulationType | null>(null);
 
   // Care team (non-NIR) can add/remove requests and change specialty
   const canManageRequests = canEdit && !isNIR;
@@ -75,6 +79,23 @@ export function PatientRegulation({ patientId, regulations, onUpdate }: PatientR
     return canManageRequests && !FINAL_STATUSES.includes(reg.status);
   };
 
+  // Check if this regulation has special states that need attention
+  const getRegulationAlertState = (reg: PatientRegulationType) => {
+    if (reg.status !== 'aguardando_transferencia') return null;
+    
+    const hasClinicalHold = reg.clinical_hold_at;
+    const hasDeadline = reg.clinical_hold_deadline;
+    const deadlineExpired = hasDeadline && isDeadlineExpired(reg.clinical_hold_deadline);
+    const hasPendingCancel = reg.team_cancel_requested_at;
+    const hasRelisting = reg.relisting_requested_at;
+
+    if (hasPendingCancel) return 'pending_cancel';
+    if (hasRelisting) return 'relisting';
+    if (deadlineExpired) return 'deadline_expired';
+    if (hasClinicalHold) return 'clinical_hold';
+    return 'vacancy_available';
+  };
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
@@ -101,6 +122,7 @@ export function PatientRegulation({ patientId, regulations, onUpdate }: PatientR
           regulations.map((reg) => {
             const statusConfig = STATUS_CONFIG[reg.status] || STATUS_CONFIG.aguardando_regulacao;
             const StatusIcon = statusConfig.icon;
+            const alertState = getRegulationAlertState(reg);
 
             return (
               <Popover key={reg.id}>
@@ -123,6 +145,53 @@ export function PatientRegulation({ patientId, regulations, onUpdate }: PatientR
                       {reg.regulated_at && <span>| Regulado: {formatDate(reg.regulated_at)}</span>}
                       {reg.confirmed_at && <span>| Vaga: {formatDate(reg.confirmed_at)}</span>}
                     </div>
+
+                    {/* Alert badges for special states */}
+                    {alertState === 'vacancy_available' && (
+                      <div className="flex items-center gap-1.5 mt-2 p-1.5 bg-green-100 dark:bg-green-950/40 rounded text-xs">
+                        <Truck className="h-3 w-3 text-green-600" />
+                        <span className="text-green-700 dark:text-green-300 font-medium">
+                          Vaga disponível! Clique para tomar ação
+                        </span>
+                      </div>
+                    )}
+
+                    {alertState === 'clinical_hold' && (
+                      <div className="flex items-center gap-1.5 mt-2 p-1.5 bg-amber-100 dark:bg-amber-950/40 rounded text-xs">
+                        <Clock className="h-3 w-3 text-amber-600" />
+                        <span className="text-amber-700 dark:text-amber-300">
+                          Aguardando melhora clínica
+                          {reg.clinical_hold_deadline && ` - Prazo: ${formatDate(reg.clinical_hold_deadline)}`}
+                        </span>
+                      </div>
+                    )}
+
+                    {alertState === 'deadline_expired' && (
+                      <div className="flex items-center gap-1.5 mt-2 p-1.5 bg-red-100 dark:bg-red-950/40 rounded text-xs animate-pulse">
+                        <AlertTriangle className="h-3 w-3 text-red-600" />
+                        <span className="text-red-700 dark:text-red-300 font-medium">
+                          Prazo vencido! Clique para decidir
+                        </span>
+                      </div>
+                    )}
+
+                    {alertState === 'pending_cancel' && (
+                      <div className="flex items-center gap-1.5 mt-2 p-1.5 bg-red-100 dark:bg-red-950/40 rounded text-xs">
+                        <AlertTriangle className="h-3 w-3 text-red-600" />
+                        <span className="text-red-700 dark:text-red-300">
+                          Cancelamento solicitado - Aguardando NIR
+                        </span>
+                      </div>
+                    )}
+
+                    {alertState === 'relisting' && (
+                      <div className="flex items-center gap-1.5 mt-2 p-1.5 bg-blue-100 dark:bg-blue-950/40 rounded text-xs">
+                        <RefreshCw className="h-3 w-3 text-blue-600" />
+                        <span className="text-blue-700 dark:text-blue-300">
+                          Nova listagem solicitada - Aguardando NIR
+                        </span>
+                      </div>
+                    )}
 
                     {/* Change indicator */}
                     {reg.previous_support_type && (
@@ -154,7 +223,7 @@ export function PatientRegulation({ patientId, regulations, onUpdate }: PatientR
                   </div>
                 </PopoverTrigger>
                 
-                <PopoverContent className="w-72" align="start">
+                <PopoverContent className="w-80" align="start">
                   <div className="space-y-3">
                     <div>
                       <p className="font-medium">{getSupportLabel(reg.support_type)}</p>
@@ -169,6 +238,60 @@ export function PatientRegulation({ patientId, regulations, onUpdate }: PatientR
                       {reg.confirmed_at && <p>Vaga confirmada: {new Date(reg.confirmed_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>}
                       {reg.transferred_at && <p>Transferido: {new Date(reg.transferred_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>}
                     </div>
+
+                    {/* Clinical hold info */}
+                    {reg.clinical_hold_at && (
+                      <div className="text-xs p-2 bg-amber-50 dark:bg-amber-950/30 rounded">
+                        <p className="font-medium text-amber-800 dark:text-amber-200">Impossibilidade Clínica</p>
+                        <p className="text-amber-700 dark:text-amber-300 mt-1">
+                          {reg.clinical_hold_reason || 'Sem justificativa'}
+                        </p>
+                        {reg.clinical_hold_deadline && (
+                          <p className="mt-1 text-amber-600 dark:text-amber-400">
+                            Prazo: {formatDate(reg.clinical_hold_deadline)}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Transfer action buttons for care team */}
+                    {reg.status === 'aguardando_transferencia' && canManageRequests && (
+                      <div className="space-y-2 pt-2 border-t">
+                        {alertState === 'deadline_expired' ? (
+                          <div className="p-2 bg-red-50 dark:bg-red-950/30 rounded-lg">
+                            <p className="text-xs text-red-600 dark:text-red-400 font-medium mb-2">
+                              ⚠️ Prazo de melhora clínica vencido!
+                            </p>
+                            <Button 
+                              size="sm" 
+                              variant="destructive"
+                              className="w-full gap-1"
+                              onClick={() => setDeadlineExpiredReg(reg)}
+                            >
+                              <AlertTriangle className="h-3 w-3" />
+                              Ver Opções
+                            </Button>
+                          </div>
+                        ) : alertState === 'vacancy_available' ? (
+                          <Button 
+                            size="sm" 
+                            className="w-full gap-1 bg-green-600 hover:bg-green-700"
+                            onClick={() => setActionRegulation(reg)}
+                          >
+                            <Truck className="h-3 w-3" />
+                            Ações de Transferência
+                          </Button>
+                        ) : alertState === 'clinical_hold' ? (
+                          <div className="text-xs text-muted-foreground text-center">
+                            Aguardando prazo de melhora clínica
+                          </div>
+                        ) : alertState === 'pending_cancel' || alertState === 'relisting' ? (
+                          <div className="text-xs text-muted-foreground text-center">
+                            Aguardando análise do NIR
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
 
                     {/* Actions for care team */}
                     {canManageRequests && (
@@ -256,6 +379,32 @@ export function PatientRegulation({ patientId, regulations, onUpdate }: PatientR
           isOpen={!!changeSpecialtyReg}
           onClose={() => setChangeSpecialtyReg(null)}
           onUpdate={onUpdate}
+        />
+      )}
+
+      {/* Dialog para ações de transferência */}
+      {actionRegulation && (
+        <RegulationTeamActions
+          regulation={actionRegulation}
+          isOpen={!!actionRegulation}
+          onClose={() => setActionRegulation(null)}
+          onUpdate={() => {
+            setActionRegulation(null);
+            onUpdate();
+          }}
+        />
+      )}
+
+      {/* Dialog para prazo vencido */}
+      {deadlineExpiredReg && (
+        <DeadlineExpiredDialog
+          regulation={deadlineExpiredReg}
+          isOpen={!!deadlineExpiredReg}
+          onClose={() => setDeadlineExpiredReg(null)}
+          onUpdate={() => {
+            setDeadlineExpiredReg(null);
+            onUpdate();
+          }}
         />
       )}
     </div>
