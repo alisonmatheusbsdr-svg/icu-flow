@@ -25,9 +25,17 @@ export default function Auth() {
   // Signup form
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
+  const [signupPasswordConfirm, setSignupPasswordConfirm] = useState('');
   const [signupNome, setSignupNome] = useState('');
   const [signupCrm, setSignupCrm] = useState('');
   const [signupRole, setSignupRole] = useState<AppRole>('plantonista');
+
+  const handleRoleChange = (role: AppRole) => {
+    setSignupRole(role);
+    if (role === 'nir') {
+      setSignupCrm('');
+    }
+  };
 
   // Redirect if already logged in
   if (user && rolesLoaded) {
@@ -62,8 +70,21 @@ export default function Auth() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!signupEmail || !signupPassword || !signupNome || !signupCrm) {
+    
+    const requiresCrm = signupRole !== 'nir';
+    
+    if (!signupEmail || !signupPassword || !signupNome) {
       toast.error('Preencha todos os campos');
+      return;
+    }
+    
+    if (requiresCrm && !signupCrm) {
+      toast.error('CRM é obrigatório para equipe assistencial');
+      return;
+    }
+
+    if (signupPassword !== signupPasswordConfirm) {
+      toast.error('As senhas não coincidem');
       return;
     }
 
@@ -72,8 +93,10 @@ export default function Auth() {
       return;
     }
 
+    const crmValue = requiresCrm ? signupCrm : 'N/A';
+
     setIsLoading(true);
-    const { error } = await signUp(signupEmail, signupPassword, signupNome, signupCrm, signupRole);
+    const { error } = await signUp(signupEmail, signupPassword, signupNome, crmValue, signupRole);
     setIsLoading(false);
 
     if (error) {
@@ -162,19 +185,8 @@ export default function Auth() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="signup-crm">CRM</Label>
-                    <Input
-                      id="signup-crm"
-                      type="text"
-                      placeholder="CRM-PE 123456"
-                      value={signupCrm}
-                      onChange={(e) => setSignupCrm(e.target.value)}
-                      disabled={isLoading}
-                    />
-                  </div>
-                  <div className="space-y-2">
                     <Label htmlFor="signup-role">Papel</Label>
-                    <Select value={signupRole} onValueChange={(v) => setSignupRole(v as AppRole)}>
+                    <Select value={signupRole} onValueChange={handleRoleChange}>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione seu papel" />
                       </SelectTrigger>
@@ -200,6 +212,19 @@ export default function Auth() {
                       </SelectContent>
                     </Select>
                   </div>
+                  {signupRole !== 'nir' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-crm">CRM</Label>
+                      <Input
+                        id="signup-crm"
+                        type="text"
+                        placeholder="CRM-PE 123456"
+                        value={signupCrm}
+                        onChange={(e) => setSignupCrm(e.target.value)}
+                        disabled={isLoading}
+                      />
+                    </div>
+                  )}
                   <div className="space-y-2">
                     <Label htmlFor="signup-email">Email</Label>
                     <Input
@@ -219,6 +244,17 @@ export default function Auth() {
                       placeholder="Mínimo 6 caracteres"
                       value={signupPassword}
                       onChange={(e) => setSignupPassword(e.target.value)}
+                      disabled={isLoading}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-password-confirm">Confirmar Senha</Label>
+                    <Input
+                      id="signup-password-confirm"
+                      type="password"
+                      placeholder="Repita a senha"
+                      value={signupPasswordConfirm}
+                      onChange={(e) => setSignupPasswordConfirm(e.target.value)}
                       disabled={isLoading}
                     />
                   </div>
