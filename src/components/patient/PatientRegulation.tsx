@@ -282,8 +282,18 @@ export function PatientRegulation({ patientId, regulations, onUpdate }: PatientR
                             Ações de Transferência
                           </Button>
                         ) : alertState === 'clinical_hold' ? (
-                          <div className="text-xs text-muted-foreground text-center">
-                            Aguardando prazo de melhora clínica
+                          <div className="space-y-2">
+                            <div className="text-xs text-muted-foreground text-center">
+                              Aguardando prazo de melhora clínica
+                            </div>
+                            <Button 
+                              size="sm" 
+                              className="w-full gap-1 bg-green-600 hover:bg-green-700"
+                              onClick={() => setActionRegulation(reg)}
+                            >
+                              <CheckCircle className="h-3 w-3" />
+                              Paciente Melhorou
+                            </Button>
                           </div>
                         ) : alertState === 'pending_cancel' || alertState === 'relisting' ? (
                           <div className="text-xs text-muted-foreground text-center">
