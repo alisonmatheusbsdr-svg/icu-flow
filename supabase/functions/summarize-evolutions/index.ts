@@ -3,6 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Allowed origins for CORS
 const allowedOrigins = [
+  "https://sinapsehealthcare.app",
+  "https://sinapsehealthcare.lovable.app",
   "https://id-preview--deb97400-6ef9-479c-a47d-70385f8c2cdb.lovable.app",
   "https://lovable.dev",
   "http://localhost:8080",
