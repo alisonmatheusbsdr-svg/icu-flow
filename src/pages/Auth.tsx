@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Stethoscope, UserPlus, LogIn, Activity } from 'lucide-react';
+import { Stethoscope, UserPlus, LogIn, ClipboardList } from 'lucide-react';
 import { SinapseLogo } from '@/components/SinapseLogo';
 import type { AppRole } from '@/types/database';
 
@@ -191,10 +191,10 @@ export default function Auth() {
                             Diarista
                           </div>
                         </SelectItem>
-                        <SelectItem value="coordenador">
+                        <SelectItem value="nir">
                           <div className="flex items-center gap-2">
-                            <Activity className="h-4 w-4" />
-                            Coordenador
+                            <ClipboardList className="h-4 w-4" />
+                            NIR (Regulação)
                           </div>
                         </SelectItem>
                       </SelectContent>
