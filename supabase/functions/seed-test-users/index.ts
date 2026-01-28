@@ -4,26 +4,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // It intentionally has no authentication to allow test user setup
 // After testing, consider removing this function from deployment
 
-// Allowed origins for CORS - restricted even for test functions
-const allowedOrigins = [
-  "https://sinapsehealthcare.app",
-  "https://sinapsehealthcare.lovable.app",
-  "https://id-preview--deb97400-6ef9-479c-a47d-70385f8c2cdb.lovable.app",
-  "https://lovable.dev",
-  "http://localhost:8080",
-  "http://localhost:5173",
-  "http://localhost:3000"
-];
-
+// Dynamic CORS headers - reflects origin or uses wildcard for server-to-server
 function getCorsHeaders(origin: string | null) {
-  const allowedOrigin = origin && allowedOrigins.some(o => origin.startsWith(o.replace(/:\d+$/, '')) || origin === o)
-    ? origin
-    : allowedOrigins[0];
-  
   return {
-    "Access-Control-Allow-Origin": allowedOrigin,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Credentials": "true",
+    "Access-Control-Allow-Origin": origin || "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-setup-key, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
   };
 }
 
@@ -38,7 +24,7 @@ Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(origin);
 
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   // Require setup key for authentication
