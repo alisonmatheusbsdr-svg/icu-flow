@@ -25,6 +25,7 @@ import { VenousAccessSection, ACCESS_TYPES, INSERTION_SITES } from './VenousAcce
 import { RespiratorySection } from './RespiratorySection';
 import { PatientExamsDialog } from './PatientExamsDialog';
 import { PatientRegulation } from './PatientRegulation';
+import { PatientPrecautions } from './PatientPrecautions';
 import type { PatientWithDetails, DietType } from '@/types/database';
 
 // Derived devices - these are automatically shown based on other sections
@@ -1336,6 +1337,14 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
             <span className="text-sm text-muted-foreground">Nenhuma dieta definida</span>
           )}
         </div>
+      </div>
+
+      {/* Precautions Section */}
+      <div className="section-card">
+        <PatientPrecautions 
+          patient={patient} 
+          onUpdate={onUpdate} 
+        />
       </div>
 
       {/* Regulation Section */}
