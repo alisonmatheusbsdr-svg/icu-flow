@@ -4,9 +4,10 @@ import { NIRBedCard } from './NIRBedCard';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Building2, ChevronDown, Clock, Check, XCircle } from 'lucide-react';
+import { Loader2, Building2, ChevronDown, Clock, FileCheck, Truck, CheckCircle2, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Bed, Patient, PatientRegulation } from '@/types/database';
+import { STATUS_CONFIG, ACTIVE_STATUSES } from '@/lib/regulation-config';
+import type { Bed, Patient, PatientRegulation, RegulationStatus } from '@/types/database';
 
 interface Unit {
   id: string;
@@ -31,11 +32,24 @@ interface UnitWithBeds {
     total: number;
     occupied: number;
     withRegulation: number;
-    pending: number;
-    confirmed: number;
-    denied: number;
+    aguardando_regulacao: number;
+    regulado: number;
+    aguardando_transferencia: number;
+    transferido: number;
+    negado_nir: number;
+    negado_hospital: number;
   };
 }
+
+const STATUS_FILTER_OPTIONS = [
+  { value: 'all', label: 'Todos os Status', icon: Building2 },
+  { value: 'aguardando_regulacao', label: 'Aguardando Regulação', icon: Clock },
+  { value: 'regulado', label: 'Regulados', icon: FileCheck },
+  { value: 'aguardando_transferencia', label: 'Aguard. Transferência', icon: Truck },
+  { value: 'transferido', label: 'Transferidos', icon: CheckCircle2 },
+  { value: 'negado_nir', label: 'Negados (NIR)', icon: XCircle },
+  { value: 'negado_hospital', label: 'Negados (Hospital)', icon: Building2 },
+] as const;
 
 export function NIRDashboard() {
   const [unitsWithBeds, setUnitsWithBeds] = useState<UnitWithBeds[]>([]);
@@ -116,28 +130,22 @@ export function NIRDashboard() {
         };
       });
 
-      // Only keep beds with patients that have active regulations
-      const bedsWithRegulation = bedsWithPatients.filter(b => {
-        const patientRegs = b.patient?.patient_regulation || [];
-        return patientRegs.length > 0;
-      });
-
       // Calculate stats
       const allRegsInUnit = bedsWithPatients.flatMap(b => b.patient?.patient_regulation || []);
-      const pendingCount = allRegsInUnit.filter(r => r.status === 'aguardando').length;
-      const confirmedCount = allRegsInUnit.filter(r => r.status === 'confirmado').length;
-      const deniedCount = allRegsInUnit.filter(r => r.status === 'negado').length;
-
+      
       return {
         unit,
         beds: bedsWithPatients,
         stats: {
           total: unitBeds.length,
           occupied: bedsWithPatients.filter(b => b.patient).length,
-          withRegulation: bedsWithRegulation.length,
-          pending: pendingCount,
-          confirmed: confirmedCount,
-          denied: deniedCount
+          withRegulation: bedsWithPatients.filter(b => (b.patient?.patient_regulation?.length || 0) > 0).length,
+          aguardando_regulacao: allRegsInUnit.filter(r => r.status === 'aguardando_regulacao').length,
+          regulado: allRegsInUnit.filter(r => r.status === 'regulado').length,
+          aguardando_transferencia: allRegsInUnit.filter(r => r.status === 'aguardando_transferencia').length,
+          transferido: allRegsInUnit.filter(r => r.status === 'transferido').length,
+          negado_nir: allRegsInUnit.filter(r => r.status === 'negado_nir').length,
+          negado_hospital: allRegsInUnit.filter(r => r.status === 'negado_hospital').length
         }
       };
     });
@@ -152,7 +160,6 @@ export function NIRDashboard() {
 
   // Filter beds based on status filter
   const filterBeds = (beds: BedWithPatient[]): BedWithPatient[] => {
-    // Only show beds with patients that have regulations
     const bedsWithRegulation = beds.filter(b => {
       const regs = b.patient?.patient_regulation || [];
       if (regs.length === 0) return false;
@@ -174,10 +181,16 @@ export function NIRDashboard() {
 
   // Calculate global stats
   const globalStats = unitsWithBeds.reduce((acc, u) => ({
-    pending: acc.pending + u.stats.pending,
-    confirmed: acc.confirmed + u.stats.confirmed,
-    denied: acc.denied + u.stats.denied
-  }), { pending: 0, confirmed: 0, denied: 0 });
+    aguardando_regulacao: acc.aguardando_regulacao + u.stats.aguardando_regulacao,
+    regulado: acc.regulado + u.stats.regulado,
+    aguardando_transferencia: acc.aguardando_transferencia + u.stats.aguardando_transferencia,
+    transferido: acc.transferido + u.stats.transferido,
+    negado_nir: acc.negado_nir + u.stats.negado_nir,
+    negado_hospital: acc.negado_hospital + u.stats.negado_hospital
+  }), { aguardando_regulacao: 0, regulado: 0, aguardando_transferencia: 0, transferido: 0, negado_nir: 0, negado_hospital: 0 });
+
+  // Count active (pending action from NIR)
+  const activeCount = globalStats.aguardando_regulacao + globalStats.regulado + globalStats.aguardando_transferencia;
 
   return (
     <div className="space-y-4">
@@ -188,51 +201,66 @@ export function NIRDashboard() {
           <h2 className="text-xl font-semibold">Painel de Regulação</h2>
         </div>
 
-        {/* Stats and filter */}
-        <div className="flex items-center gap-3 flex-wrap">
+        {/* Stats badges */}
+        <div className="flex items-center gap-2 flex-wrap">
           <Badge 
             variant="outline" 
             className={cn(
-              "gap-1 cursor-pointer",
-              statusFilter === 'aguardando' ? "bg-amber-100 border-amber-500" : "border-amber-500/50 text-amber-600"
+              "gap-1 cursor-pointer transition-colors",
+              statusFilter === 'aguardando_regulacao' 
+                ? "bg-amber-100 border-amber-500 dark:bg-amber-900/50" 
+                : "border-amber-500/50 text-amber-600 hover:bg-amber-50"
             )}
-            onClick={() => setStatusFilter(statusFilter === 'aguardando' ? 'all' : 'aguardando')}
+            onClick={() => setStatusFilter(statusFilter === 'aguardando_regulacao' ? 'all' : 'aguardando_regulacao')}
           >
             <Clock className="h-3 w-3" />
-            {globalStats.pending} Aguardando
-          </Badge>
-          <Badge 
-            variant="outline" 
-            className={cn(
-              "gap-1 cursor-pointer",
-              statusFilter === 'confirmado' ? "bg-green-100 border-green-500" : "border-green-500/50 text-green-600"
-            )}
-            onClick={() => setStatusFilter(statusFilter === 'confirmado' ? 'all' : 'confirmado')}
-          >
-            <Check className="h-3 w-3" />
-            {globalStats.confirmed} Confirmados
-          </Badge>
-          <Badge 
-            variant="outline" 
-            className={cn(
-              "gap-1 cursor-pointer",
-              statusFilter === 'negado' ? "bg-red-100 border-red-500" : "border-red-500/50 text-red-600"
-            )}
-            onClick={() => setStatusFilter(statusFilter === 'negado' ? 'all' : 'negado')}
-          >
-            <XCircle className="h-3 w-3" />
-            {globalStats.denied} Negados
+            {globalStats.aguardando_regulacao} Aguard. Reg.
           </Badge>
           
+          <Badge 
+            variant="outline" 
+            className={cn(
+              "gap-1 cursor-pointer transition-colors",
+              statusFilter === 'regulado' 
+                ? "bg-blue-100 border-blue-500 dark:bg-blue-900/50" 
+                : "border-blue-500/50 text-blue-600 hover:bg-blue-50"
+            )}
+            onClick={() => setStatusFilter(statusFilter === 'regulado' ? 'all' : 'regulado')}
+          >
+            <FileCheck className="h-3 w-3" />
+            {globalStats.regulado} Regulados
+          </Badge>
+          
+          <Badge 
+            variant="outline" 
+            className={cn(
+              "gap-1 cursor-pointer transition-colors",
+              statusFilter === 'aguardando_transferencia' 
+                ? "bg-green-100 border-green-500 dark:bg-green-900/50" 
+                : "border-green-500/50 text-green-600 hover:bg-green-50"
+            )}
+            onClick={() => setStatusFilter(statusFilter === 'aguardando_transferencia' ? 'all' : 'aguardando_transferencia')}
+          >
+            <Truck className="h-3 w-3" />
+            {globalStats.aguardando_transferencia} Aguard. Transf.
+          </Badge>
+
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="Filtrar por status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos os Status</SelectItem>
-              <SelectItem value="aguardando">Aguardando</SelectItem>
-              <SelectItem value="confirmado">Confirmados</SelectItem>
-              <SelectItem value="negado">Negados</SelectItem>
+              {STATUS_FILTER_OPTIONS.map((option) => {
+                const Icon = option.icon;
+                return (
+                  <SelectItem key={option.value} value={option.value}>
+                    <span className="flex items-center gap-2">
+                      <Icon className="h-4 w-4" />
+                      {option.label}
+                    </span>
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         </div>
@@ -247,6 +275,8 @@ export function NIRDashboard() {
           return null;
         }
 
+        const unitActiveCount = stats.aguardando_regulacao + stats.regulado + stats.aguardando_transferencia;
+
         return (
           <Collapsible key={unit.id} defaultOpen className="border rounded-lg bg-card">
             <CollapsibleTrigger className="w-full px-4 py-3 flex items-center justify-between hover:bg-accent/50 transition-colors rounded-t-lg">
@@ -255,24 +285,29 @@ export function NIRDashboard() {
                 <span className="font-medium">{unit.name}</span>
               </div>
               
-              <div className="flex items-center gap-3">
-                {/* Regulation counts */}
-                {stats.pending > 0 && (
-                  <Badge variant="outline" className="gap-1 border-amber-500 text-amber-600">
+              <div className="flex items-center gap-2">
+                {stats.aguardando_regulacao > 0 && (
+                  <Badge variant="outline" className="gap-1 border-amber-500 text-amber-600 text-xs">
                     <Clock className="h-3 w-3" />
-                    {stats.pending}
+                    {stats.aguardando_regulacao}
                   </Badge>
                 )}
-                {stats.confirmed > 0 && (
-                  <Badge variant="outline" className="gap-1 border-green-500 text-green-600">
-                    <Check className="h-3 w-3" />
-                    {stats.confirmed}
+                {stats.regulado > 0 && (
+                  <Badge variant="outline" className="gap-1 border-blue-500 text-blue-600 text-xs">
+                    <FileCheck className="h-3 w-3" />
+                    {stats.regulado}
                   </Badge>
                 )}
-                {stats.denied > 0 && (
-                  <Badge variant="outline" className="gap-1 border-red-500 text-red-600">
+                {stats.aguardando_transferencia > 0 && (
+                  <Badge variant="outline" className="gap-1 border-green-500 text-green-600 text-xs">
+                    <Truck className="h-3 w-3" />
+                    {stats.aguardando_transferencia}
+                  </Badge>
+                )}
+                {(stats.negado_nir + stats.negado_hospital) > 0 && (
+                  <Badge variant="outline" className="gap-1 border-red-500 text-red-600 text-xs">
                     <XCircle className="h-3 w-3" />
-                    {stats.denied}
+                    {stats.negado_nir + stats.negado_hospital}
                   </Badge>
                 )}
                 
@@ -311,7 +346,7 @@ export function NIRDashboard() {
           <p className="text-muted-foreground">
             {statusFilter === 'all' 
               ? 'Nenhum paciente com regulação ativa no momento.'
-              : `Nenhum paciente com regulação "${statusFilter}" no momento.`
+              : `Nenhum paciente com status "${STATUS_CONFIG[statusFilter as RegulationStatus]?.label || statusFilter}" no momento.`
             }
           </p>
         </div>

@@ -184,17 +184,35 @@ export interface PatientExam {
   created_at: string;
 }
 
+export type RegulationStatus = 
+  | 'aguardando_regulacao'
+  | 'regulado'
+  | 'aguardando_transferencia'
+  | 'transferido'
+  | 'negado_nir'
+  | 'negado_hospital';
+
 export interface PatientRegulation {
   id: string;
   patient_id: string;
   support_type: string;
-  status: 'aguardando' | 'confirmado' | 'negado';
+  status: RegulationStatus;
   requested_at: string;
+  regulated_at: string | null;
+  confirmed_at: string | null;
+  transferred_at: string | null;
+  denied_at: string | null;
+  denial_reason: string | null;
+  // Mudança de especialidade
+  previous_support_type: string | null;
+  change_reason: string | null;
+  changed_at: string | null;
+  changed_by: string | null;
+  // Outros
   updated_at: string;
   is_active: boolean;
   notes: string | null;
   created_by: string;
-  denial_reason: string | null;
   updated_by: string | null;
 }
 

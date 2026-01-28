@@ -7,11 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Building2, Plus, X, Calendar, Clock, Check, XCircle, Info, Save, Loader2 } from 'lucide-react';
+import { Building2, Plus, X, Calendar, Info, Pencil, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
-import type { PatientRegulation as PatientRegulationType } from '@/types/database';
+import { ChangeSpecialtyDialog } from './ChangeSpecialtyDialog';
+import { STATUS_CONFIG, SUPPORT_TYPES, getSupportLabel, formatDate, FINAL_STATUSES } from '@/lib/regulation-config';
+import type { PatientRegulation as PatientRegulationType, RegulationStatus } from '@/types/database';
 
 interface PatientRegulationProps {
   patientId: string;
@@ -19,52 +19,15 @@ interface PatientRegulationProps {
   onUpdate: () => void;
 }
 
-const SUPPORT_TYPES = [
-  { type: 'NEUROLOGIA', label: 'Neurologia', emoji: '🧠' },
-  { type: 'CARDIOLOGIA', label: 'Cardiologia', emoji: '❤️' },
-  { type: 'CRONICOS', label: 'Crônicos', emoji: '🏥' },
-  { type: 'TORACICA', label: 'Torácica', emoji: '🫁' },
-  { type: 'ONCOLOGIA', label: 'Oncologia', emoji: '🎗️' },
-  { type: 'NEFROLOGIA', label: 'Nefrologia', emoji: '💧' },
-  { type: 'OUTROS', label: 'Outros', emoji: '📋' },
-] as const;
-
-const STATUS_CONFIG = {
-  aguardando: { 
-    label: 'Aguardando', 
-    className: 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700',
-    icon: Clock
-  },
-  confirmado: { 
-    label: 'Confirmado', 
-    className: 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700',
-    icon: Check
-  },
-  negado: { 
-    label: 'Negado', 
-    className: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700',
-    icon: XCircle
-  },
-} as const;
-
-type RegulationStatus = keyof typeof STATUS_CONFIG;
-
 export function PatientRegulation({ patientId, regulations, onUpdate }: PatientRegulationProps) {
-  const { user, hasRole } = useAuth();
+  const { user } = useAuth();
   const { canEdit, isNIR } = useUnit();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  
-  // NIR-specific state
-  const [nirEditStatus, setNirEditStatus] = useState<RegulationStatus | null>(null);
-  const [nirDenialReason, setNirDenialReason] = useState('');
-  const [isSavingNir, setIsSavingNir] = useState(false);
+  const [changeSpecialtyReg, setChangeSpecialtyReg] = useState<PatientRegulationType | null>(null);
 
-  // NIR and admins can update status/justification
-  const canUpdateStatus = isNIR || hasRole('admin');
-  // Care team (non-NIR) can add/remove requests
+  // Care team (non-NIR) can add/remove requests and change specialty
   const canManageRequests = canEdit && !isNIR;
 
   const handleAddRegulation = async () => {
@@ -76,7 +39,7 @@ export function PatientRegulation({ patientId, regulations, onUpdate }: PatientR
       .insert({
         patient_id: patientId,
         support_type: selectedType,
-        status: 'aguardando',
+        status: 'aguardando_regulacao',
         created_by: user.id
       });
 
@@ -84,7 +47,7 @@ export function PatientRegulation({ patientId, regulations, onUpdate }: PatientR
       toast.error('Erro ao adicionar regulação');
       console.error(error);
     } else {
-      toast.success('Regulação adicionada');
+      toast.success('Regulação solicitada');
       setSelectedType('');
       setIsDialogOpen(false);
       onUpdate();
@@ -107,58 +70,9 @@ export function PatientRegulation({ patientId, regulations, onUpdate }: PatientR
     }
   };
 
-  // NIR: Save status update
-  const handleNirSave = async (regulationId: string) => {
-    if (!nirEditStatus || !user) return;
-
-    // Validate denial reason
-    if (nirEditStatus === 'negado' && !nirDenialReason.trim()) {
-      toast.error('Justificativa obrigatória para regulação negada');
-      return;
-    }
-
-    setIsSavingNir(true);
-    const { error } = await supabase
-      .from('patient_regulation')
-      .update({
-        status: nirEditStatus,
-        denial_reason: nirEditStatus === 'negado' ? nirDenialReason : null,
-        updated_by: user.id
-      })
-      .eq('id', regulationId);
-
-    if (error) {
-      toast.error('Erro ao atualizar regulação');
-      console.error(error);
-    } else {
-      toast.success(`Status alterado para ${STATUS_CONFIG[nirEditStatus].label}`);
-      setEditingId(null);
-      setNirEditStatus(null);
-      setNirDenialReason('');
-      onUpdate();
-    }
-    setIsSavingNir(false);
-  };
-
-  const openNirEdit = (reg: PatientRegulationType) => {
-    setEditingId(reg.id);
-    setNirEditStatus(reg.status as RegulationStatus);
-    setNirDenialReason(reg.denial_reason || '');
-  };
-
-  const closeNirEdit = () => {
-    setEditingId(null);
-    setNirEditStatus(null);
-    setNirDenialReason('');
-  };
-
-  const getSupportLabel = (type: string) => {
-    const found = SUPPORT_TYPES.find(s => s.type === type);
-    return found ? `${found.emoji} ${found.label}` : type;
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  const canChangeSpecialty = (reg: PatientRegulationType): boolean => {
+    // Can change specialty unless it's in a final state
+    return canManageRequests && !FINAL_STATUSES.includes(reg.status);
   };
 
   return (
@@ -180,138 +94,114 @@ export function PatientRegulation({ patientId, regulations, onUpdate }: PatientR
         )}
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col gap-2">
         {regulations.length === 0 ? (
           <span className="text-xs text-muted-foreground">Nenhuma regulação ativa</span>
         ) : (
           regulations.map((reg) => {
-            const statusConfig = STATUS_CONFIG[reg.status as RegulationStatus] || STATUS_CONFIG.aguardando;
+            const statusConfig = STATUS_CONFIG[reg.status] || STATUS_CONFIG.aguardando_regulacao;
             const StatusIcon = statusConfig.icon;
-            const isEditing = editingId === reg.id;
 
             return (
-              <Popover key={reg.id} open={isEditing} onOpenChange={(open) => {
-                if (open && canUpdateStatus) {
-                  openNirEdit(reg);
-                } else {
-                  closeNirEdit();
-                }
-              }}>
+              <Popover key={reg.id}>
                 <PopoverTrigger asChild>
-                  <Badge
-                    variant="outline"
-                    className={`cursor-pointer flex items-center gap-1.5 pr-1 ${statusConfig.className}`}
-                  >
-                    <StatusIcon className="h-3 w-3" />
-                    <span>{getSupportLabel(reg.support_type)}</span>
-                    <span className="text-xs opacity-70 flex items-center gap-0.5">
+                  <div className={`p-2 border rounded-lg cursor-pointer hover:bg-accent/50 transition-colors ${statusConfig.className}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <StatusIcon className="h-4 w-4 shrink-0" />
+                        <span className="font-medium truncate">{getSupportLabel(reg.support_type)}</span>
+                      </div>
+                      <Badge variant="outline" className="shrink-0 text-xs">
+                        {statusConfig.shortLabel}
+                      </Badge>
+                    </div>
+                    
+                    {/* Timeline info */}
+                    <div className="flex items-center gap-2 mt-1 text-xs opacity-80">
                       <Calendar className="h-3 w-3" />
-                      {formatDate(reg.requested_at)}
-                    </span>
-                    {/* Show denial indicator */}
-                    {reg.status === 'negado' && reg.denial_reason && (
-                      <Info className="h-3 w-3 ml-1" />
+                      <span>Solicitado: {formatDate(reg.requested_at)}</span>
+                      {reg.regulated_at && <span>| Regulado: {formatDate(reg.regulated_at)}</span>}
+                      {reg.confirmed_at && <span>| Vaga: {formatDate(reg.confirmed_at)}</span>}
+                    </div>
+
+                    {/* Change indicator */}
+                    {reg.previous_support_type && (
+                      <div className="flex items-start gap-1.5 mt-2 p-1.5 bg-amber-50 dark:bg-amber-950/30 rounded text-xs">
+                        <AlertTriangle className="h-3 w-3 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-amber-800 dark:text-amber-200">
+                            Mudado de {getSupportLabel(reg.previous_support_type)}
+                          </span>
+                          {reg.change_reason && (
+                            <p className="text-amber-700 dark:text-amber-300 mt-0.5 italic">
+                              "{reg.change_reason}"
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     )}
-                    {/* Only care team can remove */}
-                    {canManageRequests && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRemove(reg.id);
-                        }}
-                        className="ml-1 hover:bg-black/10 rounded-full p-0.5"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
+
+                    {/* Denial reason */}
+                    {reg.denial_reason && (reg.status === 'negado_nir' || reg.status === 'negado_hospital') && (
+                      <div className="flex items-start gap-1.5 mt-2 p-1.5 bg-red-50 dark:bg-red-950/30 rounded text-xs">
+                        <Info className="h-3 w-3 text-red-600 shrink-0 mt-0.5" />
+                        <span className="text-red-800 dark:text-red-200">
+                          {reg.status === 'negado_nir' ? 'Motivo NIR: ' : 'Motivo Hospital: '}
+                          {reg.denial_reason}
+                        </span>
+                      </div>
                     )}
-                  </Badge>
+                  </div>
                 </PopoverTrigger>
                 
-                {/* Popover content - different for NIR vs care team */}
-                <PopoverContent className="w-64 p-3" align="start">
-                  {canUpdateStatus ? (
-                    /* NIR/Admin: Can change status */
-                    <div className="space-y-3">
-                      <p className="text-xs font-medium text-muted-foreground">Alterar status (NIR):</p>
-                      
-                      <Select value={nirEditStatus || ''} onValueChange={(v) => setNirEditStatus(v as RegulationStatus)}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {(Object.keys(STATUS_CONFIG) as RegulationStatus[]).map((status) => {
-                            const config = STATUS_CONFIG[status];
-                            const Icon = config.icon;
-                            return (
-                              <SelectItem key={status} value={status}>
-                                <span className="flex items-center gap-2">
-                                  <Icon className="h-4 w-4" />
-                                  {config.label}
-                                </span>
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
+                <PopoverContent className="w-72" align="start">
+                  <div className="space-y-3">
+                    <div>
+                      <p className="font-medium">{getSupportLabel(reg.support_type)}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {statusConfig.description}
+                      </p>
+                    </div>
+                    
+                    <div className="text-xs space-y-1 text-muted-foreground">
+                      <p>Solicitado: {new Date(reg.requested_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                      {reg.regulated_at && <p>Regulado: {new Date(reg.regulated_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>}
+                      {reg.confirmed_at && <p>Vaga confirmada: {new Date(reg.confirmed_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>}
+                      {reg.transferred_at && <p>Transferido: {new Date(reg.transferred_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>}
+                    </div>
 
-                      {nirEditStatus === 'negado' && (
-                        <div className="space-y-1">
-                          <Label className="text-xs flex items-center gap-1">
-                            Justificativa <span className="text-destructive">*</span>
-                          </Label>
-                          <Textarea
-                            placeholder="Motivo da recusa"
-                            value={nirDenialReason}
-                            onChange={(e) => setNirDenialReason(e.target.value)}
-                            className="text-sm min-h-[60px]"
-                          />
-                        </div>
-                      )}
-
-                      {/* Show existing denial reason */}
-                      {reg.denial_reason && nirEditStatus !== 'negado' && (
-                        <div className="p-2 bg-destructive/10 rounded text-xs">
-                          <span className="font-medium text-destructive">Motivo anterior:</span>{' '}
-                          {reg.denial_reason}
-                        </div>
-                      )}
-
-                      <Button 
-                        size="sm" 
-                        className="w-full"
-                        onClick={() => handleNirSave(reg.id)}
-                        disabled={isSavingNir || nirEditStatus === reg.status}
-                      >
-                        {isSavingNir ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <Save className="h-4 w-4 mr-2" />
+                    {/* Actions for care team */}
+                    {canManageRequests && (
+                      <div className="flex gap-2 pt-2 border-t">
+                        {canChangeSpecialty(reg) && (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="flex-1 gap-1"
+                            onClick={() => setChangeSpecialtyReg(reg)}
+                          >
+                            <Pencil className="h-3 w-3" />
+                            Alterar
+                          </Button>
                         )}
-                        Salvar
-                      </Button>
-                    </div>
-                  ) : (
-                    /* Care team: View-only info */
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">{getSupportLabel(reg.support_type)}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Solicitado em {new Date(reg.requested_at).toLocaleDateString('pt-BR')}
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => handleRemove(reg.id)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Info for NIR */}
+                    {isNIR && (
+                      <p className="text-xs text-muted-foreground italic border-t pt-2">
+                        Use o painel NIR para alterar o status desta regulação.
                       </p>
-                      <Badge variant="outline" className={statusConfig.className}>
-                        <StatusIcon className="h-3 w-3 mr-1" />
-                        {statusConfig.label}
-                      </Badge>
-                      {reg.denial_reason && (
-                        <div className="p-2 bg-destructive/10 rounded text-xs mt-2">
-                          <span className="font-medium text-destructive">Motivo:</span>{' '}
-                          {reg.denial_reason}
-                        </div>
-                      )}
-                      <p className="text-xs text-muted-foreground italic mt-2">
-                        Alterações de status são realizadas pelo NIR.
-                      </p>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </PopoverContent>
               </Popover>
             );
@@ -325,7 +215,7 @@ export function PatientRegulation({ patientId, regulations, onUpdate }: PatientR
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5" />
-              Adicionar Regulação
+              Solicitar Regulação
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
@@ -352,12 +242,22 @@ export function PatientRegulation({ patientId, regulations, onUpdate }: PatientR
                 onClick={handleAddRegulation} 
                 disabled={!selectedType || isSubmitting}
               >
-                Adicionar
+                Solicitar
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog para alterar especialidade */}
+      {changeSpecialtyReg && (
+        <ChangeSpecialtyDialog
+          regulation={changeSpecialtyReg}
+          isOpen={!!changeSpecialtyReg}
+          onClose={() => setChangeSpecialtyReg(null)}
+          onUpdate={onUpdate}
+        />
+      )}
     </div>
   );
 }
