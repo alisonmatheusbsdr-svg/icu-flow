@@ -9,6 +9,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { Check, X, Loader2, RefreshCw, Users, UserCheck, UserX, Clock } from 'lucide-react';
 import { Database } from '@/integrations/supabase/types';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { UserCard } from './UserCard';
 
 type AppRole = Database['public']['Enums']['app_role'];
 type ApprovalStatus = Database['public']['Enums']['approval_status'];
@@ -48,6 +50,7 @@ export function UserManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [updatingUser, setUpdatingUser] = useState<string | null>(null);
+  const isMobile = useIsMobile();
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -202,73 +205,90 @@ export function UserManagement() {
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => setStatusFilter('all')}>
-          <CardContent className="pt-6">
+          <CardContent className="p-4 md:pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total</p>
-                <p className="text-2xl font-bold">{users.length}</p>
+                <p className="text-xs md:text-sm text-muted-foreground">Total</p>
+                <p className="text-xl md:text-2xl font-bold">{users.length}</p>
               </div>
-              <Users className="h-8 w-8 text-muted-foreground" />
+              <Users className="h-6 w-6 md:h-8 md:w-8 text-muted-foreground" />
             </div>
           </CardContent>
         </Card>
         <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => setStatusFilter('pending')}>
-          <CardContent className="pt-6">
+          <CardContent className="p-4 md:pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Pendentes</p>
-                <p className="text-2xl font-bold text-yellow-500">{pendingCount}</p>
+                <p className="text-xs md:text-sm text-muted-foreground">Pendentes</p>
+                <p className="text-xl md:text-2xl font-bold text-yellow-500">{pendingCount}</p>
               </div>
-              <Clock className="h-8 w-8 text-yellow-500" />
+              <Clock className="h-6 w-6 md:h-8 md:w-8 text-yellow-500" />
             </div>
           </CardContent>
         </Card>
         <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => setStatusFilter('approved')}>
-          <CardContent className="pt-6">
+          <CardContent className="p-4 md:pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Aprovados</p>
-                <p className="text-2xl font-bold text-green-500">{approvedCount}</p>
+                <p className="text-xs md:text-sm text-muted-foreground">Aprovados</p>
+                <p className="text-xl md:text-2xl font-bold text-green-500">{approvedCount}</p>
               </div>
-              <UserCheck className="h-8 w-8 text-green-500" />
+              <UserCheck className="h-6 w-6 md:h-8 md:w-8 text-green-500" />
             </div>
           </CardContent>
         </Card>
         <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => setStatusFilter('rejected')}>
-          <CardContent className="pt-6">
+          <CardContent className="p-4 md:pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Rejeitados</p>
-                <p className="text-2xl font-bold text-red-500">{rejectedCount}</p>
+                <p className="text-xs md:text-sm text-muted-foreground">Rejeitados</p>
+                <p className="text-xl md:text-2xl font-bold text-red-500">{rejectedCount}</p>
               </div>
-              <UserX className="h-8 w-8 text-red-500" />
+              <UserX className="h-6 w-6 md:h-8 md:w-8 text-red-500" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Users Table */}
+      {/* Users List/Table */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>
-            Gerenciar Usuários
+        <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3 md:pb-6">
+          <CardTitle className="text-base md:text-lg">
+            Usuários
             {statusFilter !== 'all' && (
-              <span className="ml-2 text-sm font-normal text-muted-foreground">
-                (Filtro: {statusFilter === 'pending' ? 'Pendentes' : statusFilter === 'approved' ? 'Aprovados' : 'Rejeitados'})
+              <span className="ml-2 text-xs md:text-sm font-normal text-muted-foreground">
+                ({statusFilter === 'pending' ? 'Pendentes' : statusFilter === 'approved' ? 'Aprovados' : 'Rejeitados'})
               </span>
             )}
           </CardTitle>
-          <Button variant="outline" size="sm" onClick={fetchUsers}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Atualizar
+          <Button variant="outline" size="sm" onClick={fetchUsers} className="gap-1 md:gap-2">
+            <RefreshCw className="h-4 w-4" />
+            <span className="hidden sm:inline">Atualizar</span>
           </Button>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-0">
           {filteredUsers.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">Nenhum usuário encontrado</p>
+          ) : isMobile ? (
+            // Mobile: Card list
+            <div className="space-y-3">
+              {filteredUsers.map((user) => (
+                <UserCard
+                  key={user.id}
+                  user={user}
+                  allUnits={allUnits}
+                  roles={ROLES}
+                  isUpdating={updatingUser === user.id}
+                  onUpdateApproval={updateApprovalStatus}
+                  onUpdateRole={updateUserRole}
+                  onToggleUnit={toggleUserUnit}
+                />
+              ))}
+            </div>
           ) : (
+            // Desktop: Table
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>

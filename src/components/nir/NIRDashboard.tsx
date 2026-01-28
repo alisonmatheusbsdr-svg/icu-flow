@@ -195,18 +195,18 @@ export function NIRDashboard() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+      <div className="flex flex-col gap-4 mb-6">
         <div className="flex items-center gap-3">
           <Building2 className="h-5 w-5 text-primary" />
           <h2 className="text-xl font-semibold">Painel de Regulação</h2>
         </div>
 
-        {/* Stats badges */}
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* Stats badges - horizontal scroll on mobile */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-4 px-4 md:mx-0 md:px-0 md:flex-wrap md:overflow-visible">
           <Badge 
             variant="outline" 
             className={cn(
-              "gap-1 cursor-pointer transition-colors",
+              "gap-1 cursor-pointer transition-colors whitespace-nowrap flex-shrink-0",
               statusFilter === 'aguardando_regulacao' 
                 ? "bg-amber-100 border-amber-500 dark:bg-amber-900/50" 
                 : "border-amber-500/50 text-amber-600 hover:bg-amber-50"
@@ -214,13 +214,13 @@ export function NIRDashboard() {
             onClick={() => setStatusFilter(statusFilter === 'aguardando_regulacao' ? 'all' : 'aguardando_regulacao')}
           >
             <Clock className="h-3 w-3" />
-            {globalStats.aguardando_regulacao} Aguard. Reg.
+            {globalStats.aguardando_regulacao} Aguard.
           </Badge>
           
           <Badge 
             variant="outline" 
             className={cn(
-              "gap-1 cursor-pointer transition-colors",
+              "gap-1 cursor-pointer transition-colors whitespace-nowrap flex-shrink-0",
               statusFilter === 'regulado' 
                 ? "bg-blue-100 border-blue-500 dark:bg-blue-900/50" 
                 : "border-blue-500/50 text-blue-600 hover:bg-blue-50"
@@ -228,13 +228,13 @@ export function NIRDashboard() {
             onClick={() => setStatusFilter(statusFilter === 'regulado' ? 'all' : 'regulado')}
           >
             <FileCheck className="h-3 w-3" />
-            {globalStats.regulado} Regulados
+            {globalStats.regulado} Reg.
           </Badge>
           
           <Badge 
             variant="outline" 
             className={cn(
-              "gap-1 cursor-pointer transition-colors",
+              "gap-1 cursor-pointer transition-colors whitespace-nowrap flex-shrink-0",
               statusFilter === 'aguardando_transferencia' 
                 ? "bg-green-100 border-green-500 dark:bg-green-900/50" 
                 : "border-green-500/50 text-green-600 hover:bg-green-50"
@@ -242,12 +242,12 @@ export function NIRDashboard() {
             onClick={() => setStatusFilter(statusFilter === 'aguardando_transferencia' ? 'all' : 'aguardando_transferencia')}
           >
             <Truck className="h-3 w-3" />
-            {globalStats.aguardando_transferencia} Aguard. Transf.
+            {globalStats.aguardando_transferencia} Transf.
           </Badge>
 
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Filtrar por status" />
+            <SelectTrigger className="w-[180px] md:w-[200px] flex-shrink-0">
+              <SelectValue placeholder="Filtrar" />
             </SelectTrigger>
             <SelectContent>
               {STATUS_FILTER_OPTIONS.map((option) => {
@@ -322,7 +322,7 @@ export function NIRDashboard() {
                     Nenhum paciente com regulação nesta unidade.
                   </p>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 pt-3">
+                  <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 pt-3">
                     {filteredBeds.map((bed) => (
                       <NIRBedCard
                         key={bed.id}

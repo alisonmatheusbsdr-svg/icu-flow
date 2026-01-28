@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useUnit } from '@/hooks/useUnit';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ClipboardList, Edit, Loader2, LogOut, PenLine, Printer } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { ClipboardList, Edit, Loader2, LogOut, MoreHorizontal, PenLine, Printer } from 'lucide-react';
 import { TherapeuticPlan } from './TherapeuticPlan';
 import { PatientClinicalData } from './PatientClinicalData';
 import { PatientEvolutions } from './PatientEvolutions';
@@ -33,6 +35,7 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
   const [isExamsDialogOpen, setIsExamsDialogOpen] = useState(false);
   const { isPreparing, printData, showPreview, preparePrint, closePreview } = usePrintPatient();
   const { canEdit } = useUnit();
+  const isMobile = useIsMobile();
 
   const fetchPatient = async (isRefresh = false) => {
     if (!patientId) return;
@@ -132,102 +135,158 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
 
   const comorbidityList = patient?.comorbidities?.split(',').map(c => c.trim()).filter(Boolean) || [];
 
+  // Mobile action buttons as dropdown
+  const MobileActions = () => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-2">
+          <MoreHorizontal className="h-4 w-4" />
+          Ações
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        {canEdit && (
+          <DropdownMenuItem onClick={() => setIsEditOpen(true)}>
+            <Edit className="h-4 w-4 mr-2" />
+            Editar Dados
+          </DropdownMenuItem>
+        )}
+        {canEdit && (
+          <DropdownMenuItem onClick={() => {
+            document.getElementById('evolution-input-section')?.scrollIntoView({ behavior: 'smooth' });
+          }}>
+            <PenLine className="h-4 w-4 mr-2" />
+            Evoluir
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem onClick={() => setIsExamsDialogOpen(true)}>
+          <ClipboardList className="h-4 w-4 mr-2" />
+          Exames
+        </DropdownMenuItem>
+        <DropdownMenuItem 
+          onClick={() => patient && preparePrint(patient, bedNumber, authorProfiles)}
+          disabled={isPreparing}
+        >
+          {isPreparing ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <Printer className="h-4 w-4 mr-2" />
+          )}
+          Imprimir
+        </DropdownMenuItem>
+        {canEdit && patient?.is_active && (
+          <DropdownMenuItem onClick={() => setIsDischargeDialogOpen(true)}>
+            <LogOut className="h-4 w-4 mr-2" />
+            Registrar Desfecho
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  // Desktop action buttons
+  const DesktopActions = () => (
+    <div className="flex items-center gap-2">
+      {canEdit && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setIsEditOpen(true)}
+          className="flex items-center gap-2"
+        >
+          <Edit className="h-4 w-4" />
+          Editar Dados
+        </Button>
+      )}
+      {canEdit && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            document.getElementById('evolution-input-section')?.scrollIntoView({ behavior: 'smooth' });
+          }}
+          className="flex items-center gap-2"
+        >
+          <PenLine className="h-4 w-4" />
+          Evoluir
+        </Button>
+      )}
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setIsExamsDialogOpen(true)}
+        className="flex items-center gap-2"
+      >
+        <ClipboardList className="h-4 w-4" />
+        Exames
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => patient && preparePrint(patient, bedNumber, authorProfiles)}
+        disabled={isPreparing}
+        className="flex items-center gap-2"
+      >
+        {isPreparing ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Printer className="h-4 w-4" />
+        )}
+        Imprimir
+      </Button>
+      {canEdit && patient?.is_active && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setIsDischargeDialogOpen(true)}
+          className="flex items-center gap-2"
+        >
+          <LogOut className="h-4 w-4" />
+          Registrar Desfecho
+        </Button>
+      )}
+    </div>
+  );
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-6xl w-[95vw] h-[90vh] p-0 overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-card border-b px-6 py-4 flex-shrink-0 space-y-3">
+        <div className="bg-card border-b px-4 md:px-6 py-3 md:py-4 flex-shrink-0 space-y-2 md:space-y-3">
           {/* Título e informações demográficas */}
-          <div>
-            <h2 className="text-xl font-bold text-foreground">
-              Leito {bedNumber} - {patient?.initials || '...'}
-            </h2>
-            {patient && (
-              <p className="text-sm text-muted-foreground mt-1">
-                {patient.age} anos {patient.weight ? `| ${patient.weight}kg` : ''} | Adm: {new Date(patient.admission_date).toLocaleDateString('pt-BR')} | D{daysAdmitted}
-              </p>
-            )}
-          </div>
-
-          {/* Botões de ação */}
-          {patient && (
-            <div className="flex items-center gap-2">
-              {canEdit && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsEditOpen(true)}
-                  className="flex items-center gap-2"
-                >
-                  <Edit className="h-4 w-4" />
-                  Editar Dados
-                </Button>
-              )}
-              {canEdit && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    document.getElementById('evolution-input-section')?.scrollIntoView({ behavior: 'smooth' });
-                  }}
-                  className="flex items-center gap-2"
-                >
-                  <PenLine className="h-4 w-4" />
-                  Evoluir
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsExamsDialogOpen(true)}
-                className="flex items-center gap-2"
-              >
-                <ClipboardList className="h-4 w-4" />
-                Exames
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => preparePrint(patient, bedNumber, authorProfiles)}
-                disabled={isPreparing}
-                className="flex items-center gap-2"
-              >
-                {isPreparing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Printer className="h-4 w-4" />
-                )}
-                Imprimir
-              </Button>
-              {canEdit && patient.is_active && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsDischargeDialogOpen(true)}
-                  className="flex items-center gap-2"
-                >
-                  <LogOut className="h-4 w-4" />
-                  Registrar Desfecho
-                </Button>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h2 className="text-lg md:text-xl font-bold text-foreground">
+                Leito {bedNumber} - {patient?.initials || '...'}
+              </h2>
+              {patient && (
+                <p className="text-xs md:text-sm text-muted-foreground mt-0.5 md:mt-1">
+                  {patient.age}a {patient.weight ? `| ${patient.weight}kg` : ''} | D{daysAdmitted}
+                </p>
               )}
             </div>
-          )}
+            {/* Mobile: show dropdown in header */}
+            {patient && isMobile && <MobileActions />}
+          </div>
 
-          {/* Badges */}
+          {/* Desktop: Botões de ação em linha separada */}
+          {patient && !isMobile && <DesktopActions />}
+
+          {/* Badges - with horizontal scroll on mobile */}
           {patient && (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 md:mx-0 md:px-0 md:flex-wrap md:overflow-visible">
               {patient.main_diagnosis && (
-                <Badge className="bg-destructive text-destructive-foreground">
+                <Badge className="bg-destructive text-destructive-foreground whitespace-nowrap flex-shrink-0">
                   HD: {patient.main_diagnosis}
                 </Badge>
               )}
               {comorbidityList.map((c, i) => (
-                <Badge key={i} variant="secondary" className="bg-muted text-muted-foreground">
+                <Badge key={i} variant="secondary" className="bg-muted text-muted-foreground whitespace-nowrap flex-shrink-0">
                   {c}
                 </Badge>
               ))}
               {patient.is_palliative && (
-                <Badge className="badge-pal">PAL</Badge>
+                <Badge className="badge-pal whitespace-nowrap flex-shrink-0">PAL</Badge>
               )}
             </div>
           )}
@@ -248,12 +307,12 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : patient ? (
-          <div className="flex-1 overflow-y-auto p-6 relative">
+          <div className="flex-1 overflow-y-auto p-4 md:p-6 relative">
             {/* Plano Terapêutico - Full Width */}
             <TherapeuticPlan patient={patient} onUpdate={() => fetchPatient(true)} />
             
-            {/* Grid de duas colunas */}
-            <div className="grid lg:grid-cols-2 gap-6">
+            {/* Grid - 1 coluna mobile, 2 colunas desktop */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
               <PatientClinicalData patient={patient} onUpdate={() => fetchPatient(true)} />
               <PatientEvolutions 
                 patient={patient} 

@@ -10,6 +10,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { ProfileDialog } from '@/components/profile/ProfileDialog';
+import { MobileNav } from './MobileNav';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -29,9 +31,17 @@ function formatTimeRemaining(lastActivity: string): { text: string; isUrgent: bo
   return { text: `${minutes}min`, isUrgent };
 }
 
+const roleLabels: Record<string, string> = {
+  admin: 'Admin',
+  diarista: 'Diarista',
+  plantonista: 'Plantonista',
+  coordenador: 'Coordenador'
+};
+
 export function DashboardHeader() {
   const navigate = useNavigate();
   const location = useLocation();
+  const isMobile = useIsMobile();
   const { profile, roles, signOut, hasRole } = useAuth();
   const { 
     units, 
@@ -56,13 +66,6 @@ export function DashboardHeader() {
   
   // Show handover buttons only for plantonistas with blocking sessions
   const showHandoverControls = activeSession?.is_blocking && !canSwitchUnits;
-
-  const roleLabels: Record<string, string> = {
-    admin: 'Admin',
-    diarista: 'Diarista',
-    plantonista: 'Plantonista',
-    coordenador: 'Coordenador'
-  };
 
   // Update countdown every 30 seconds
   useEffect(() => {
@@ -110,18 +113,39 @@ export function DashboardHeader() {
 
   return (
     <header className="bg-card border-b border-border sticky top-0 z-50">
-      <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="container mx-auto px-3 md:px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2 md:gap-4">
+          {/* Mobile Nav */}
+          <MobileNav
+            units={units}
+            selectedUnit={selectedUnit}
+            showAllUnits={showAllUnits}
+            canSwitchUnits={canSwitchUnits}
+            canViewAllUnits={canViewAllUnits}
+            activeSession={activeSession}
+            isInHandoverMode={isInHandoverMode}
+            isHandoverReceiver={isHandoverReceiver}
+            timeRemaining={timeRemaining}
+            onSelectUnit={selectUnit}
+            onSelectAllUnits={selectAllUnits}
+            onStartHandover={handleStartHandover}
+            onEndHandover={handleEndHandover}
+            onAssumeShift={handleAssumeShift}
+            onOpenProfile={() => setIsProfileOpen(true)}
+            onLogout={handleLogout}
+            isHandoverLoading={isHandoverLoading}
+          />
+
           <button 
             onClick={() => navigate('/dashboard')} 
             className="flex items-center gap-2 hover:opacity-80 transition-opacity"
           >
             <SinapseLogo size="sm" />
-            <span className="font-semibold text-foreground">Sinapse | UTI</span>
+            <span className="font-semibold text-foreground hidden sm:inline">Sinapse | UTI</span>
           </button>
 
-          {/* Show dropdown for privileged users, fixed badge for plantonistas - hide on admin page */}
-          {units.length > 0 && !isOnAdmin && (
+          {/* Show dropdown for privileged users, fixed badge for plantonistas - hide on admin page and mobile */}
+          {units.length > 0 && !isOnAdmin && !isMobile && (
             canSwitchUnits ? (
               <Select 
                 value={showAllUnits ? 'all' : selectedUnit?.id || ''} 
@@ -165,8 +189,8 @@ export function DashboardHeader() {
             )
           )}
 
-          {/* Inactivity countdown indicator */}
-          {activeSession && timeRemaining && !isHandoverReceiver && (
+          {/* Inactivity countdown indicator - desktop only */}
+          {!isMobile && activeSession && timeRemaining && !isHandoverReceiver && (
             <Badge 
               variant="outline" 
               className={cn(
@@ -181,8 +205,8 @@ export function DashboardHeader() {
             </Badge>
           )}
 
-          {/* Handover mode indicator for receiver */}
-          {isHandoverReceiver && (
+          {/* Handover mode indicator for receiver - desktop only */}
+          {!isMobile && isHandoverReceiver && (
             <Badge 
               variant="outline" 
               className="gap-1.5 px-2.5 py-1 text-xs font-normal border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-950"
@@ -192,8 +216,8 @@ export function DashboardHeader() {
             </Badge>
           )}
 
-          {/* Handover mode indicator for active plantonista */}
-          {isInHandoverMode && !isHandoverReceiver && (
+          {/* Handover mode indicator for active plantonista - desktop only */}
+          {!isMobile && isInHandoverMode && !isHandoverReceiver && (
             <Badge 
               variant="outline" 
               className="gap-1.5 px-2.5 py-1 text-xs font-normal border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-950 animate-pulse"
@@ -204,7 +228,8 @@ export function DashboardHeader() {
           )}
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* Desktop actions */}
+        <div className="hidden md:flex items-center gap-3">
           {/* Handover controls for plantonista */}
           {showHandoverControls && !isInHandoverMode && (
             <Button 
