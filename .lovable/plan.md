@@ -1,39 +1,68 @@
 
 
-# Plano: Remover Coordenador do Dropdown de Cadastro e Adicionar NIR
+# Plano: CRM Condicional e Confirmação de Senha
 
-## Situação Atual
+## Alterações Solicitadas
 
-O dropdown de "Papel" no formulário de cadastro possui 3 opções:
-- Plantonista
-- Diarista
-- **Coordenador** ← A ser removido
+1. **CRM opcional para NIR**: O campo CRM deve ser ocultado quando o usuário selecionar o papel "NIR (Regulação)"
+2. **Confirmação de senha**: Adicionar um campo "Confirmar Senha" para todos os cadastros
 
-## Alteração Proposta
+## Comportamento do Formulário
 
-| Antes | Depois |
-|-------|--------|
-| Plantonista | Plantonista |
-| Diarista | Diarista |
-| Coordenador | **NIR (Regulação)** ← Substituir |
-
-## Justificativa
-
-- O **Coordenador** é um papel único e sempre atribuído a um membro da equipe assistencial
-- O administrador pode promover um Plantonista ou Diarista para Coordenador pelo painel de administração
-- O **NIR** precisa de auto-cadastro pois são membros de um setor separado (Núcleo Interno de Regulação)
-
-## Resultado Visual
-
+### Equipe Assistencial (Plantonista/Diarista)
 ```text
 ┌──────────────────────────────┐
+│ Nome Completo                │
+│ [____________________]       │
+│                              │
+│ CRM                          │
+│ [____________________]       │  ← Visível
+│                              │
 │ Papel                        │
-├──────────────────────────────┤
-│ 🩺 Plantonista               │
-│ 🩺 Diarista                  │
-│ 📋 NIR (Regulação)           │
+│ [Plantonista ▼]              │
+│                              │
+│ Email                        │
+│ [____________________]       │
+│                              │
+│ Senha                        │
+│ [____________________]       │
+│                              │
+│ Confirmar Senha              │  ← NOVO
+│ [____________________]       │
+│                              │
+│ [     Criar conta      ]     │
 └──────────────────────────────┘
 ```
+
+### NIR (Regulação)
+```text
+┌──────────────────────────────┐
+│ Nome Completo                │
+│ [____________________]       │
+│                              │
+│ Papel                        │
+│ [NIR (Regulação) ▼]          │
+│                              │
+│ Email                        │  ← CRM OCULTO
+│ [____________________]       │
+│                              │
+│ Senha                        │
+│ [____________________]       │
+│                              │
+│ Confirmar Senha              │  ← NOVO
+│ [____________________]       │
+│                              │
+│ [     Criar conta      ]     │
+└──────────────────────────────┘
+```
+
+## Validações
+
+| Validação | Mensagem de Erro |
+|-----------|------------------|
+| Senhas não coincidem | "As senhas não coincidem" |
+| CRM vazio (se não for NIR) | "Preencha todos os campos" |
+| CRM vazio (se for NIR) | Permitido (campo oculto) |
 
 ---
 
@@ -45,37 +74,98 @@ O dropdown de "Papel" no formulário de cadastro possui 3 opções:
 
 ### Mudanças
 
-1. **Importar ícone ClipboardList** (linha 11):
+1. **Adicionar estado para confirmação de senha** (linha 28):
    ```typescript
-   import { Stethoscope, UserPlus, LogIn, ClipboardList } from 'lucide-react';
+   const [signupPasswordConfirm, setSignupPasswordConfirm] = useState('');
    ```
-   - Remove `Activity` (não será mais usado)
-   - Adiciona `ClipboardList` para o NIR
 
-2. **Substituir opção Coordenador por NIR** (linhas 194-199):
+2. **Mover seleção de "Papel" para logo após "Nome"** - Isso permite que o campo CRM seja condicionalmente exibido baseado na seleção
+
+3. **Condicionar exibição do campo CRM**:
    ```tsx
-   // Antes:
-   <SelectItem value="coordenador">
-     <div className="flex items-center gap-2">
-       <Activity className="h-4 w-4" />
-       Coordenador
+   {signupRole !== 'nir' && (
+     <div className="space-y-2">
+       <Label htmlFor="signup-crm">CRM</Label>
+       <Input
+         id="signup-crm"
+         type="text"
+         placeholder="CRM-PE 123456"
+         value={signupCrm}
+         onChange={(e) => setSignupCrm(e.target.value)}
+         disabled={isLoading}
+       />
      </div>
-   </SelectItem>
-   
-   // Depois:
-   <SelectItem value="nir">
-     <div className="flex items-center gap-2">
-       <ClipboardList className="h-4 w-4" />
-       NIR (Regulação)
-     </div>
-   </SelectItem>
+   )}
    ```
 
-### Fluxo de Atribuição de Coordenador
+4. **Adicionar campo de confirmação de senha** (após o campo de senha):
+   ```tsx
+   <div className="space-y-2">
+     <Label htmlFor="signup-password-confirm">Confirmar Senha</Label>
+     <Input
+       id="signup-password-confirm"
+       type="password"
+       placeholder="Repita a senha"
+       value={signupPasswordConfirm}
+       onChange={(e) => setSignupPasswordConfirm(e.target.value)}
+       disabled={isLoading}
+     />
+   </div>
+   ```
 
-Após esta alteração, o fluxo para criar um Coordenador será:
+5. **Atualizar validação do handleSignup**:
+   ```typescript
+   const handleSignup = async (e: React.FormEvent) => {
+     e.preventDefault();
+     
+     // CRM obrigatório apenas para não-NIR
+     const requiresCrm = signupRole !== 'nir';
+     
+     if (!signupEmail || !signupPassword || !signupNome) {
+       toast.error('Preencha todos os campos');
+       return;
+     }
+     
+     if (requiresCrm && !signupCrm) {
+       toast.error('CRM é obrigatório para equipe assistencial');
+       return;
+     }
 
-1. Usuário se cadastra como **Plantonista** ou **Diarista**
-2. Administrador aprova o usuário
-3. Administrador altera o papel para **Coordenador** no painel de administração (`/admin` → Usuários)
+     if (signupPassword !== signupPasswordConfirm) {
+       toast.error('As senhas não coincidem');
+       return;
+     }
+
+     if (signupPassword.length < 6) {
+       toast.error('A senha deve ter pelo menos 6 caracteres');
+       return;
+     }
+     
+     // Para NIR, usar string vazia ou "N/A" como CRM
+     const crmValue = requiresCrm ? signupCrm : 'N/A';
+     
+     // ... resto do código usando crmValue
+   };
+   ```
+
+6. **Limpar campo de confirmação ao trocar de papel**:
+   ```typescript
+   // Ao mudar o papel, limpar CRM se for NIR
+   const handleRoleChange = (role: AppRole) => {
+     setSignupRole(role);
+     if (role === 'nir') {
+       setSignupCrm('');
+     }
+   };
+   ```
+
+### Ordem Final dos Campos no Formulário
+
+1. Nome Completo
+2. **Papel** (movido para cima)
+3. CRM (condicional - oculto para NIR)
+4. Email
+5. Senha
+6. **Confirmar Senha** (novo)
+7. Botão "Criar conta"
 
