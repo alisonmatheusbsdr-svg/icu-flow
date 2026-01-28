@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { UnitProvider } from "@/hooks/useUnit";
+import { UpdatePrompt } from "@/components/pwa/UpdatePrompt";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import SelectUnit from "./pages/SelectUnit";
@@ -19,6 +20,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <UpdatePrompt />
       <BrowserRouter>
         <AuthProvider>
           <UnitProvider>
