@@ -26,14 +26,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Home, Cross, ArrowRightLeft, Building2, HeartPulse } from 'lucide-react';
+import { Loader2, Home, Cross, ArrowRightLeft, Building2, HeartPulse, AlertTriangle } from 'lucide-react';
 import type { PatientOutcome } from '@/types/database';
 
 interface PatientDischargeDialogProps {
   patientId: string;
   patientInitials: string;
   bedId: string | null;
+  hasActiveExternalTransfer?: boolean;
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
@@ -53,6 +55,7 @@ export function PatientDischargeDialog({
   patientId,
   patientInitials,
   bedId,
+  hasActiveExternalTransfer,
   isOpen,
   onClose,
   onSuccess,
@@ -60,8 +63,15 @@ export function PatientDischargeDialog({
   const { toast } = useToast();
   const [outcome, setOutcome] = useState<DischargeOutcome | ''>('');
   const [isLoading, setIsLoading] = useState(false);
+  const [justification, setJustification] = useState('');
 
   const selectedOption = outcomeOptions.find(o => o.value === outcome);
+  
+  // Verifica se selecionou desfecho diferente de transferência externa quando há regulação ativa
+  const needsJustification = 
+    hasActiveExternalTransfer && 
+    outcome && 
+    outcome !== 'transferencia_externa';
 
   const handleDischarge = async () => {
     if (!outcome) return;
@@ -113,6 +123,7 @@ export function PatientDischargeDialog({
   const handleOpenChange = (open: boolean) => {
     if (!open) {
       setOutcome('');
+      setJustification('');
       onClose();
     }
   };
@@ -144,11 +155,29 @@ export function PatientDischargeDialog({
             </SelectContent>
           </Select>
 
+          {needsJustification && (
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md space-y-3">
+              <div className="flex items-start gap-2 text-amber-700 dark:text-amber-300">
+                <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <div className="text-sm">
+                  <strong>Atenção:</strong> Este paciente possui uma vaga de transferência externa confirmada. 
+                  Você está selecionando um desfecho diferente.
+                </div>
+              </div>
+              <Textarea
+                placeholder="Justifique o motivo do desfecho diferente da transferência..."
+                value={justification}
+                onChange={(e) => setJustification(e.target.value)}
+                className="min-h-[80px]"
+              />
+            </div>
+          )}
+
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button 
                 className="w-full" 
-                disabled={!outcome || isLoading}
+                disabled={!outcome || isLoading || (needsJustification && !justification.trim())}
                 variant={outcome === 'obito' ? 'destructive' : 'default'}
               >
                 {isLoading ? (
@@ -164,18 +193,25 @@ export function PatientDischargeDialog({
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Confirmar desfecho?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  {outcome === 'obito' ? (
-                    <span className="text-destructive font-medium">
-                      Você está registrando <strong>ÓBITO</strong> para {patientInitials}. 
-                      Esta ação não pode ser desfeita.
-                    </span>
-                  ) : (
-                    <>
-                      Confirmar <strong>{selectedOption?.label}</strong> para {patientInitials}?
-                      O leito será liberado automaticamente.
-                    </>
-                  )}
+                <AlertDialogDescription asChild>
+                  <div>
+                    {outcome === 'obito' ? (
+                      <span className="text-destructive font-medium">
+                        Você está registrando <strong>ÓBITO</strong> para {patientInitials}. 
+                        Esta ação não pode ser desfeita.
+                      </span>
+                    ) : (
+                      <>
+                        Confirmar <strong>{selectedOption?.label}</strong> para {patientInitials}?
+                        O leito será liberado automaticamente.
+                      </>
+                    )}
+                    {needsJustification && (
+                      <div className="mt-3 p-2 bg-amber-100 dark:bg-amber-900/30 rounded text-sm text-amber-800 dark:text-amber-200">
+                        <strong>Justificativa:</strong> {justification}
+                      </div>
+                    )}
+                  </div>
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

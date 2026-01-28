@@ -284,6 +284,9 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
             patientId={patient.id}
             patientInitials={patient.initials}
             bedId={patient.bed_id}
+            hasActiveExternalTransfer={patient.patient_regulation?.some(
+              r => r.is_active && r.status === 'aguardando_transferencia'
+            )}
             isOpen={isDischargeDialogOpen}
             onClose={() => setIsDischargeDialogOpen(false)}
             onSuccess={onClose}
