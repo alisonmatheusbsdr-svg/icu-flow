@@ -6,12 +6,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Button } from '@/components/ui/button';
 import { AdmitPatientForm } from './AdmitPatientForm';
 import { BlockBedDialog } from './BlockBedDialog';
-import { Wind, Heart, Plus, Pill, Ban, Lock, MoreVertical, Unlock, Loader2, Truck, Clock, AlertTriangle } from 'lucide-react';
+import { Wind, Heart, Plus, Pill, Ban, Lock, MoreVertical, Unlock, Loader2, Truck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { getSupportLabel, isDeadlineExpired, formatDate } from '@/lib/regulation-config';
+import { getSupportLabel } from '@/lib/regulation-config';
 import type { Bed, Patient, PatientRegulation } from '@/types/database';
 
 interface PatientWithModality extends Patient {
@@ -267,90 +267,13 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
           )}
         </div>
 
-        {/* Awaiting transfer notification badge */}
+        {/* Awaiting transfer notification badge - only show green VAGA */}
         {(() => {
           const awaitingTransfer = patient.patient_regulation?.find(
             r => r.is_active && r.status === 'aguardando_transferencia'
           );
           if (!awaitingTransfer) return null;
 
-          // Check clinical hold status
-          const hasClinicalHold = awaitingTransfer.clinical_hold_at;
-          const hasDeadline = awaitingTransfer.clinical_hold_deadline;
-          const deadlineExpired = hasDeadline && isDeadlineExpired(awaitingTransfer.clinical_hold_deadline);
-          const hasPendingCancel = awaitingTransfer.team_cancel_requested_at;
-          const hasRelisting = awaitingTransfer.relisting_requested_at;
-
-          // Pending cancellation - red badge
-          if (hasPendingCancel) {
-            return (
-              <div className="mt-2 p-2 bg-red-100 dark:bg-red-950/40 rounded-md border border-red-300 dark:border-red-800">
-                <div className="flex items-center gap-1.5 text-red-700 dark:text-red-300 text-xs font-medium">
-                  <AlertTriangle className="h-3.5 w-3.5" />
-                  CANCELAMENTO PEND. - {getSupportLabel(awaitingTransfer.support_type)}
-                </div>
-              </div>
-            );
-          }
-
-          // Relisting requested - blue badge
-          if (hasRelisting) {
-            return (
-              <div className="mt-2 p-2 bg-blue-100 dark:bg-blue-950/40 rounded-md border border-blue-300 dark:border-blue-800">
-                <div className="flex items-center gap-1.5 text-blue-700 dark:text-blue-300 text-xs font-medium">
-                  <Clock className="h-3.5 w-3.5" />
-                  NOVA LISTAGEM SOLIC. - {getSupportLabel(awaitingTransfer.support_type)}
-                </div>
-              </div>
-            );
-          }
-
-          // Deadline expired - pulsing red badge (visual only)
-          if (deadlineExpired) {
-            return (
-              <div className="mt-2 p-2 bg-red-100 dark:bg-red-950/40 rounded-md border border-red-300 dark:border-red-800 animate-pulse">
-                <div className="flex items-center gap-1.5 text-red-700 dark:text-red-300 text-xs font-medium">
-                  <AlertTriangle className="h-3.5 w-3.5" />
-                  PRAZO VENCIDO - {getSupportLabel(awaitingTransfer.support_type)}
-                </div>
-                <div className="text-[10px] text-red-600 dark:text-red-400 mt-0.5">
-                  Venceu em {formatDate(awaitingTransfer.clinical_hold_deadline!)}
-                </div>
-              </div>
-            );
-          }
-
-          // Clinical hold with deadline - amber badge
-          if (hasClinicalHold && hasDeadline) {
-            return (
-              <div className="mt-2 p-2 bg-amber-100 dark:bg-amber-950/40 rounded-md border border-amber-300 dark:border-amber-800">
-                <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300 text-xs font-medium">
-                  <Clock className="h-3.5 w-3.5" />
-                  AGUARD. MELHORA - {getSupportLabel(awaitingTransfer.support_type)}
-                </div>
-                <div className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">
-                  Prazo: {formatDate(awaitingTransfer.clinical_hold_deadline!)}
-                </div>
-              </div>
-            );
-          }
-
-          // Clinical hold without deadline (NIR still needs to set)
-          if (hasClinicalHold && !hasDeadline) {
-            return (
-              <div className="mt-2 p-2 bg-amber-100 dark:bg-amber-950/40 rounded-md border border-amber-300 dark:border-amber-800">
-                <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300 text-xs font-medium">
-                  <Clock className="h-3.5 w-3.5" />
-                  AGUARD. MELHORA - {getSupportLabel(awaitingTransfer.support_type)}
-                </div>
-                <div className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">
-                  Aguardando NIR definir prazo
-                </div>
-              </div>
-            );
-          }
-
-          // Default: vacancy available - green pulsing badge (visual only)
           return (
             <div className="mt-2 p-2 bg-green-100 dark:bg-green-950/40 rounded-md border border-green-300 dark:border-green-800 animate-pulse">
               <div className="flex items-center gap-1.5 text-green-700 dark:text-green-300 text-xs font-medium">
