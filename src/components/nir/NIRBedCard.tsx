@@ -12,12 +12,19 @@ interface PatientWithModality extends Patient {
   respiratory_modality?: string;
   has_active_dva?: boolean;
   patient_regulation?: PatientRegulation[];
+  // Campos para cálculo de probabilidade de alta
+  active_antibiotics_count?: number;
+  active_devices_count?: number;
+  has_central_access?: boolean;
+  has_sepsis_or_shock?: boolean;
+  has_tot_device?: boolean;
 }
 
 interface NIRBedCardProps {
   bed: Bed;
   patient: PatientWithModality;
   onUpdate: () => void;
+  showProbabilityBar?: boolean;
 }
 
 const MODALITY_BADGES: Record<string, { badge: string; className: string }> = {
@@ -30,7 +37,51 @@ const MODALITY_BADGES: Record<string, { badge: string; className: string }> = {
   'traqueostomia': { badge: 'TQT', className: 'bg-purple-500/20 text-purple-600 border-purple-500/30' },
 };
 
-export function NIRBedCard({ bed, patient, onUpdate }: NIRBedCardProps) {
+// Função para calcular probabilidade de alta
+const calculateDischargeProbability = (patient: PatientWithModality) => {
+  if (patient.is_palliative) {
+    return { probability: 100, status: 'palliative' as const, color: 'gray' as const };
+  }
+  
+  const isOnTOT = patient.respiratory_modality === 'tot' || patient.has_tot_device;
+  if (isOnTOT || patient.has_active_dva) {
+    return { probability: 0, status: 'blocked' as const, color: 'red' as const };
+  }
+  
+  let discount = 0;
+  
+  if (['traqueostomia', 'vni'].includes(patient.respiratory_modality || '')) {
+    discount += 15;
+  }
+  
+  const atbCount = patient.active_antibiotics_count || 0;
+  if (atbCount >= 4) discount += 15;
+  else if (atbCount === 3) discount += 10;
+  else if (atbCount >= 1) discount += 5;
+  
+  const devCount = patient.active_devices_count || 0;
+  if (devCount >= 6) discount += 15;
+  else if (devCount >= 4) discount += 10;
+  else if (devCount >= 2) discount += 5;
+  
+  if (patient.has_central_access) discount += 5;
+  if (patient.has_sepsis_or_shock) discount += 10;
+  
+  const days = Math.ceil((Date.now() - new Date(patient.admission_date).getTime()) / 86400000);
+  if (days > 30) discount += 10;
+  else if (days > 14) discount += 5;
+  
+  const probability = Math.max(0, 100 - discount);
+  
+  let color: 'green' | 'yellow' | 'orange' | 'red' = 'green';
+  if (probability < 30) color = 'red';
+  else if (probability < 60) color = 'orange';
+  else if (probability < 80) color = 'yellow';
+  
+  return { probability, status: 'normal' as const, color };
+};
+
+export function NIRBedCard({ bed, patient, onUpdate, showProbabilityBar = false }: NIRBedCardProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const daysInternado = Math.ceil(
@@ -65,6 +116,19 @@ export function NIRBedCard({ bed, patient, onUpdate }: NIRBedCardProps) {
   };
 
   const urgentStatus = getMostUrgentStatus();
+
+  // Calcular probabilidade de alta
+  const { probability, status, color } = calculateDischargeProbability(patient);
+  
+  const colorClasses = {
+    green: 'bg-green-500',
+    yellow: 'bg-yellow-500',
+    orange: 'bg-orange-500',
+    red: 'bg-red-500',
+    gray: 'bg-gray-400'
+  };
+
+  const barWidth = status === 'blocked' ? 100 : (status === 'palliative' ? 100 : probability);
 
   return (
     <>
@@ -103,7 +167,7 @@ export function NIRBedCard({ bed, patient, onUpdate }: NIRBedCardProps) {
             )}
           </div>
 
-          {/* Regulation status badges */}
+          {/* Regulation status badges - only show if there are regulations */}
           {activeRegulations.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-3">
               {activeRegulations.slice(0, 3).map((reg) => {
@@ -157,28 +221,45 @@ export function NIRBedCard({ bed, patient, onUpdate }: NIRBedCardProps) {
               )}
             </div>
           )}
+
+          {/* Mini discharge probability bar - always show in overview mode */}
+          {showProbabilityBar && (
+            <div className="flex items-center gap-2 mb-3">
+              <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                <div 
+                  className={cn("h-full transition-all", colorClasses[color])}
+                  style={{ width: `${barWidth}%` }}
+                />
+              </div>
+              <span className="text-xs text-muted-foreground min-w-[28px] text-right">
+                {status === 'palliative' ? 'CP' : `${probability}%`}
+              </span>
+            </div>
+          )}
           
-          {/* Regulation button */}
-          <Button
-            variant={urgentStatus || hasUrgentSignal ? 'default' : 'outline'}
-            size="sm"
-            className={cn(
-              "w-full gap-2",
-              hasUrgentSignal && "bg-red-600 hover:bg-red-700 animate-pulse",
-              !hasUrgentSignal && urgentStatus === 'aguardando_regulacao' && "bg-amber-600 hover:bg-amber-700",
-              !hasUrgentSignal && urgentStatus === 'regulado' && "bg-blue-600 hover:bg-blue-700",
-              !hasUrgentSignal && urgentStatus === 'aguardando_transferencia' && "bg-green-600 hover:bg-green-700"
-            )}
-            onClick={() => setIsDialogOpen(true)}
-          >
-            <Building2 className="h-4 w-4" />
-            Regulação
-            {pendingCount > 0 && (
-              <Badge className="ml-1 bg-white text-foreground text-xs h-5 w-5 p-0 flex items-center justify-center rounded-full">
-                {pendingCount}
-              </Badge>
-            )}
-          </Button>
+          {/* Regulation button - only show if there are active regulations */}
+          {activeRegulations.length > 0 && (
+            <Button
+              variant={urgentStatus || hasUrgentSignal ? 'default' : 'outline'}
+              size="sm"
+              className={cn(
+                "w-full gap-2",
+                hasUrgentSignal && "bg-red-600 hover:bg-red-700 animate-pulse",
+                !hasUrgentSignal && urgentStatus === 'aguardando_regulacao' && "bg-amber-600 hover:bg-amber-700",
+                !hasUrgentSignal && urgentStatus === 'regulado' && "bg-blue-600 hover:bg-blue-700",
+                !hasUrgentSignal && urgentStatus === 'aguardando_transferencia' && "bg-green-600 hover:bg-green-700"
+              )}
+              onClick={() => setIsDialogOpen(true)}
+            >
+              <Building2 className="h-4 w-4" />
+              Regulação
+              {pendingCount > 0 && (
+                <Badge className="ml-1 bg-white text-foreground text-xs h-5 w-5 p-0 flex items-center justify-center rounded-full">
+                  {pendingCount}
+                </Badge>
+              )}
+            </Button>
+          )}
         </CardContent>
       </Card>
 
