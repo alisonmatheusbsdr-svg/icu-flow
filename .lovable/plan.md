@@ -1,202 +1,214 @@
 
 
-# Plano: Implementar PWA Completo com Service Worker
+# Plano: Adicionar Propriedades Avançadas ao Web App Manifest
 
 ## Visão Geral
 
-Transformar o Sinapse UTI em um Progressive Web App (PWA) completo que pode ser instalado como aplicativo nativo e funcionar offline. Isso permitirá que médicos e enfermeiros acessem informações críticas mesmo sem conexão à internet.
+Enriquecer o manifest PWA do Sinapse UTI com propriedades avançadas que melhoram a experiência do usuário e a integração com o sistema operacional.
 
-## Benefícios para o Usuário
+## Propriedades a Adicionar
 
-- **Instalação na tela inicial** - O app aparece como ícone no celular/computador
-- **Funcionamento offline** - Dados em cache disponíveis sem internet
-- **Carregamento instantâneo** - Assets ficam salvos no dispositivo
-- **Atualizações automáticas** - O app atualiza em segundo plano
-- **Push notifications** (futuro) - Alertas de pacientes críticos
-
-## O que será implementado
-
-### 1. Instalar dependência `vite-plugin-pwa`
-
-O plugin vai gerenciar automaticamente:
-- Geração do manifest.json
-- Criação e registro do Service Worker
-- Estratégias de cache (Workbox)
-- Atualizações automáticas
-
-### 2. Configurar `vite.config.ts`
-
-Adicionar o plugin com configurações otimizadas para aplicação médica:
+### 1. `categories` - Categorização do App
+Define em quais categorias o app se encaixa nas lojas de aplicativos:
 
 ```typescript
-import { VitePWA } from 'vite-plugin-pwa';
-
-export default defineConfig({
-  plugins: [
-    react(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'sinapse-logo.png'],
-      manifest: {
-        name: 'Sinapse UTI',
-        short_name: 'Sinapse',
-        description: 'Sistema de Gestão e Passagem de Plantão em UTI',
-        theme_color: '#1e3a5f',
-        background_color: '#f8fafc',
-        display: 'standalone',
-        orientation: 'portrait-primary',
-        start_url: '/',
-        icons: [...]
-      },
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        runtimeCaching: [
-          // Cache para API do Supabase
-          // Cache para imagens
-        ]
-      }
-    })
-  ]
-});
+categories: ["medical", "health", "productivity", "business"]
 ```
 
-### 3. Atualizar `index.html`
+**Benefício**: Ajuda usuários a encontrar o app quando buscam por categoria.
 
-Adicionar meta tags essenciais para PWA:
+---
 
-```html
-<!-- Theme color -->
-<meta name="theme-color" content="#1e3a5f">
-
-<!-- iOS support -->
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Sinapse">
-<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-
-<!-- Manifest (gerado automaticamente pelo plugin) -->
-```
-
-### 4. Criar ícones PWA
-
-Criar pasta `public/icons/` com ícones em múltiplos tamanhos usando o logo Sinapse:
-
-| Tamanho | Uso |
-|---------|-----|
-| 72x72 | Android antigo |
-| 96x96 | Android |
-| 128x128 | Chrome Web Store |
-| 144x144 | Windows tiles |
-| 152x152 | iPad |
-| 192x192 | Android (padrão) |
-| 384x384 | Android (grande) |
-| 512x512 | Splash screen |
-
-### 5. Criar componente de atualização (opcional)
-
-Um toast que aparece quando há nova versão disponível:
+### 2. `display_override` - Modos de Exibição Alternativos
+Permite definir uma sequência de modos de exibição que o navegador tentará usar, em ordem de preferência:
 
 ```typescript
-// src/components/pwa/UpdatePrompt.tsx
-import { useRegisterSW } from 'virtual:pwa-register/react';
-
-export function UpdatePrompt() {
-  const { needRefresh, updateServiceWorker } = useRegisterSW();
-  
-  if (needRefresh) {
-    return (
-      <Toast>
-        Nova versão disponível!
-        <Button onClick={() => updateServiceWorker()}>
-          Atualizar
-        </Button>
-      </Toast>
-    );
-  }
-}
+display_override: ["window-controls-overlay", "standalone", "minimal-ui"]
 ```
 
-## Estratégias de Cache do Service Worker
+| Modo | Descrição |
+|------|-----------|
+| `window-controls-overlay` | Controles do sistema integrados na barra de título (desktop moderno) |
+| `standalone` | App em tela cheia sem barra de navegação |
+| `minimal-ui` | Fallback com controles mínimos |
 
-### Cache First (Assets estáticos)
-- JavaScript, CSS, fontes
-- Ícones e imagens da interface
-- **Vantagem**: Carregamento instantâneo
+**Benefício**: Experiência mais nativa em desktops Windows/macOS/Linux.
 
-### Network First (Dados do Supabase)
-- Dados de pacientes
-- Evoluções e prescrições
-- **Vantagem**: Sempre atualizado, com fallback offline
+---
 
-### Stale While Revalidate (Listas)
-- Lista de unidades
-- Lista de leitos
-- **Vantagem**: Rápido + atualização em background
-
-## Arquivos a Criar/Modificar
-
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `package.json` | Modificar | Adicionar vite-plugin-pwa |
-| `vite.config.ts` | Modificar | Configurar plugin PWA |
-| `index.html` | Modificar | Adicionar meta tags PWA |
-| `public/icons/` | Criar | 8 ícones em diferentes tamanhos |
-| `src/components/pwa/UpdatePrompt.tsx` | Criar | Toast de atualização |
-| `src/App.tsx` | Modificar | Incluir UpdatePrompt |
-
-## Cores do Tema
-
-Baseado no design system existente:
-- **Theme color**: `#1e3a5f` (azul escuro da sidebar)
-- **Background**: `#f8fafc` (background claro)
-
-## Resultado Esperado
-
-Após implementação:
-
-1. **Android**: Banner "Adicionar à tela inicial" aparece automaticamente
-2. **iOS**: Safari > Compartilhar > "Adicionar à Tela de Início"
-3. **Desktop Chrome**: Ícone de instalação na barra de endereços
-4. **Offline**: App abre e mostra últimos dados carregados
-5. **Atualizações**: Toast notifica quando há nova versão
-
-## Validação
-
-1. Testar instalação no celular (Android/iOS)
-2. Verificar se app abre sem barra do navegador
-3. Desligar WiFi e verificar se app ainda abre
-4. Verificar pontuação no Lighthouse (aba PWA)
-5. Confirmar que atualizações são detectadas
-
-## Detalhes Técnicos
-
-### Workbox Runtime Caching
+### 3. `prefer_related_applications` e `related_applications`
+Para futuro, caso vocês lancem um app nativo:
 
 ```typescript
-runtimeCaching: [
+prefer_related_applications: false,
+related_applications: []
+```
+
+Mantemos `false` para priorizar o PWA web. No futuro, se houver apps nativos para iOS/Android, podemos adicionar:
+
+```typescript
+related_applications: [
   {
-    urlPattern: /^https:\/\/.*supabase.*\/rest\/v1\/.*/,
-    handler: 'NetworkFirst',
-    options: {
-      cacheName: 'api-cache',
-      expiration: { maxEntries: 50, maxAgeSeconds: 86400 }
-    }
-  },
-  {
-    urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/,
-    handler: 'CacheFirst',
-    options: {
-      cacheName: 'image-cache',
-      expiration: { maxEntries: 100, maxAgeSeconds: 604800 }
-    }
+    platform: "play",
+    url: "https://play.google.com/store/apps/details?id=com.sinapse.uti",
+    id: "com.sinapse.uti"
   }
 ]
 ```
 
-### Registro do Service Worker
+---
 
-O `vite-plugin-pwa` gera automaticamente:
-- `sw.js` - Service Worker compilado
-- `registerSW.js` - Script de registro
-- `manifest.webmanifest` - Manifest gerado
+### 4. `scope_extensions` - Extensões de Escopo (Experimental)
+Permite que domínios adicionais sejam considerados "dentro do app":
+
+```typescript
+scope_extensions: [
+  { origin: "https://sinapsehealthcare.lovable.app" },
+  { origin: "https://*.lovable.app" }
+]
+```
+
+**Nota**: Esta é uma API experimental e pode não funcionar em todos os navegadores ainda.
+
+---
+
+### 5. `iarc_rating_id` - Classificação Etária
+Para aplicações médicas, geralmente é "para todos":
+
+```typescript
+iarc_rating_id: "" // Deixar vazio se não houver certificação IARC
+```
+
+**Nota**: Requer certificação formal do IARC. Para aplicações internas/profissionais, geralmente não é necessário.
+
+---
+
+## Outras Propriedades Úteis
+
+### `shortcuts` - Atalhos Rápidos
+Ações rápidas ao pressionar e segurar o ícone do app:
+
+```typescript
+shortcuts: [
+  {
+    name: "Dashboard",
+    short_name: "Início",
+    description: "Ir para o dashboard principal",
+    url: "/dashboard",
+    icons: [{ src: "/icons/icon-192x192.png", sizes: "192x192" }]
+  },
+  {
+    name: "Admin",
+    short_name: "Admin",
+    description: "Painel administrativo",
+    url: "/admin",
+    icons: [{ src: "/icons/icon-192x192.png", sizes: "192x192" }]
+  }
+]
+```
+
+### `screenshots` - Screenshots para Instalação
+Imagens exibidas no prompt de instalação:
+
+```typescript
+screenshots: [
+  {
+    src: "/screenshots/dashboard.png",
+    sizes: "1280x720",
+    type: "image/png",
+    form_factor: "wide",
+    label: "Dashboard de Leitos"
+  },
+  {
+    src: "/screenshots/mobile.png",
+    sizes: "390x844",
+    type: "image/png",
+    form_factor: "narrow",
+    label: "Visão Mobile"
+  }
+]
+```
+
+---
+
+## Configuração Final Proposta
+
+```typescript
+manifest: {
+  name: "Sinapse UTI",
+  short_name: "Sinapse",
+  description: "Sistema de Gestão e Passagem de Plantão em UTI",
+  theme_color: "#1e3a5f",
+  background_color: "#f8fafc",
+  display: "standalone",
+  display_override: ["window-controls-overlay", "standalone", "minimal-ui"],
+  orientation: "portrait-primary",
+  start_url: "/",
+  scope: "/",
+  categories: ["medical", "health", "productivity", "business"],
+  prefer_related_applications: false,
+  related_applications: [],
+  shortcuts: [
+    {
+      name: "Dashboard",
+      short_name: "Início",
+      url: "/dashboard",
+      icons: [{ src: "/icons/icon-192x192.png", sizes: "192x192" }]
+    },
+    {
+      name: "Administração",
+      short_name: "Admin",
+      url: "/admin",
+      icons: [{ src: "/icons/icon-192x192.png", sizes: "192x192" }]
+    }
+  ],
+  icons: [
+    // ... ícones existentes
+  ]
+}
+```
+
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `vite.config.ts` | Modificar | Adicionar propriedades avançadas ao manifest |
+| `public/screenshots/` | (Opcional) Criar | Screenshots para prompt de instalação |
+
+---
+
+## Resumo das Propriedades
+
+| Propriedade | Valor | Necessidade |
+|-------------|-------|-------------|
+| `categories` | `["medical", "health", ...]` | Recomendado |
+| `display_override` | `["window-controls-overlay", ...]` | Recomendado |
+| `prefer_related_applications` | `false` | Opcional |
+| `related_applications` | `[]` | Opcional (futuro) |
+| `shortcuts` | Dashboard + Admin | Recomendado |
+| `iarc_rating_id` | Vazio | Não aplicável |
+| `scope_extensions` | Experimental | Não recomendado ainda |
+| `screenshots` | Imagens | Opcional (melhora UX de instalação) |
+
+---
+
+## Detalhes Técnicos
+
+### Compatibilidade de `display_override`
+- Chrome 89+ (desktop/Android)
+- Edge 89+
+- Samsung Internet 15+
+- iOS Safari: ignora (usa `display`)
+
+### Compatibilidade de `shortcuts`
+- Chrome 84+ (Android/Windows/macOS/Linux)
+- Edge 84+
+- iOS Safari: não suportado
+
+### `scope_extensions`
+- Ainda em proposta/experimentação
+- Pode ser ignorado por navegadores atuais
+- Alternativa: configurar redirects no servidor
 
