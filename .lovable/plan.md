@@ -1,115 +1,202 @@
 
-## Diagnóstico (o que está acontecendo de verdade)
 
-Pelos requests capturados no navegador, o erro atual do `/admin` **não é mais “token inválido”** na função — é **CORS bloqueando a chamada antes do POST acontecer**.
+# Plano: Implementar PWA Completo com Service Worker
 
-Evidência:
-- O browser está chamando a função com `Origin: https://deb97400-6ef9-479c-a47d-70385f8c2cdb.lovableproject.com`
-- Esse domínio **não está** no `allowedOrigins` da função
-- O preflight (OPTIONS) recebe `Access-Control-Allow-Origin` diferente do `Origin` (cai no “fallback” para `https://sinapsehealthcare.app`)
-- Resultado: o navegador bloqueia e o frontend vê `Failed to fetch / Failed to send a request to the Edge Function`
+## Visão Geral
 
-Evidência adicional:
-- Chamando a função diretamente via ferramenta (sem CORS), ela respondeu **200** e retornou usuários e unidades corretamente, então a lógica de autenticação/admin está OK.
+Transformar o Sinapse UTI em um Progressive Web App (PWA) completo que pode ser instalado como aplicativo nativo e funcionar offline. Isso permitirá que médicos e enfermeiros acessem informações críticas mesmo sem conexão à internet.
 
-Portanto, para o Admin funcionar tanto no preview quanto no publicado (e evitar quebrar novamente quando a URL do preview mudar), precisamos trocar o modelo de CORS.
+## Benefícios para o Usuário
 
----
+- **Instalação na tela inicial** - O app aparece como ícone no celular/computador
+- **Funcionamento offline** - Dados em cache disponíveis sem internet
+- **Carregamento instantâneo** - Assets ficam salvos no dispositivo
+- **Atualizações automáticas** - O app atualiza em segundo plano
+- **Push notifications** (futuro) - Alertas de pacientes críticos
 
-## Objetivo
+## O que será implementado
 
-1. Garantir que **todas** as backend functions chamadas pelo frontend funcionem em:
-   - domínio publicado (sinapsehealthcare.app / sinapsehealthcare.lovable.app)
-   - preview (domínios `*.lovableproject.com` e eventuais variantes)
-2. Evitar manutenção manual de allowlist (que volta a quebrar quando o domínio do preview muda)
-3. Manter segurança: as funções já exigem JWT / role / setup key, então liberar o origin não expõe dados por si só.
+### 1. Instalar dependência `vite-plugin-pwa`
 
----
+O plugin vai gerenciar automaticamente:
+- Geração do manifest.json
+- Criação e registro do Service Worker
+- Estratégias de cache (Workbox)
+- Atualizações automáticas
 
-## Mudanças propostas (código)
+### 2. Configurar `vite.config.ts`
 
-### 1) Padronizar CORS em todas as backend functions (recomendado)
-Arquivos:
-- `supabase/functions/get-users-with-email/index.ts`
-- `supabase/functions/summarize-evolutions/index.ts`
-- `supabase/functions/seed-admin/index.ts`
-- `supabase/functions/seed-test-users/index.ts`
+Adicionar o plugin com configurações otimizadas para aplicação médica:
 
-Substituir o modelo atual `allowedOrigins + fallback` por um modelo robusto:
-- **Refletir o Origin** quando existir: `Access-Control-Allow-Origin: <origin-do-request>`
-- Se não houver `Origin` (chamada server-to-server), usar `*`
-- **Remover** `Access-Control-Allow-Credentials` (não é necessário para `Authorization` header e evita incompatibilidade com `*`)
-- Incluir lista completa de headers recomendados para compatibilidade com supabase-js em navegadores:
-  - `authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version`
-- (Opcional, mas recomendado) adicionar `Access-Control-Allow-Methods: GET,POST,OPTIONS`
+```typescript
+import { VitePWA } from 'vite-plugin-pwa';
 
-Exemplo de bloco a aplicar em cada função:
-- Calcular `origin = req.headers.get("Origin")`
-- Montar `corsHeaders` em função do `origin`
-- `if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })`
-- Garantir que **toda Response** (sucesso/erro) inclua `...corsHeaders`
+export default defineConfig({
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['favicon.ico', 'sinapse-logo.png'],
+      manifest: {
+        name: 'Sinapse UTI',
+        short_name: 'Sinapse',
+        description: 'Sistema de Gestão e Passagem de Plantão em UTI',
+        theme_color: '#1e3a5f',
+        background_color: '#f8fafc',
+        display: 'standalone',
+        orientation: 'portrait-primary',
+        start_url: '/',
+        icons: [...]
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        runtimeCaching: [
+          // Cache para API do Supabase
+          // Cache para imagens
+        ]
+      }
+    })
+  ]
+});
+```
 
-Isso elimina o problema atual e também previne futuros breaks por mudança de domínio do preview.
+### 3. Atualizar `index.html`
 
----
+Adicionar meta tags essenciais para PWA:
 
-### 2) Harmonizar autenticação do `summarize-evolutions` (para evitar outro 401 mais adiante)
-Hoje `summarize-evolutions` ainda usa:
-- `supabaseClient.auth.getUser()` (pode falhar em ambientes com signing-keys)
+```html
+<!-- Theme color -->
+<meta name="theme-color" content="#1e3a5f">
 
-Atualizar para a mesma abordagem robusta usada no `get-users-with-email`:
-- Validar `Authorization: Bearer <token>` com regex case-insensitive
-- Usar `supabaseClient.auth.getClaims(token)` para obter `sub`
-- Usar `sub` como `userId` ao chamar `rpc("is_approved", { _user_id: userId })`
+<!-- iOS support -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Sinapse">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 
-Isso evita regressão de 401 em produção/preview para a funcionalidade de resumo.
+<!-- Manifest (gerado automaticamente pelo plugin) -->
+```
 
----
+### 4. Criar ícones PWA
 
-## Sequência de implementação
+Criar pasta `public/icons/` com ícones em múltiplos tamanhos usando o logo Sinapse:
 
-1. Editar `get-users-with-email`:
-   - Trocar CORS para “reflect origin / wildcard”
-   - (Manter getClaims como está; só melhorar parsing do token se necessário)
-2. Editar `summarize-evolutions`:
-   - Trocar CORS para o mesmo padrão
-   - Trocar `getUser()` por `getClaims()` + `sub`
-3. Editar `seed-admin` e `seed-test-users`:
-   - Trocar CORS para o mesmo padrão (mesmo sendo funções de setup, isso evita “Failed to fetch” caso sejam usadas no preview)
-4. Deploy automático das funções pelo build.
-5. Validação ponta-a-ponta.
+| Tamanho | Uso |
+|---------|-----|
+| 72x72 | Android antigo |
+| 96x96 | Android |
+| 128x128 | Chrome Web Store |
+| 144x144 | Windows tiles |
+| 152x152 | iPad |
+| 192x192 | Android (padrão) |
+| 384x384 | Android (grande) |
+| 512x512 | Splash screen |
 
----
+### 5. Criar componente de atualização (opcional)
 
-## Como vamos validar (checklist)
+Um toast que aparece quando há nova versão disponível:
 
-### Admin (principal)
-- Abrir `/admin` no preview e clicar em “Atualizar”
-- Confirmar que:
-  - tabela carrega os usuários
-  - contadores (Total/Pendentes/Aprovados/Rejeitados) aparecem corretos
-- No DevTools > Network:
-  - `POST /functions/v1/get-users-with-email` deve retornar 200
-  - Response headers devem conter `Access-Control-Allow-Origin` igual ao Origin do request
+```typescript
+// src/components/pwa/UpdatePrompt.tsx
+import { useRegisterSW } from 'virtual:pwa-register/react';
 
-### Resumo de evoluções (impacto secundário)
-- Abrir um paciente com evoluções suficientes e acionar o resumo
-- Confirmar 200 e geração de texto
+export function UpdatePrompt() {
+  const { needRefresh, updateServiceWorker } = useRegisterSW();
+  
+  if (needRefresh) {
+    return (
+      <Toast>
+        Nova versão disponível!
+        <Button onClick={() => updateServiceWorker()}>
+          Atualizar
+        </Button>
+      </Toast>
+    );
+  }
+}
+```
 
----
+## Estratégias de Cache do Service Worker
 
-## Riscos / notas
+### Cache First (Assets estáticos)
+- JavaScript, CSS, fontes
+- Ícones e imagens da interface
+- **Vantagem**: Carregamento instantâneo
 
-- Abrir CORS “para qualquer origin” pode soar mais permissivo, mas:
-  - A função continua exigindo JWT e papel admin/aprovação
-  - Logo, não há vazamento de dados por CORS sozinho
-- Se em algum cenário futuro vocês decidirem permitir cookies (credenciais), aí precisamos reintroduzir allowlist e `Allow-Credentials`. Hoje não é necessário.
+### Network First (Dados do Supabase)
+- Dados de pacientes
+- Evoluções e prescrições
+- **Vantagem**: Sempre atualizado, com fallback offline
 
----
+### Stale While Revalidate (Listas)
+- Lista de unidades
+- Lista de leitos
+- **Vantagem**: Rápido + atualização em background
 
-## Entregáveis
+## Arquivos a Criar/Modificar
 
-- Correção definitiva de CORS para funcionar em qualquer URL de preview e em produção
-- Redução de erros “Failed to fetch” e falsos 401 no frontend
-- `summarize-evolutions` alinhado ao mesmo padrão de validação JWT (getClaims)
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `package.json` | Modificar | Adicionar vite-plugin-pwa |
+| `vite.config.ts` | Modificar | Configurar plugin PWA |
+| `index.html` | Modificar | Adicionar meta tags PWA |
+| `public/icons/` | Criar | 8 ícones em diferentes tamanhos |
+| `src/components/pwa/UpdatePrompt.tsx` | Criar | Toast de atualização |
+| `src/App.tsx` | Modificar | Incluir UpdatePrompt |
+
+## Cores do Tema
+
+Baseado no design system existente:
+- **Theme color**: `#1e3a5f` (azul escuro da sidebar)
+- **Background**: `#f8fafc` (background claro)
+
+## Resultado Esperado
+
+Após implementação:
+
+1. **Android**: Banner "Adicionar à tela inicial" aparece automaticamente
+2. **iOS**: Safari > Compartilhar > "Adicionar à Tela de Início"
+3. **Desktop Chrome**: Ícone de instalação na barra de endereços
+4. **Offline**: App abre e mostra últimos dados carregados
+5. **Atualizações**: Toast notifica quando há nova versão
+
+## Validação
+
+1. Testar instalação no celular (Android/iOS)
+2. Verificar se app abre sem barra do navegador
+3. Desligar WiFi e verificar se app ainda abre
+4. Verificar pontuação no Lighthouse (aba PWA)
+5. Confirmar que atualizações são detectadas
+
+## Detalhes Técnicos
+
+### Workbox Runtime Caching
+
+```typescript
+runtimeCaching: [
+  {
+    urlPattern: /^https:\/\/.*supabase.*\/rest\/v1\/.*/,
+    handler: 'NetworkFirst',
+    options: {
+      cacheName: 'api-cache',
+      expiration: { maxEntries: 50, maxAgeSeconds: 86400 }
+    }
+  },
+  {
+    urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/,
+    handler: 'CacheFirst',
+    options: {
+      cacheName: 'image-cache',
+      expiration: { maxEntries: 100, maxAgeSeconds: 604800 }
+    }
+  }
+]
+```
+
+### Registro do Service Worker
+
+O `vite-plugin-pwa` gera automaticamente:
+- `sw.js` - Service Worker compilado
+- `registerSW.js` - Script de registro
+- `manifest.webmanifest` - Manifest gerado
 
