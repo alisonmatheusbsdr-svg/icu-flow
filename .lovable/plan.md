@@ -1,214 +1,224 @@
 
 
-# Plano: Adicionar Propriedades Avançadas ao Web App Manifest
+# Plano: Revisão e Melhorias de Responsividade Mobile
 
-## Visão Geral
+## Diagnóstico Geral
 
-Enriquecer o manifest PWA do Sinapse UTI com propriedades avançadas que melhoram a experiência do usuário e a integração com o sistema operacional.
-
-## Propriedades a Adicionar
-
-### 1. `categories` - Categorização do App
-Define em quais categorias o app se encaixa nas lojas de aplicativos:
-
-```typescript
-categories: ["medical", "health", "productivity", "business"]
-```
-
-**Benefício**: Ajuda usuários a encontrar o app quando buscam por categoria.
+Após análise detalhada do código, identifiquei os principais problemas de usabilidade em dispositivos móveis:
 
 ---
 
-### 2. `display_override` - Modos de Exibição Alternativos
-Permite definir uma sequência de modos de exibição que o navegador tentará usar, em ordem de preferência:
+## Problemas Encontrados
 
-```typescript
-display_override: ["window-controls-overlay", "standalone", "minimal-ui"]
-```
+### 1. **Header (`DashboardHeader.tsx`)** - CRÍTICO
+O header é o componente mais problemático para mobile:
 
-| Modo | Descrição |
-|------|-----------|
-| `window-controls-overlay` | Controles do sistema integrados na barra de título (desktop moderno) |
-| `standalone` | App em tela cheia sem barra de navegação |
-| `minimal-ui` | Fallback com controles mínimos |
+| Problema | Impacto |
+|----------|---------|
+| Todos os botões ficam em uma única linha | Transborda a tela em celulares |
+| Nome do usuário + roles ocupam muito espaço | Fica cortado ou quebra layout |
+| Select de unidade tem largura fixa (w-48) | Pode não caber |
+| Múltiplos botões de ação (Perfil, Admin, Passagem) | Amontoados em tela pequena |
 
-**Benefício**: Experiência mais nativa em desktops Windows/macOS/Linux.
-
----
-
-### 3. `prefer_related_applications` e `related_applications`
-Para futuro, caso vocês lancem um app nativo:
-
-```typescript
-prefer_related_applications: false,
-related_applications: []
-```
-
-Mantemos `false` para priorizar o PWA web. No futuro, se houver apps nativos para iOS/Android, podemos adicionar:
-
-```typescript
-related_applications: [
-  {
-    platform: "play",
-    url: "https://play.google.com/store/apps/details?id=com.sinapse.uti",
-    id: "com.sinapse.uti"
-  }
-]
-```
+**Solução proposta:**
+- Transformar em layout colapsável com menu hamburger em mobile
+- Usar `Sheet` (drawer lateral) para menu mobile
+- Ocultar texto dos botões, deixando apenas ícones em mobile
+- Mover informações do usuário para o drawer
 
 ---
 
-### 4. `scope_extensions` - Extensões de Escopo (Experimental)
-Permite que domínios adicionais sejam considerados "dentro do app":
+### 2. **Modal de Paciente (`PatientModal.tsx`)** - CRÍTICO
+O modal ocupa 95vw mas tem problemas internos:
 
-```typescript
-scope_extensions: [
-  { origin: "https://sinapsehealthcare.lovable.app" },
-  { origin: "https://*.lovable.app" }
-]
-```
+| Problema | Impacto |
+|----------|---------|
+| Grid de 2 colunas (`lg:grid-cols-2`) sem adaptação mobile | Telas médias ficam espremidas |
+| Botões do header empilhados horizontalmente | Não cabem em mobile |
+| Badges de diagnóstico transbordam | Ficam cortados |
 
-**Nota**: Esta é uma API experimental e pode não funcionar em todos os navegadores ainda.
-
----
-
-### 5. `iarc_rating_id` - Classificação Etária
-Para aplicações médicas, geralmente é "para todos":
-
-```typescript
-iarc_rating_id: "" // Deixar vazio se não houver certificação IARC
-```
-
-**Nota**: Requer certificação formal do IARC. Para aplicações internas/profissionais, geralmente não é necessário.
+**Solução proposta:**
+- Em mobile: botões de ação em um dropdown único ou scroll horizontal
+- Header do modal mais compacto
+- Grid sempre 1 coluna em mobile (< 768px)
+- Scroll horizontal para badges se necessário
 
 ---
 
-## Outras Propriedades Úteis
+### 3. **Tabela de Usuários (`UserManagement.tsx`)** - CRÍTICO
+A página `/admin` usa uma tabela tradicional:
 
-### `shortcuts` - Atalhos Rápidos
-Ações rápidas ao pressionar e segurar o ícone do app:
+| Problema | Impacto |
+|----------|---------|
+| Tabela com 7 colunas | Impossível visualizar em mobile |
+| Apenas `overflow-x-auto` como solução | Experiência ruim |
+| Checkboxes de unidades em linha | Fica muito largo |
 
-```typescript
-shortcuts: [
-  {
-    name: "Dashboard",
-    short_name: "Início",
-    description: "Ir para o dashboard principal",
-    url: "/dashboard",
-    icons: [{ src: "/icons/icon-192x192.png", sizes: "192x192" }]
-  },
-  {
-    name: "Admin",
-    short_name: "Admin",
-    description: "Painel administrativo",
-    url: "/admin",
-    icons: [{ src: "/icons/icon-192x192.png", sizes: "192x192" }]
-  }
-]
-```
-
-### `screenshots` - Screenshots para Instalação
-Imagens exibidas no prompt de instalação:
-
-```typescript
-screenshots: [
-  {
-    src: "/screenshots/dashboard.png",
-    sizes: "1280x720",
-    type: "image/png",
-    form_factor: "wide",
-    label: "Dashboard de Leitos"
-  },
-  {
-    src: "/screenshots/mobile.png",
-    sizes: "390x844",
-    type: "image/png",
-    form_factor: "narrow",
-    label: "Visão Mobile"
-  }
-]
-```
+**Solução proposta:**
+- Em mobile: trocar tabela por lista de cards
+- Cada usuário vira um card expansível
+- Ações e detalhes em accordion dentro do card
+- Cards de estatísticas: `grid-cols-2` em vez de `grid-cols-4`
 
 ---
 
-## Configuração Final Proposta
+### 4. **Grid de Leitos (`BedGrid.tsx` e `AllUnitsGrid.tsx`)** - MODERADO
+| Problema | Impacto |
+|----------|---------|
+| Mínimo de 2 colunas em mobile (`grid-cols-2`) | Leitos ficam muito pequenos |
+| Cards com muito conteúdo comprimido | Difícil de ler |
 
-```typescript
-manifest: {
-  name: "Sinapse UTI",
-  short_name: "Sinapse",
-  description: "Sistema de Gestão e Passagem de Plantão em UTI",
-  theme_color: "#1e3a5f",
-  background_color: "#f8fafc",
-  display: "standalone",
-  display_override: ["window-controls-overlay", "standalone", "minimal-ui"],
-  orientation: "portrait-primary",
-  start_url: "/",
-  scope: "/",
-  categories: ["medical", "health", "productivity", "business"],
-  prefer_related_applications: false,
-  related_applications: [],
-  shortcuts: [
-    {
-      name: "Dashboard",
-      short_name: "Início",
-      url: "/dashboard",
-      icons: [{ src: "/icons/icon-192x192.png", sizes: "192x192" }]
-    },
-    {
-      name: "Administração",
-      short_name: "Admin",
-      url: "/admin",
-      icons: [{ src: "/icons/icon-192x192.png", sizes: "192x192" }]
-    }
-  ],
-  icons: [
-    // ... ícones existentes
-  ]
-}
-```
+**Solução proposta:**
+- Em telas muito pequenas (< 400px): 1 coluna
+- Melhorar breakpoints: `grid-cols-1 xs:grid-cols-2 sm:grid-cols-3`
+- Adicionar classe `text-xs` para texto em mobile
+
+---
+
+### 5. **Página de Autenticação (`Auth.tsx`)** - BOM, mas ajustável
+Já está bem responsiva, apenas ajustes menores:
+- Padding pode ser reduzido em mobile
+- Formulário poderia ter campos maiores (touch-friendly)
+
+---
+
+### 6. **NIR Dashboard (`NIRDashboard.tsx`)** - MODERADO
+| Problema | Impacto |
+|----------|---------|
+| Select de filtro + badges na mesma linha | Transborda em mobile |
+| Grid de beds começa em 2 colunas | Pode ser muito pequeno |
+
+**Solução proposta:**
+- Empilhar filtros verticalmente em mobile
+- Badges de status em scroll horizontal
+- Grid: 1 coluna em mobile
+
+---
+
+### 7. **Dados Clínicos (`PatientClinicalData.tsx`)** - MODERADO
+Componente longo com várias seções:
+- Dropdowns e inputs funcionam bem
+- Precisa garantir que botões não transbordem
+
+---
+
+## Implementação Proposta
+
+### Fase 1: Header Responsivo (Maior impacto)
+1. Criar `MobileNav.tsx` usando `Sheet` component
+2. Detectar mobile via `useIsMobile()` hook existente
+3. Em mobile:
+   - Logo + hamburger menu à esquerda
+   - Drawer contém: seletor de unidade, perfil, botões de ação, logout
+4. Em desktop: manter layout atual
+
+### Fase 2: Modal de Paciente Responsivo
+1. Botões de ação em dropdown `DropdownMenu` para mobile
+2. Ajustar grid para `grid-cols-1` em telas < 768px
+3. Header mais compacto com informações essenciais
+
+### Fase 3: Admin Responsivo
+1. Criar componente `UserCard.tsx` para visualização mobile
+2. Usar `useIsMobile()` para alternar entre Table e Cards
+3. Cards de estatísticas em 2 colunas no mobile
+
+### Fase 4: Grids de Leitos
+1. Ajustar breakpoints do grid
+2. Adicionar classe custom para telas muito pequenas
+
+### Fase 5: Ajustes Menores
+1. NIR Dashboard: empilhar filtros
+2. SelectUnit: já está bom, pequenos ajustes de padding
+3. Formulários: aumentar `min-height` de inputs para 44px (touch-friendly)
 
 ---
 
 ## Arquivos a Modificar
 
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `vite.config.ts` | Modificar | Adicionar propriedades avançadas ao manifest |
-| `public/screenshots/` | (Opcional) Criar | Screenshots para prompt de instalação |
+| Arquivo | Alteração | Prioridade |
+|---------|-----------|------------|
+| `src/components/dashboard/DashboardHeader.tsx` | Refatorar para responsivo com drawer mobile | Alta |
+| `src/components/patient/PatientModal.tsx` | Botões em dropdown + grid responsivo | Alta |
+| `src/components/admin/UserManagement.tsx` | Alternar tabela/cards + stats grid | Alta |
+| `src/components/dashboard/BedGrid.tsx` | Ajustar grid cols breakpoints | Média |
+| `src/components/dashboard/AllUnitsGrid.tsx` | Ajustar grid cols breakpoints | Média |
+| `src/components/nir/NIRDashboard.tsx` | Empilhar filtros em mobile | Média |
+| `src/index.css` | Adicionar utilitários para xs breakpoint | Baixa |
 
 ---
 
-## Resumo das Propriedades
+## Arquivos Novos
 
-| Propriedade | Valor | Necessidade |
-|-------------|-------|-------------|
-| `categories` | `["medical", "health", ...]` | Recomendado |
-| `display_override` | `["window-controls-overlay", ...]` | Recomendado |
-| `prefer_related_applications` | `false` | Opcional |
-| `related_applications` | `[]` | Opcional (futuro) |
-| `shortcuts` | Dashboard + Admin | Recomendado |
-| `iarc_rating_id` | Vazio | Não aplicável |
-| `scope_extensions` | Experimental | Não recomendado ainda |
-| `screenshots` | Imagens | Opcional (melhora UX de instalação) |
+| Arquivo | Descrição |
+|---------|-----------|
+| `src/components/dashboard/MobileNav.tsx` | Drawer de navegação mobile |
+| `src/components/admin/UserCard.tsx` | Card de usuário para visualização mobile |
 
 ---
 
 ## Detalhes Técnicos
 
-### Compatibilidade de `display_override`
-- Chrome 89+ (desktop/Android)
-- Edge 89+
-- Samsung Internet 15+
-- iOS Safari: ignora (usa `display`)
+### Breakpoints Tailwind (referência)
+```
+sm: 640px
+md: 768px
+lg: 1024px
+xl: 1280px
+```
 
-### Compatibilidade de `shortcuts`
-- Chrome 84+ (Android/Windows/macOS/Linux)
-- Edge 84+
-- iOS Safari: não suportado
+### Custom XS breakpoint (a adicionar)
+```css
+@media (min-width: 400px) {
+  .xs\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+```
 
-### `scope_extensions`
-- Ainda em proposta/experimentação
-- Pode ser ignorado por navegadores atuais
-- Alternativa: configurar redirects no servidor
+### Padrão de detecção mobile
+```typescript
+// Usar hook existente
+import { useIsMobile } from '@/hooks/use-mobile';
+
+const isMobile = useIsMobile();
+// Renderização condicional baseada em isMobile
+```
+
+### Exemplo de Header Mobile
+```typescript
+{isMobile ? (
+  <Sheet>
+    <SheetTrigger asChild>
+      <Button variant="ghost" size="icon">
+        <Menu className="h-5 w-5" />
+      </Button>
+    </SheetTrigger>
+    <SheetContent side="left">
+      {/* Conteúdo do menu */}
+    </SheetContent>
+  </Sheet>
+) : (
+  // Header desktop atual
+)}
+```
+
+---
+
+## Resultado Esperado
+
+Após implementação:
+
+1. **Header**: Menu hamburger em mobile, todos os controles acessíveis via drawer
+2. **Modal de Paciente**: Botões organizados, conteúdo em coluna única
+3. **Admin**: Cards de usuário ao invés de tabela, fácil de navegar
+4. **Grids**: Leitos legíveis em qualquer tamanho de tela
+5. **Touch-friendly**: Todos os elementos clicáveis com área mínima de 44px
+
+---
+
+## Ordem de Implementação Sugerida
+
+1. Header (maior impacto visual imediato)
+2. Admin/UserManagement (você está nessa página agora)
+3. PatientModal
+4. Grids de leitos
+5. Ajustes menores
 
