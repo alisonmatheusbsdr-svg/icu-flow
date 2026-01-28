@@ -103,3 +103,21 @@ export const FINAL_STATUSES: RegulationStatus[] = ['transferido', 'negado_nir'];
 
 // Status ativos para contagem
 export const ACTIVE_STATUSES: RegulationStatus[] = ['aguardando_regulacao', 'regulado', 'aguardando_transferencia'];
+
+// Funções para verificação de prazo de melhora clínica
+export function isDeadlineExpired(deadline: string | null): boolean {
+  if (!deadline) return false;
+  const deadlineDate = new Date(deadline);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  deadlineDate.setHours(0, 0, 0, 0);
+  return deadlineDate < today;
+}
+
+export type DeadlineStatus = 'none' | 'pending' | 'expired';
+
+export function getDeadlineStatus(reg: { clinical_hold_deadline: string | null; clinical_hold_at: string | null }): DeadlineStatus {
+  if (!reg.clinical_hold_at) return 'none';
+  if (!reg.clinical_hold_deadline) return 'pending'; // Hold without deadline yet
+  return isDeadlineExpired(reg.clinical_hold_deadline) ? 'expired' : 'pending';
+}
