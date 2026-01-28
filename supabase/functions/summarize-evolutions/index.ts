@@ -1,9 +1,26 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// Allowed origins for CORS
+const allowedOrigins = [
+  "https://id-preview--deb97400-6ef9-479c-a47d-70385f8c2cdb.lovable.app",
+  "https://lovable.dev",
+  "http://localhost:8080",
+  "http://localhost:5173",
+  "http://localhost:3000"
+];
+
+function getCorsHeaders(origin: string | null) {
+  const allowedOrigin = origin && allowedOrigins.some(o => origin.startsWith(o.replace(/:\d+$/, '')) || origin === o)
+    ? origin
+    : allowedOrigins[0];
+  
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Credentials": "true",
+  };
+}
 
 interface Evolution {
   content: string;
@@ -12,12 +29,53 @@ interface Evolution {
 }
 
 serve(async (req) => {
+  const origin = req.headers.get("Origin");
+  const corsHeaders = getCorsHeaders(origin);
+
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    // Authentication check
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      console.error("Missing authorization header");
+      return new Response(
+        JSON.stringify({ summary: null, error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabaseClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    if (userError || !user) {
+      console.error("Invalid token:", userError?.message);
+      return new Response(
+        JSON.stringify({ summary: null, error: "Invalid token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Verify user is approved
+    const { data: isApproved } = await supabaseClient.rpc("is_approved", {
+      _user_id: user.id
+    });
+
+    if (!isApproved) {
+      console.error("User not approved:", user.id);
+      return new Response(
+        JSON.stringify({ summary: null, error: "User not approved" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { evolutions, patient_context } = await req.json();
     
     if (!evolutions || !Array.isArray(evolutions) || evolutions.length < 3) {
@@ -68,7 +126,7 @@ Regras:
 
 ${formattedEvolutions}`;
 
-    console.log(`Summarizing ${evolutionCount} evolutions (max ${maxLines} lines)...`);
+    console.log(`Summarizing ${evolutionCount} evolutions (max ${maxLines} lines) for user ${user.id}...`);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
