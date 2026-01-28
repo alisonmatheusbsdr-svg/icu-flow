@@ -18,7 +18,8 @@ import {
   UserCheck,
   Eye,
   ArrowRightLeft,
-  XCircle
+  XCircle,
+  Users
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -275,6 +276,18 @@ export function MobileNav({
               >
                 <Settings className="h-4 w-4" />
                 Administração
+              </Button>
+            )}
+
+            {/* Team management for coordinators (not admins) */}
+            {!isOnAdmin && hasRole('coordenador') && !hasRole('admin') && (
+              <Button 
+                variant="ghost" 
+                className="w-full justify-start gap-2"
+                onClick={() => handleNavigation('/equipe')}
+              >
+                <Users className="h-4 w-4" />
+                Equipe
               </Button>
             )}
           </div>
