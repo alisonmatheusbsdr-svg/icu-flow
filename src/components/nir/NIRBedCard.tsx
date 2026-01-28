@@ -25,6 +25,7 @@ interface NIRBedCardProps {
   patient: PatientWithModality;
   onUpdate: () => void;
   showProbabilityBar?: boolean;
+  onPatientClick?: (patientId: string, bedNumber: number) => void;
 }
 
 const MODALITY_BADGES: Record<string, { badge: string; className: string }> = {
@@ -81,8 +82,12 @@ const calculateDischargeProbability = (patient: PatientWithModality) => {
   return { probability, status: 'normal' as const, color };
 };
 
-export function NIRBedCard({ bed, patient, onUpdate, showProbabilityBar = false }: NIRBedCardProps) {
+export function NIRBedCard({ bed, patient, onUpdate, showProbabilityBar = false, onPatientClick }: NIRBedCardProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  const handleCardClick = () => {
+    onPatientClick?.(patient.id, bed.bed_number);
+  };
 
   const daysInternado = Math.ceil(
     (new Date().getTime() - new Date(patient.admission_date).getTime()) / (1000 * 60 * 60 * 24)
@@ -132,7 +137,10 @@ export function NIRBedCard({ bed, patient, onUpdate, showProbabilityBar = false 
 
   return (
     <>
-      <Card className="bed-occupied hover:shadow-md transition-shadow">
+      <Card 
+        className="bed-occupied cursor-pointer hover:shadow-md transition-shadow"
+        onClick={handleCardClick}
+      >
         <CardContent className="p-4">
           <div className="flex justify-between items-start mb-2">
             <span className="text-sm text-muted-foreground">Leito {bed.bed_number}</span>
@@ -249,7 +257,10 @@ export function NIRBedCard({ bed, patient, onUpdate, showProbabilityBar = false 
                 !hasUrgentSignal && urgentStatus === 'regulado' && "bg-blue-600 hover:bg-blue-700",
                 !hasUrgentSignal && urgentStatus === 'aguardando_transferencia' && "bg-green-600 hover:bg-green-700"
               )}
-              onClick={() => setIsDialogOpen(true)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsDialogOpen(true);
+              }}
             >
               <Building2 className="h-4 w-4" />
               Regulação

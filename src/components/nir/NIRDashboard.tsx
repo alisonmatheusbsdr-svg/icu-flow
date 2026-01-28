@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { NIRBedCard } from './NIRBedCard';
 import { NIREmptyBedCard } from './NIREmptyBedCard';
+import { PatientModal } from '@/components/patient/PatientModal';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -112,6 +113,8 @@ export function NIRDashboard() {
   const [unitsWithBeds, setUnitsWithBeds] = useState<UnitWithBeds[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+  const [selectedBedNumber, setSelectedBedNumber] = useState<number>(0);
   const [viewMode, setViewMode] = useState<ViewMode>('regulation');
 
   const fetchAllData = useCallback(async () => {
@@ -278,6 +281,17 @@ export function NIRDashboard() {
   useEffect(() => {
     fetchAllData();
   }, [fetchAllData]);
+
+  const handlePatientClick = (patientId: string, bedNumber: number) => {
+    setSelectedPatientId(patientId);
+    setSelectedBedNumber(bedNumber);
+  };
+
+  const handleCloseModal = () => {
+    setSelectedPatientId(null);
+    setSelectedBedNumber(0);
+    fetchAllData();
+  };
 
   // Filter beds based on status filter and view mode
   const filterBeds = (beds: BedWithPatient[]): BedWithPatient[] => {
@@ -546,6 +560,7 @@ export function NIRDashboard() {
                           patient={bed.patient}
                           onUpdate={fetchAllData}
                           showProbabilityBar={viewMode === 'overview'}
+                          onPatientClick={handlePatientClick}
                         />
                       ) : (
                         <NIREmptyBedCard key={bed.id} bed={bed} />
@@ -573,6 +588,14 @@ export function NIRDashboard() {
           </p>
         </div>
       )}
+
+      {/* Patient Modal - Read-only for NIR */}
+      <PatientModal
+        patientId={selectedPatientId}
+        bedNumber={selectedBedNumber}
+        isOpen={!!selectedPatientId}
+        onClose={handleCloseModal}
+      />
     </div>
   );
 }
