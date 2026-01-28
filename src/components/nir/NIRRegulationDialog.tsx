@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Building2, Calendar, Loader2, AlertTriangle } from 'lucide-react';
+import { Building2, Calendar, Loader2, AlertTriangle, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { STATUS_CONFIG, NIR_TRANSITIONS, DENIAL_STATUSES, getSupportLabel, formatDateTime } from '@/lib/regulation-config';
 import type { PatientRegulation, RegulationStatus } from '@/types/database';
@@ -32,6 +32,10 @@ export function NIRRegulationDialog({
   const { user } = useAuth();
   const [savingId, setSavingId] = useState<string | null>(null);
   const [denialReasons, setDenialReasons] = useState<Record<string, string>>({});
+  const [pendingDenial, setPendingDenial] = useState<{
+    regId: string;
+    status: RegulationStatus;
+  } | null>(null);
 
   const getTimestampField = (status: RegulationStatus): string | null => {
     switch (status) {
@@ -41,6 +45,16 @@ export function NIRRegulationDialog({
       case 'negado_nir':
       case 'negado_hospital': return 'denied_at';
       default: return null;
+    }
+  };
+
+  const handleActionClick = (reg: PatientRegulation, newStatus: RegulationStatus) => {
+    if (DENIAL_STATUSES.includes(newStatus)) {
+      // Activate denial mode - show justification field
+      setPendingDenial({ regId: reg.id, status: newStatus });
+    } else {
+      // Execute transition directly
+      handleTransition(reg, newStatus);
     }
   };
 
@@ -88,21 +102,29 @@ export function NIRRegulationDialog({
       console.error(error);
     } else {
       toast.success(`Status alterado para ${STATUS_CONFIG[newStatus].label}`);
-      // Clear denial reason state
+      // Clear states
       setDenialReasons(prev => {
         const { [reg.id]: _, ...rest } = prev;
         return rest;
       });
+      setPendingDenial(null);
       onUpdate();
     }
 
     setSavingId(null);
   };
 
+  const handleDialogClose = (open: boolean) => {
+    if (!open) {
+      setPendingDenial(null);
+    }
+    onClose();
+  };
+
   const activeRegulations = regulations.filter(r => r.is_active);
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={handleDialogClose}>
       <DialogContent className="sm:max-w-xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -122,7 +144,7 @@ export function NIRRegulationDialog({
               const StatusIcon = statusConfig.icon;
               const availableTransitions = NIR_TRANSITIONS[reg.status] || [];
               const isSaving = savingId === reg.id;
-              const needsDenialReason = availableTransitions.some(t => DENIAL_STATUSES.includes(t.status));
+              const isInDenialMode = pendingDenial?.regId === reg.id;
 
               return (
                 <div key={reg.id} className="border rounded-lg p-4 space-y-3">
@@ -182,31 +204,59 @@ export function NIRRegulationDialog({
                     </div>
                   )}
 
-                  {/* Denial reason input (when needed for next action) */}
-                  {needsDenialReason && (
-                    <div className="space-y-2">
-                      <Label className="text-xs flex items-center gap-1">
-                        Justificativa para Negativa <span className="text-destructive">*</span>
-                      </Label>
-                      <Textarea
-                        placeholder="Informe o motivo da recusa..."
-                        value={denialReasons[reg.id] || ''}
-                        onChange={(e) => setDenialReasons(prev => ({ ...prev, [reg.id]: e.target.value }))}
-                        disabled={isSaving}
-                        className="min-h-[60px] text-sm"
-                      />
+                  {/* Denial reason input - only appears when user clicked a denial button */}
+                  {isInDenialMode && (
+                    <div className="space-y-3 p-3 bg-red-50 dark:bg-red-950/30 rounded-lg border border-red-200 dark:border-red-800">
+                      <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
+                        <XCircle className="h-4 w-4" />
+                        <span className="font-medium text-sm">
+                          {pendingDenial.status === 'negado_nir' ? 'Negar Regulação' : 'Negado pelo Hospital'}
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs flex items-center gap-1">
+                          Justificativa da Negativa <span className="text-destructive">*</span>
+                        </Label>
+                        <Textarea
+                          placeholder="Informe o motivo da recusa..."
+                          value={denialReasons[reg.id] || ''}
+                          onChange={(e) => setDenialReasons(prev => ({ ...prev, [reg.id]: e.target.value }))}
+                          disabled={isSaving}
+                          className="min-h-[60px] text-sm"
+                          autoFocus
+                        />
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPendingDenial(null)}
+                          disabled={isSaving}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleTransition(reg, pendingDenial.status)}
+                          disabled={isSaving || !denialReasons[reg.id]?.trim()}
+                        >
+                          {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                          Confirmar Negativa
+                        </Button>
+                      </div>
                     </div>
                   )}
 
-                  {/* Action buttons */}
-                  {availableTransitions.length > 0 && (
+                  {/* Action buttons - hidden when in denial mode */}
+                  {availableTransitions.length > 0 && !isInDenialMode && (
                     <div className="flex flex-wrap gap-2 pt-2 border-t">
                       {availableTransitions.map((transition) => (
                         <Button
                           key={transition.status}
                           variant={transition.variant || 'default'}
                           size="sm"
-                          onClick={() => handleTransition(reg, transition.status)}
+                          onClick={() => handleActionClick(reg, transition.status)}
                           disabled={isSaving}
                         >
                           {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
@@ -217,7 +267,7 @@ export function NIRRegulationDialog({
                   )}
 
                   {/* Final state indicator */}
-                  {availableTransitions.length === 0 && (
+                  {availableTransitions.length === 0 && !isInDenialMode && (
                     <p className="text-xs text-muted-foreground italic pt-2 border-t">
                       {reg.status === 'transferido' 
                         ? '✓ Regulação concluída com sucesso.'
