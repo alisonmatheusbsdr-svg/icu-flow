@@ -302,6 +302,8 @@ export type Database = {
           requested_at: string
           status: string
           support_type: string
+          team_confirmed_at: string | null
+          team_confirmed_by: string | null
           transferred_at: string | null
           updated_at: string
           updated_by: string | null
@@ -323,6 +325,8 @@ export type Database = {
           requested_at?: string
           status?: string
           support_type: string
+          team_confirmed_at?: string | null
+          team_confirmed_by?: string | null
           transferred_at?: string | null
           updated_at?: string
           updated_by?: string | null
@@ -344,6 +348,8 @@ export type Database = {
           requested_at?: string
           status?: string
           support_type?: string
+          team_confirmed_at?: string | null
+          team_confirmed_by?: string | null
           transferred_at?: string | null
           updated_at?: string
           updated_by?: string | null

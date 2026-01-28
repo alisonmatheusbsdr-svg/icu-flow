@@ -6,12 +6,14 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Button } from '@/components/ui/button';
 import { AdmitPatientForm } from './AdmitPatientForm';
 import { BlockBedDialog } from './BlockBedDialog';
-import { Wind, Heart, Plus, Pill, Ban, Lock, MoreVertical, Unlock, Loader2 } from 'lucide-react';
+import { Wind, Heart, Plus, Pill, Ban, Lock, MoreVertical, Unlock, Loader2, Truck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import type { Bed, Patient } from '@/types/database';
+import { getSupportLabel } from '@/lib/regulation-config';
+import type { Bed, Patient, PatientRegulation
+} from '@/types/database';
 
 interface PatientWithModality extends Patient {
   respiratory_modality?: string;
@@ -21,6 +23,7 @@ interface PatientWithModality extends Patient {
   has_central_access?: boolean;
   has_sepsis_or_shock?: boolean;
   has_tot_device?: boolean;
+  patient_regulation?: PatientRegulation[];
 }
 
 const calculateDischargeProbability = (patient: PatientWithModality) => {
@@ -264,6 +267,24 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
             <Badge className="badge-pal text-xs gap-1"><Heart className="h-3 w-3" />CCPP</Badge>
           )}
         </div>
+
+        {/* Awaiting transfer notification badge */}
+        {(() => {
+          const awaitingTransfer = patient.patient_regulation?.find(
+            r => r.is_active && r.status === 'aguardando_transferencia'
+          );
+          if (awaitingTransfer) {
+            return (
+              <div className="mt-2 p-2 bg-green-100 dark:bg-green-950/40 rounded-md border border-green-300 dark:border-green-800 animate-pulse">
+                <div className="flex items-center gap-1.5 text-green-700 dark:text-green-300 text-xs font-medium">
+                  <Truck className="h-3.5 w-3.5" />
+                  VAGA - {getSupportLabel(awaitingTransfer.support_type)}
+                </div>
+              </div>
+            );
+          }
+          return null;
+        })()}
         
         {/* Mini discharge probability bar */}
         {(() => {
