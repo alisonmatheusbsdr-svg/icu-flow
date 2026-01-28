@@ -1,125 +1,105 @@
 
-# Plano: Validação de Desfecho com Regulação Ativa
+# Plano: Adicionar Confirmação para Cancelar Regulação
 
 ## Problema
 
-Quando um paciente tem uma regulação ativa aguardando transferência externa, o usuário pode registrar um desfecho diferente (alta, óbito, etc.) sem nenhum aviso. Isso pode causar inconsistências nos dados e perda de rastreabilidade.
+Ao clicar no botão X para remover uma regulação, a ação é executada imediatamente sem confirmação. Isso pode causar remoções acidentais de regulações importantes.
 
 ## Solução
 
-Adicionar validação no dialog de desfecho que:
-1. Detecta se há regulação ativa para transferência externa
-2. Exibe alerta quando usuário seleciona desfecho diferente de "Transferência Externa"
-3. Exige justificativa obrigatória para prosseguir com desfecho divergente
+Adicionar um AlertDialog de confirmação antes de executar a remoção da regulação.
 
 ## Alterações
 
-### 1. PatientModal.tsx
+### Arquivo: `src/components/patient/PatientRegulation.tsx`
 
-Passar informação sobre regulação ativa para o dialog:
-
+**1. Novo estado para controlar a regulação pendente de remoção:**
 ```tsx
-<PatientDischargeDialog
-  patientId={patient.id}
-  patientInitials={patient.initials}
-  bedId={patient.bed_id}
-  hasActiveExternalTransfer={patient.patient_regulation?.some(
-    r => r.is_active && r.status === 'aguardando_transferencia'
-  )}
-  isOpen={isDischargeDialogOpen}
-  onClose={() => setIsDischargeDialogOpen(false)}
-  onSuccess={onClose}
-/>
+const [removeRegulation, setRemoveRegulation] = useState<PatientRegulationType | null>(null);
 ```
 
-### 2. PatientDischargeDialog.tsx
+**2. Alterar o botão X (linhas 320-327):**
 
-**Novos imports:**
-- `Textarea` para campo de justificativa
-- `AlertTriangle` para ícone de aviso
-
-**Nova prop:**
-```tsx
-interface PatientDischargeDialogProps {
-  // ... props existentes
-  hasActiveExternalTransfer?: boolean;
-}
-```
-
-**Novos estados:**
-```tsx
-const [justification, setJustification] = useState('');
-```
-
-**Lógica de validação:**
-```tsx
-// Verifica se selecionou desfecho diferente de transferência externa
-// quando há regulação ativa
-const needsJustification = 
-  hasActiveExternalTransfer && 
-  outcome && 
-  outcome !== 'transferencia_externa';
-```
-
-**UI - Alerta condicional:**
-Exibir box de aviso amarelo/laranja quando `needsJustification` for true:
-
-```tsx
-{needsJustification && (
-  <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md space-y-3">
-    <div className="flex items-start gap-2 text-amber-700 dark:text-amber-300">
-      <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-      <div className="text-sm">
-        <strong>Atenção:</strong> Este paciente possui uma vaga de transferência externa confirmada. 
-        Você está selecionando um desfecho diferente.
-      </div>
-    </div>
-    <Textarea
-      placeholder="Justifique o motivo do desfecho diferente da transferência..."
-      value={justification}
-      onChange={(e) => setJustification(e.target.value)}
-      className="min-h-[80px]"
-    />
-  </div>
-)}
-```
-
-**Botão desabilitado:**
+Antes:
 ```tsx
 <Button 
-  disabled={!outcome || isLoading || (needsJustification && !justification.trim())}
+  variant="ghost" 
+  size="sm"
+  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+  onClick={() => handleRemove(reg.id)}
 >
+  <X className="h-4 w-4" />
+</Button>
 ```
 
-**Mensagem de confirmação atualizada:**
-Incluir aviso na confirmação quando há justificativa:
+Depois:
+```tsx
+<Button 
+  variant="ghost" 
+  size="sm"
+  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+  onClick={() => setRemoveRegulation(reg)}
+>
+  <X className="h-4 w-4" />
+</Button>
+```
+
+**3. Adicionar AlertDialog no final do componente:**
 
 ```tsx
-{needsJustification && (
-  <div className="mt-2 p-2 bg-amber-100 dark:bg-amber-900/30 rounded text-sm">
-    <strong>Justificativa:</strong> {justification}
-  </div>
-)}
+{/* Dialog de confirmação para remover regulação */}
+<AlertDialog open={!!removeRegulation} onOpenChange={(open) => !open && setRemoveRegulation(null)}>
+  <AlertDialogContent>
+    <AlertDialogHeader>
+      <AlertDialogTitle>Remover Regulação</AlertDialogTitle>
+      <AlertDialogDescription>
+        Tem certeza que deseja remover a solicitação de regulação para{' '}
+        <strong>{removeRegulation && getSupportLabel(removeRegulation.support_type)}</strong>?
+        Esta ação não pode ser desfeita.
+      </AlertDialogDescription>
+    </AlertDialogHeader>
+    <AlertDialogFooter>
+      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+      <AlertDialogAction
+        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+        onClick={() => {
+          if (removeRegulation) {
+            handleRemove(removeRegulation.id);
+            setRemoveRegulation(null);
+          }
+        }}
+      >
+        Remover
+      </AlertDialogAction>
+    </AlertDialogFooter>
+  </AlertDialogContent>
+</AlertDialog>
+```
+
+**4. Adicionar imports necessários:**
+```tsx
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 ```
 
 ## Fluxo do Usuário
 
-1. Usuário abre dialog de desfecho
-2. Se não há regulação ativa -> comportamento normal
-3. Se há regulação ativa:
-   - Usuário seleciona "Transferência Externa" -> comportamento normal
-   - Usuário seleciona outro desfecho -> aparece aviso + campo de justificativa
-   - Botão fica desabilitado até preencher justificativa
-   - Na confirmação, mostra a justificativa informada
+1. Usuário clica no botão X
+2. Dialog de confirmação aparece com nome da especialidade
+3. Usuário pode cancelar ou confirmar a remoção
+4. Só após confirmação a regulação é removida
 
-## Resultado Visual
+## Resultado Esperado
 
-Select com desfecho -> Se divergente, aparece:
-- Box amarelo com ícone de alerta
-- Texto explicando que há vaga disponível
-- Campo de texto para justificativa obrigatória
-- Botão só habilita após preenchimento
-
-## Consideração Futura (opcional)
-
-A justificativa poderia ser salva em um campo do paciente ou em uma tabela de auditoria para rastreabilidade. Por ora, serve como barreira de segurança para evitar erros acidentais.
+- Botão X abre dialog de confirmação
+- Dialog mostra qual regulação será removida
+- Botão vermelho "Remover" confirma a ação
+- Botão "Cancelar" fecha o dialog sem fazer nada
