@@ -211,6 +211,21 @@ export interface PatientRegulation {
   // Dupla checagem - confirmação pela equipe assistencial
   team_confirmed_at: string | null;
   team_confirmed_by: string | null;
+  // Impossibilidade clínica (equipe sinaliza)
+  clinical_hold_at: string | null;
+  clinical_hold_by: string | null;
+  clinical_hold_reason: string | null;
+  // Prazo definido pelo NIR
+  clinical_hold_deadline: string | null;
+  clinical_hold_deadline_set_by: string | null;
+  // Solicitação de nova listagem (quando prazo vence)
+  relisting_requested_at: string | null;
+  relisting_requested_by: string | null;
+  relisting_reason: string | null;
+  // Cancelamento solicitado pela equipe
+  team_cancel_requested_at: string | null;
+  team_cancel_requested_by: string | null;
+  team_cancel_reason: string | null;
   // Outros
   updated_at: string;
   is_active: boolean;

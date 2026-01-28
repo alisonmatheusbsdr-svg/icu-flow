@@ -3,9 +3,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { NIRRegulationDialog } from './NIRRegulationDialog';
-import { Wind, Heart, Pill, Ban, Building2 } from 'lucide-react';
+import { Wind, Heart, Pill, Ban, Building2, Clock, AlertTriangle, RefreshCw, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { STATUS_CONFIG, ACTIVE_STATUSES } from '@/lib/regulation-config';
+import { STATUS_CONFIG, ACTIVE_STATUSES, isDeadlineExpired } from '@/lib/regulation-config';
 import type { Bed, Patient, PatientRegulation, RegulationStatus } from '@/types/database';
 
 interface PatientWithModality extends Patient {
@@ -43,6 +43,18 @@ export function NIRBedCard({ bed, patient, onUpdate }: NIRBedCardProps) {
   const pendingCount = activeRegulations.filter(r => 
     r.status === 'aguardando_regulacao' || r.status === 'regulado' || r.status === 'aguardando_transferencia'
   ).length;
+
+  // Check for urgent signals from team
+  const hasClinicalHoldWithoutDeadline = activeRegulations.some(r => 
+    r.clinical_hold_at && !r.clinical_hold_deadline
+  );
+  const hasExpiredDeadline = activeRegulations.some(r => 
+    r.clinical_hold_deadline && isDeadlineExpired(r.clinical_hold_deadline)
+  );
+  const hasRelistingRequest = activeRegulations.some(r => r.relisting_requested_at);
+  const hasCancelRequest = activeRegulations.some(r => r.team_cancel_requested_at);
+  
+  const hasUrgentSignal = hasClinicalHoldWithoutDeadline || hasExpiredDeadline || hasRelistingRequest || hasCancelRequest;
 
   // Get most urgent status for button color
   const getMostUrgentStatus = (): RegulationStatus | null => {
@@ -115,16 +127,47 @@ export function NIRBedCard({ bed, patient, onUpdate }: NIRBedCardProps) {
               )}
             </div>
           )}
+
+          {/* Urgent signals from team */}
+          {hasUrgentSignal && (
+            <div className="space-y-1 mb-3">
+              {hasClinicalHoldWithoutDeadline && (
+                <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 text-xs bg-amber-50 dark:bg-amber-950/30 p-1.5 rounded">
+                  <Clock className="h-3 w-3" />
+                  <span>Aguardando definição de prazo</span>
+                </div>
+              )}
+              {hasExpiredDeadline && (
+                <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400 text-xs bg-red-50 dark:bg-red-950/30 p-1.5 rounded animate-pulse">
+                  <AlertTriangle className="h-3 w-3" />
+                  <span>Prazo vencido</span>
+                </div>
+              )}
+              {hasRelistingRequest && (
+                <div className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 text-xs bg-blue-50 dark:bg-blue-950/30 p-1.5 rounded animate-pulse">
+                  <RefreshCw className="h-3 w-3" />
+                  <span>Solicitação de nova listagem</span>
+                </div>
+              )}
+              {hasCancelRequest && (
+                <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400 text-xs bg-red-50 dark:bg-red-950/30 p-1.5 rounded animate-pulse">
+                  <XCircle className="h-3 w-3" />
+                  <span>Solicitação de cancelamento</span>
+                </div>
+              )}
+            </div>
+          )}
           
           {/* Regulation button */}
           <Button
-            variant={urgentStatus ? 'default' : 'outline'}
+            variant={urgentStatus || hasUrgentSignal ? 'default' : 'outline'}
             size="sm"
             className={cn(
               "w-full gap-2",
-              urgentStatus === 'aguardando_regulacao' && "bg-amber-600 hover:bg-amber-700",
-              urgentStatus === 'regulado' && "bg-blue-600 hover:bg-blue-700",
-              urgentStatus === 'aguardando_transferencia' && "bg-green-600 hover:bg-green-700"
+              hasUrgentSignal && "bg-red-600 hover:bg-red-700 animate-pulse",
+              !hasUrgentSignal && urgentStatus === 'aguardando_regulacao' && "bg-amber-600 hover:bg-amber-700",
+              !hasUrgentSignal && urgentStatus === 'regulado' && "bg-blue-600 hover:bg-blue-700",
+              !hasUrgentSignal && urgentStatus === 'aguardando_transferencia' && "bg-green-600 hover:bg-green-700"
             )}
             onClick={() => setIsDialogOpen(true)}
           >

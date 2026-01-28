@@ -6,9 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Building2, Calendar, Loader2, AlertTriangle, XCircle, Clock, CheckCircle2 } from 'lucide-react';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Building2, Calendar as CalendarIcon, Loader2, AlertTriangle, XCircle, Clock, CheckCircle2, RefreshCw, CalendarDays } from 'lucide-react';
 import { toast } from 'sonner';
-import { STATUS_CONFIG, NIR_TRANSITIONS, DENIAL_STATUSES, getSupportLabel, formatDateTime } from '@/lib/regulation-config';
+import { format, addDays } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { STATUS_CONFIG, NIR_TRANSITIONS, DENIAL_STATUSES, getSupportLabel, formatDateTime, isDeadlineExpired, formatDate } from '@/lib/regulation-config';
 import type { PatientRegulation, RegulationStatus } from '@/types/database';
 
 interface NIRRegulationDialogProps {
@@ -36,6 +40,8 @@ export function NIRRegulationDialog({
     regId: string;
     status: RegulationStatus;
   } | null>(null);
+  const [selectedDeadline, setSelectedDeadline] = useState<Date | undefined>(undefined);
+  const [deadlinePopoverId, setDeadlinePopoverId] = useState<string | null>(null);
 
   const getTimestampField = (status: RegulationStatus): string | null => {
     switch (status) {
@@ -117,8 +123,122 @@ export function NIRRegulationDialog({
   const handleDialogClose = (open: boolean) => {
     if (!open) {
       setPendingDenial(null);
+      setSelectedDeadline(undefined);
+      setDeadlinePopoverId(null);
     }
     onClose();
+  };
+
+  // Handle setting clinical hold deadline
+  const handleSetDeadline = async (reg: PatientRegulation) => {
+    if (!selectedDeadline) {
+      toast.error('Selecione uma data limite');
+      return;
+    }
+
+    setSavingId(reg.id);
+
+    const { error } = await supabase
+      .from('patient_regulation')
+      .update({
+        clinical_hold_deadline: selectedDeadline.toISOString().split('T')[0],
+        clinical_hold_deadline_set_by: user?.id,
+        updated_by: user?.id
+      })
+      .eq('id', reg.id);
+
+    if (error) {
+      toast.error('Erro ao definir prazo');
+      console.error(error);
+    } else {
+      toast.success(`Prazo definido para ${format(selectedDeadline, 'dd/MM/yyyy')}`);
+      setSelectedDeadline(undefined);
+      setDeadlinePopoverId(null);
+      onUpdate();
+    }
+
+    setSavingId(null);
+  };
+
+  // Handle relisting approval
+  const handleApproveRelisting = async (reg: PatientRegulation) => {
+    setSavingId(reg.id);
+
+    const { error } = await supabase
+      .from('patient_regulation')
+      .update({
+        status: 'regulado',
+        regulated_at: new Date().toISOString(),
+        // Clear clinical hold and relisting fields
+        clinical_hold_at: null,
+        clinical_hold_by: null,
+        clinical_hold_reason: null,
+        clinical_hold_deadline: null,
+        clinical_hold_deadline_set_by: null,
+        relisting_requested_at: null,
+        relisting_requested_by: null,
+        relisting_reason: null,
+        updated_by: user?.id
+      })
+      .eq('id', reg.id);
+
+    if (error) {
+      toast.error('Erro ao re-listar');
+      console.error(error);
+    } else {
+      toast.success('Paciente re-listado na regulação');
+      onUpdate();
+    }
+
+    setSavingId(null);
+  };
+
+  // Handle cancellation confirmation
+  const handleConfirmCancellation = async (reg: PatientRegulation) => {
+    setSavingId(reg.id);
+
+    const { error } = await supabase
+      .from('patient_regulation')
+      .update({
+        is_active: false,
+        updated_by: user?.id
+      })
+      .eq('id', reg.id);
+
+    if (error) {
+      toast.error('Erro ao confirmar cancelamento');
+      console.error(error);
+    } else {
+      toast.success('Regulação cancelada');
+      onUpdate();
+    }
+
+    setSavingId(null);
+  };
+
+  // Handle removing clinical hold (cancel vacancy due to hold)
+  const handleCancelDueToHold = async (reg: PatientRegulation) => {
+    setSavingId(reg.id);
+
+    const { error } = await supabase
+      .from('patient_regulation')
+      .update({
+        status: 'negado_hospital',
+        denied_at: new Date().toISOString(),
+        denial_reason: `Vaga cancelada por impossibilidade clínica: ${reg.clinical_hold_reason || 'Não informado'}`,
+        updated_by: user?.id
+      })
+      .eq('id', reg.id);
+
+    if (error) {
+      toast.error('Erro ao cancelar vaga');
+      console.error(error);
+    } else {
+      toast.success('Vaga cancelada devido a impossibilidade clínica');
+      onUpdate();
+    }
+
+    setSavingId(null);
   };
 
   const activeRegulations = regulations.filter(r => r.is_active);
@@ -157,10 +277,171 @@ export function NIRRegulationDialog({
                     </Badge>
                   </div>
 
+                  {/* Clinical Hold Alert - Team signaled clinical impossibility */}
+                  {reg.clinical_hold_at && !reg.clinical_hold_deadline && (
+                    <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+                      <div className="flex items-start gap-2">
+                        <Clock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                            Equipe sinalizou impossibilidade clínica
+                          </p>
+                          <p className="text-xs text-amber-700 dark:text-amber-300 mt-1 italic">
+                            "{reg.clinical_hold_reason}"
+                          </p>
+                          <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                            Defina um prazo para melhora clínica:
+                          </p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <Popover open={deadlinePopoverId === reg.id} onOpenChange={(open) => setDeadlinePopoverId(open ? reg.id : null)}>
+                              <PopoverTrigger asChild>
+                                <Button variant="outline" size="sm" className="gap-2">
+                                  <CalendarDays className="h-4 w-4" />
+                                  {selectedDeadline ? format(selectedDeadline, 'dd/MM/yyyy') : 'Selecionar data'}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                  mode="single"
+                                  selected={selectedDeadline}
+                                  onSelect={setSelectedDeadline}
+                                  disabled={(date) => date < new Date()}
+                                  initialFocus
+                                  locale={ptBR}
+                                />
+                              </PopoverContent>
+                            </Popover>
+                            <Button
+                              size="sm"
+                              onClick={() => handleSetDeadline(reg)}
+                              disabled={!selectedDeadline || savingId === reg.id}
+                              className="bg-amber-600 hover:bg-amber-700"
+                            >
+                              {savingId === reg.id && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                              Definir Prazo
+                            </Button>
+                          </div>
+                          <div className="flex gap-2 mt-3">
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleCancelDueToHold(reg)}
+                              disabled={savingId === reg.id}
+                            >
+                              Cancelar Vaga
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Clinical Hold with Deadline set */}
+                  {reg.clinical_hold_at && reg.clinical_hold_deadline && (
+                    <div className={`p-3 rounded-lg border ${
+                      isDeadlineExpired(reg.clinical_hold_deadline) 
+                        ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800'
+                        : 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800'
+                    }`}>
+                      <div className="flex items-start gap-2">
+                        <Clock className={`h-4 w-4 shrink-0 mt-0.5 ${
+                          isDeadlineExpired(reg.clinical_hold_deadline) ? 'text-red-600' : 'text-amber-600'
+                        }`} />
+                        <div>
+                          <p className={`text-sm font-medium ${
+                            isDeadlineExpired(reg.clinical_hold_deadline) 
+                              ? 'text-red-800 dark:text-red-200' 
+                              : 'text-amber-800 dark:text-amber-200'
+                          }`}>
+                            {isDeadlineExpired(reg.clinical_hold_deadline) 
+                              ? 'Prazo vencido' 
+                              : 'Aguardando melhora clínica'}
+                          </p>
+                          <p className={`text-xs mt-1 ${
+                            isDeadlineExpired(reg.clinical_hold_deadline) 
+                              ? 'text-red-600 dark:text-red-400' 
+                              : 'text-amber-600 dark:text-amber-400'
+                          }`}>
+                            Prazo: {formatDate(reg.clinical_hold_deadline)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Relisting Request Alert */}
+                  {reg.relisting_requested_at && (
+                    <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <div className="flex items-start gap-2">
+                        <RefreshCw className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                            Solicitação de nova listagem
+                          </p>
+                          <p className="text-xs text-blue-700 dark:text-blue-300 mt-1 italic">
+                            "{reg.relisting_reason}"
+                          </p>
+                          <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                            Solicitado em {formatDateTime(reg.relisting_requested_at)}
+                          </p>
+                          <div className="flex gap-2 mt-3">
+                            <Button
+                              size="sm"
+                              onClick={() => handleApproveRelisting(reg)}
+                              disabled={savingId === reg.id}
+                            >
+                              {savingId === reg.id && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                              Solicitar Nova Senha
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleConfirmCancellation(reg)}
+                              disabled={savingId === reg.id}
+                            >
+                              Cancelar Vaga
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Team Cancellation Request Alert */}
+                  {reg.team_cancel_requested_at && (
+                    <div className="p-3 bg-red-50 dark:bg-red-950/30 rounded-lg border border-red-200 dark:border-red-800">
+                      <div className="flex items-start gap-2">
+                        <XCircle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                            Equipe solicitou cancelamento
+                          </p>
+                          <p className="text-xs text-red-700 dark:text-red-300 mt-1 italic">
+                            "{reg.team_cancel_reason}"
+                          </p>
+                          <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                            Solicitado em {formatDateTime(reg.team_cancel_requested_at)}
+                          </p>
+                          <div className="flex gap-2 mt-3">
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleConfirmCancellation(reg)}
+                              disabled={savingId === reg.id}
+                            >
+                              {savingId === reg.id && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                              Confirmar Cancelamento
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Timeline */}
                   <div className="text-xs text-muted-foreground space-y-0.5">
                     <div className="flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
+                      <CalendarIcon className="h-3 w-3" />
                       Solicitado: {formatDateTime(reg.requested_at)}
                     </div>
                     {reg.regulated_at && (
@@ -248,72 +529,83 @@ export function NIRRegulationDialog({
                     </div>
                   )}
 
-                  {/* Action buttons - hidden when in denial mode */}
-                  {availableTransitions.length > 0 && !isInDenialMode && (
-                    <div className="flex flex-wrap gap-2 pt-2 border-t">
-                      {availableTransitions.map((transition) => {
-                        // Double-check logic for transfer status
-                        const isTransferAction = transition.status === 'transferido';
-                        const teamConfirmed = reg.team_confirmed_at;
+                  {/* Action buttons - hidden when in denial mode or when there are pending team signals */}
+                  {(() => {
+                    const hasPendingTeamSignals = 
+                      (reg.clinical_hold_at && !reg.clinical_hold_deadline) ||
+                      reg.relisting_requested_at ||
+                      reg.team_cancel_requested_at;
+                    
+                    if (availableTransitions.length === 0 || isInDenialMode || hasPendingTeamSignals) {
+                      return null;
+                    }
 
-                        // If transfer action and team hasn't confirmed yet
-                        if (isTransferAction && !teamConfirmed) {
-                          return (
-                            <div key={transition.status} className="w-full space-y-2">
-                              <div className="text-xs text-muted-foreground italic flex items-center gap-2 p-2 bg-muted/50 rounded">
-                                <Clock className="h-4 w-4" />
-                                Aguardando equipe assistencial confirmar saída do paciente
+                    return (
+                      <div className="flex flex-wrap gap-2 pt-2 border-t">
+                        {availableTransitions.map((transition) => {
+                          // Double-check logic for transfer status
+                          const isTransferAction = transition.status === 'transferido';
+                          const teamConfirmed = reg.team_confirmed_at;
+
+                          // If transfer action and team hasn't confirmed yet
+                          if (isTransferAction && !teamConfirmed) {
+                            return (
+                              <div key={transition.status} className="w-full space-y-2">
+                                <div className="text-xs text-muted-foreground italic flex items-center gap-2 p-2 bg-muted/50 rounded">
+                                  <Clock className="h-4 w-4" />
+                                  Aguardando equipe assistencial confirmar saída do paciente
+                                </div>
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  disabled
+                                  className="opacity-50"
+                                >
+                                  {transition.label}
+                                </Button>
                               </div>
-                              <Button
-                                variant="default"
-                                size="sm"
-                                disabled
-                                className="opacity-50"
-                              >
-                                {transition.label}
-                              </Button>
-                            </div>
-                          );
-                        }
+                            );
+                          }
 
-                        // If transfer action and team confirmed
-                        if (isTransferAction && teamConfirmed) {
-                          return (
-                            <div key={transition.status} className="w-full space-y-2">
-                              <div className="text-xs text-green-600 dark:text-green-400 flex items-center gap-2 p-2 bg-green-50 dark:bg-green-950/30 rounded">
-                                <CheckCircle2 className="h-4 w-4" />
-                                Equipe confirmou saída em {formatDateTime(teamConfirmed)}
+                          // If transfer action and team confirmed
+                          if (isTransferAction && teamConfirmed) {
+                            return (
+                              <div key={transition.status} className="w-full space-y-2">
+                                <div className="text-xs text-green-600 dark:text-green-400 flex items-center gap-2 p-2 bg-green-50 dark:bg-green-950/30 rounded">
+                                  <CheckCircle2 className="h-4 w-4" />
+                                  Equipe confirmou saída em {formatDateTime(teamConfirmed)}
+                                </div>
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  onClick={() => handleActionClick(reg, transition.status)}
+                                  disabled={isSaving}
+                                  className="bg-green-600 hover:bg-green-700"
+                                >
+                                  {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                                  {transition.label}
+                                </Button>
                               </div>
-                              <Button
-                                variant="default"
-                                size="sm"
-                                onClick={() => handleActionClick(reg, transition.status)}
-                                disabled={isSaving}
-                                className="bg-green-600 hover:bg-green-700"
-                              >
-                                {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                                {transition.label}
-                              </Button>
-                            </div>
-                          );
-                        }
+                            );
+                          }
 
-                        // Standard button for other actions
-                        return (
-                          <Button
-                            key={transition.status}
-                            variant={transition.variant || 'default'}
-                            size="sm"
-                            onClick={() => handleActionClick(reg, transition.status)}
-                            disabled={isSaving}
-                          >
-                            {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                            {transition.label}
-                          </Button>
-                        );
-                      })}
-                    </div>
-                  )}
+                          // Standard button for other actions
+                          return (
+                            <Button
+                              key={transition.status}
+                              variant={transition.variant || 'default'}
+                              size="sm"
+                              onClick={() => handleActionClick(reg, transition.status)}
+                              disabled={isSaving}
+                            >
+                              {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                              {transition.label}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
 
                   {/* Final state indicator */}
                   {availableTransitions.length === 0 && !isInDenialMode && (

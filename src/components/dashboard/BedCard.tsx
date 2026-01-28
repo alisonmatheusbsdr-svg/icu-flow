@@ -6,14 +6,15 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Button } from '@/components/ui/button';
 import { AdmitPatientForm } from './AdmitPatientForm';
 import { BlockBedDialog } from './BlockBedDialog';
-import { Wind, Heart, Plus, Pill, Ban, Lock, MoreVertical, Unlock, Loader2, Truck } from 'lucide-react';
+import { RegulationTeamActions } from '@/components/patient/RegulationTeamActions';
+import { DeadlineExpiredDialog } from '@/components/patient/DeadlineExpiredDialog';
+import { Wind, Heart, Plus, Pill, Ban, Lock, MoreVertical, Unlock, Loader2, Truck, Clock, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { getSupportLabel } from '@/lib/regulation-config';
-import type { Bed, Patient, PatientRegulation
-} from '@/types/database';
+import { getSupportLabel, isDeadlineExpired, formatDate } from '@/lib/regulation-config';
+import type { Bed, Patient, PatientRegulation } from '@/types/database';
 
 interface PatientWithModality extends Patient {
   respiratory_modality?: string;
@@ -101,6 +102,9 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
   const [isAdmitOpen, setIsAdmitOpen] = useState(false);
   const [isBlockDialogOpen, setIsBlockDialogOpen] = useState(false);
   const [isUnblocking, setIsUnblocking] = useState(false);
+  const [selectedRegulation, setSelectedRegulation] = useState<PatientRegulation | null>(null);
+  const [isTeamActionsOpen, setIsTeamActionsOpen] = useState(false);
+  const [isDeadlineExpiredOpen, setIsDeadlineExpiredOpen] = useState(false);
   const { hasRole } = useAuth();
 
   const canBlockBeds = hasRole('admin') || hasRole('coordenador');
@@ -273,17 +277,110 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
           const awaitingTransfer = patient.patient_regulation?.find(
             r => r.is_active && r.status === 'aguardando_transferencia'
           );
-          if (awaitingTransfer) {
+          if (!awaitingTransfer) return null;
+
+          // Check clinical hold status
+          const hasClinicalHold = awaitingTransfer.clinical_hold_at;
+          const hasDeadline = awaitingTransfer.clinical_hold_deadline;
+          const deadlineExpired = hasDeadline && isDeadlineExpired(awaitingTransfer.clinical_hold_deadline);
+          const hasPendingCancel = awaitingTransfer.team_cancel_requested_at;
+          const hasRelisting = awaitingTransfer.relisting_requested_at;
+
+          // Pending cancellation - red badge
+          if (hasPendingCancel) {
             return (
-              <div className="mt-2 p-2 bg-green-100 dark:bg-green-950/40 rounded-md border border-green-300 dark:border-green-800 animate-pulse">
-                <div className="flex items-center gap-1.5 text-green-700 dark:text-green-300 text-xs font-medium">
-                  <Truck className="h-3.5 w-3.5" />
-                  VAGA - {getSupportLabel(awaitingTransfer.support_type)}
+              <div className="mt-2 p-2 bg-red-100 dark:bg-red-950/40 rounded-md border border-red-300 dark:border-red-800">
+                <div className="flex items-center gap-1.5 text-red-700 dark:text-red-300 text-xs font-medium">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  CANCELAMENTO PEND. - {getSupportLabel(awaitingTransfer.support_type)}
                 </div>
               </div>
             );
           }
-          return null;
+
+          // Relisting requested - blue badge
+          if (hasRelisting) {
+            return (
+              <div className="mt-2 p-2 bg-blue-100 dark:bg-blue-950/40 rounded-md border border-blue-300 dark:border-blue-800">
+                <div className="flex items-center gap-1.5 text-blue-700 dark:text-blue-300 text-xs font-medium">
+                  <Clock className="h-3.5 w-3.5" />
+                  NOVA LISTAGEM SOLIC. - {getSupportLabel(awaitingTransfer.support_type)}
+                </div>
+              </div>
+            );
+          }
+
+          // Deadline expired - pulsing red badge, clickable
+          if (deadlineExpired) {
+            return (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedRegulation(awaitingTransfer);
+                  setIsDeadlineExpiredOpen(true);
+                }}
+                className="mt-2 p-2 w-full bg-red-100 dark:bg-red-950/40 rounded-md border border-red-300 dark:border-red-800 animate-pulse hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors text-left"
+              >
+                <div className="flex items-center gap-1.5 text-red-700 dark:text-red-300 text-xs font-medium">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  PRAZO VENCIDO - {getSupportLabel(awaitingTransfer.support_type)}
+                </div>
+                <div className="text-[10px] text-red-600 dark:text-red-400 mt-0.5">
+                  Venceu em {formatDate(awaitingTransfer.clinical_hold_deadline!)}
+                </div>
+              </button>
+            );
+          }
+
+          // Clinical hold with deadline - amber badge
+          if (hasClinicalHold && hasDeadline) {
+            return (
+              <div className="mt-2 p-2 bg-amber-100 dark:bg-amber-950/40 rounded-md border border-amber-300 dark:border-amber-800">
+                <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300 text-xs font-medium">
+                  <Clock className="h-3.5 w-3.5" />
+                  AGUARD. MELHORA - {getSupportLabel(awaitingTransfer.support_type)}
+                </div>
+                <div className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">
+                  Prazo: {formatDate(awaitingTransfer.clinical_hold_deadline!)}
+                </div>
+              </div>
+            );
+          }
+
+          // Clinical hold without deadline (NIR still needs to set)
+          if (hasClinicalHold && !hasDeadline) {
+            return (
+              <div className="mt-2 p-2 bg-amber-100 dark:bg-amber-950/40 rounded-md border border-amber-300 dark:border-amber-800">
+                <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300 text-xs font-medium">
+                  <Clock className="h-3.5 w-3.5" />
+                  AGUARD. MELHORA - {getSupportLabel(awaitingTransfer.support_type)}
+                </div>
+                <div className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">
+                  Aguardando NIR definir prazo
+                </div>
+              </div>
+            );
+          }
+
+          // Default: vacancy available - green pulsing badge, clickable
+          return (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedRegulation(awaitingTransfer);
+                setIsTeamActionsOpen(true);
+              }}
+              className="mt-2 p-2 w-full bg-green-100 dark:bg-green-950/40 rounded-md border border-green-300 dark:border-green-800 animate-pulse hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors text-left"
+            >
+              <div className="flex items-center gap-1.5 text-green-700 dark:text-green-300 text-xs font-medium">
+                <Truck className="h-3.5 w-3.5" />
+                VAGA - {getSupportLabel(awaitingTransfer.support_type)}
+              </div>
+              <div className="text-[10px] text-green-600 dark:text-green-400 mt-0.5">
+                Clique para tomar ação
+              </div>
+            </button>
+          );
         })()}
         
         {/* Mini discharge probability bar */}
@@ -316,6 +413,38 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
           );
         })()}
       </CardContent>
+
+      {/* Team Actions Dialog */}
+      {selectedRegulation && (
+        <>
+          <RegulationTeamActions
+            regulation={selectedRegulation}
+            isOpen={isTeamActionsOpen}
+            onClose={() => {
+              setIsTeamActionsOpen(false);
+              setSelectedRegulation(null);
+            }}
+            onUpdate={() => {
+              setIsTeamActionsOpen(false);
+              setSelectedRegulation(null);
+              onUpdate();
+            }}
+          />
+          <DeadlineExpiredDialog
+            regulation={selectedRegulation}
+            isOpen={isDeadlineExpiredOpen}
+            onClose={() => {
+              setIsDeadlineExpiredOpen(false);
+              setSelectedRegulation(null);
+            }}
+            onUpdate={() => {
+              setIsDeadlineExpiredOpen(false);
+              setSelectedRegulation(null);
+              onUpdate();
+            }}
+          />
+        </>
+      )}
     </Card>
   );
 }

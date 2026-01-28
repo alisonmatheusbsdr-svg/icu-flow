@@ -289,6 +289,11 @@ export type Database = {
           change_reason: string | null
           changed_at: string | null
           changed_by: string | null
+          clinical_hold_at: string | null
+          clinical_hold_by: string | null
+          clinical_hold_deadline: string | null
+          clinical_hold_deadline_set_by: string | null
+          clinical_hold_reason: string | null
           confirmed_at: string | null
           created_by: string
           denial_reason: string | null
@@ -299,9 +304,15 @@ export type Database = {
           patient_id: string
           previous_support_type: string | null
           regulated_at: string | null
+          relisting_reason: string | null
+          relisting_requested_at: string | null
+          relisting_requested_by: string | null
           requested_at: string
           status: string
           support_type: string
+          team_cancel_reason: string | null
+          team_cancel_requested_at: string | null
+          team_cancel_requested_by: string | null
           team_confirmed_at: string | null
           team_confirmed_by: string | null
           transferred_at: string | null
@@ -312,6 +323,11 @@ export type Database = {
           change_reason?: string | null
           changed_at?: string | null
           changed_by?: string | null
+          clinical_hold_at?: string | null
+          clinical_hold_by?: string | null
+          clinical_hold_deadline?: string | null
+          clinical_hold_deadline_set_by?: string | null
+          clinical_hold_reason?: string | null
           confirmed_at?: string | null
           created_by: string
           denial_reason?: string | null
@@ -322,9 +338,15 @@ export type Database = {
           patient_id: string
           previous_support_type?: string | null
           regulated_at?: string | null
+          relisting_reason?: string | null
+          relisting_requested_at?: string | null
+          relisting_requested_by?: string | null
           requested_at?: string
           status?: string
           support_type: string
+          team_cancel_reason?: string | null
+          team_cancel_requested_at?: string | null
+          team_cancel_requested_by?: string | null
           team_confirmed_at?: string | null
           team_confirmed_by?: string | null
           transferred_at?: string | null
@@ -335,6 +357,11 @@ export type Database = {
           change_reason?: string | null
           changed_at?: string | null
           changed_by?: string | null
+          clinical_hold_at?: string | null
+          clinical_hold_by?: string | null
+          clinical_hold_deadline?: string | null
+          clinical_hold_deadline_set_by?: string | null
+          clinical_hold_reason?: string | null
           confirmed_at?: string | null
           created_by?: string
           denial_reason?: string | null
@@ -345,9 +372,15 @@ export type Database = {
           patient_id?: string
           previous_support_type?: string | null
           regulated_at?: string | null
+          relisting_reason?: string | null
+          relisting_requested_at?: string | null
+          relisting_requested_by?: string | null
           requested_at?: string
           status?: string
           support_type?: string
+          team_cancel_reason?: string | null
+          team_cancel_requested_at?: string | null
+          team_cancel_requested_by?: string | null
           team_confirmed_at?: string | null
           team_confirmed_by?: string | null
           transferred_at?: string | null
