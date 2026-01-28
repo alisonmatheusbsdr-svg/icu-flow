@@ -1,186 +1,43 @@
 
 
-# Plano: Permitir que Coordenadores Aprovem Cadastros da Equipe Assistencial
+# Plano: Expandir Dashboard NIR com Visão Panorâmica
 
 ## Objetivo
 
-Permitir que usuários com role **coordenador** possam aprovar/rejeitar cadastros de **plantonistas** e **diaristas**, sem acesso a gerenciar coordenadores, NIR ou admins.
+Permitir que o NIR visualize **todos os pacientes** internados com barra de probabilidade de alta, mantendo o botão "Regulação" apenas para pacientes que possuem regulação ativa.
 
 ---
 
-## Regras de Negócio
+## Situação Atual
 
-| Ator | Pode gerenciar |
-|------|----------------|
-| **Admin** | Todos os usuários (plantonista, diarista, nir, coordenador, admin) |
-| **Coordenador** | Apenas plantonista e diarista |
-| **Outros** | Nenhum acesso à gestão de usuários |
-
-### O que "gerenciar" significa para o coordenador:
-- Aprovar ou rejeitar cadastros pendentes
-- Visualizar lista de usuários (apenas plantonistas e diaristas)
-- **NÃO** pode alterar roles (isso seria escalação de privilégio)
-- **NÃO** pode atribuir unidades (isso fica com admin)
+- O `NIRDashboard` filtra e mostra **apenas** pacientes com regulação ativa
+- O `NIRBedCard` sempre exibe o botão "Regulação"
+- Não há indicador de probabilidade de alta para o NIR
 
 ---
 
-## Implementação
+## Solução
 
-### 1. Atualizar Edge Function `get-users-with-email`
+### 1. Adicionar Toggle de Modo de Visualização
 
-**Arquivo:** `supabase/functions/get-users-with-email/index.ts`
+| Modo | Comportamento |
+|------|---------------|
+| **Regulação** | Modo atual - só pacientes com regulação (default) |
+| **Visão Geral** | Todos os leitos ocupados com probabilidade de alta |
 
-Alterar a lógica de autorização para aceitar coordenadores, mas filtrar os dados:
+### 2. Buscar Dados Clínicos Adicionais
 
-```typescript
-// Verificar se é admin OU coordenador
-const { data: isAdmin } = await supabaseAdmin.rpc("has_role", {
-  _user_id: userId,
-  _role: "admin",
-});
+Adicionar queries para os dados que alimentam a probabilidade de alta:
+- `active_antibiotics_count`
+- `active_devices_count`
+- `has_central_access`
+- `has_sepsis_or_shock`
+- `has_tot_device`
 
-const { data: isCoordenador } = await supabaseAdmin.rpc("has_role", {
-  _user_id: userId,
-  _role: "coordenador",
-});
+### 3. Atualizar NIRBedCard
 
-if (!isAdmin && !isCoordenador) {
-  return new Response(
-    JSON.stringify({ error: "Forbidden" }),
-    { status: 403, ... }
-  );
-}
-
-// Se for coordenador (não admin), filtrar apenas plantonistas e diaristas
-const allowedRoles = isCoordenador && !isAdmin 
-  ? ['plantonista', 'diarista'] 
-  : null; // null = sem filtro (admin vê tudo)
-
-// Filtrar usuários retornados
-const filteredUsers = allowedRoles 
-  ? usersWithEmail.filter(u => 
-      u.roles.some(r => allowedRoles.includes(r)) || 
-      u.roles.length === 0 // usuários sem role ainda
-    )
-  : usersWithEmail;
-```
-
----
-
-### 2. Criar Nova RLS Policy para Profiles (UPDATE por Coordenador)
-
-**Migração SQL:**
-
-```sql
--- Permitir coordenadores atualizarem approval_status de plantonistas/diaristas
-CREATE POLICY "Coordenadores podem aprovar plantonistas e diaristas"
-ON public.profiles
-FOR UPDATE
-TO authenticated
-USING (
-  -- O coordenador só pode atualizar profiles de usuários que são plantonistas ou diaristas
-  public.has_role(auth.uid(), 'coordenador') 
-  AND EXISTS (
-    SELECT 1 FROM public.user_roles ur 
-    WHERE ur.user_id = profiles.id 
-    AND ur.role IN ('plantonista', 'diarista')
-  )
-)
-WITH CHECK (
-  -- Mesma condição no WITH CHECK
-  public.has_role(auth.uid(), 'coordenador') 
-  AND EXISTS (
-    SELECT 1 FROM public.user_roles ur 
-    WHERE ur.user_id = profiles.id 
-    AND ur.role IN ('plantonista', 'diarista')
-  )
-);
-
--- Permitir coordenadores verem profiles de plantonistas e diaristas
-CREATE POLICY "Coordenadores podem ver perfis de plantonistas e diaristas"
-ON public.profiles
-FOR SELECT
-TO authenticated
-USING (
-  public.has_role(auth.uid(), 'coordenador') 
-  AND EXISTS (
-    SELECT 1 FROM public.user_roles ur 
-    WHERE ur.user_id = profiles.id 
-    AND ur.role IN ('plantonista', 'diarista')
-  )
-);
-```
-
----
-
-### 3. Criar Nova Página para Coordenadores
-
-**Arquivo:** `src/pages/TeamManagement.tsx`
-
-Nova página acessível para coordenadores em `/equipe`:
-
-```typescript
-// Rota: /equipe
-// Acesso: coordenador OU admin
-// Funcionalidades:
-//   - Listar usuários pendentes (plantonistas/diaristas)
-//   - Aprovar/rejeitar cadastros
-//   - NÃO mostra: selector de role, atribuição de unidades
-```
-
----
-
-### 4. Criar Componente de Gestão Simplificada
-
-**Arquivo:** `src/components/team/TeamUserManagement.tsx`
-
-Versão simplificada do `UserManagement.tsx` que:
-- Mostra apenas plantonistas e diaristas
-- Oculta o seletor de role
-- Oculta a atribuição de unidades
-- Permite apenas aprovar/rejeitar
-
----
-
-### 5. Atualizar Navegação
-
-**Arquivo:** `src/components/dashboard/DashboardHeader.tsx`
-
-Adicionar botão para coordenadores acessarem a gestão de equipe:
-
-```tsx
-{!isOnAdmin && hasRole('coordenador') && !hasRole('admin') && (
-  <Button variant="outline" size="sm" onClick={() => navigate('/equipe')} className="gap-2">
-    <Users className="h-4 w-4" />
-    Equipe
-  </Button>
-)}
-```
-
-**Arquivo:** `src/components/dashboard/MobileNav.tsx`
-
-Adicionar item de menu para coordenadores no drawer mobile.
-
----
-
-### 6. Atualizar Rotas
-
-**Arquivo:** `src/App.tsx`
-
-Adicionar rota protegida:
-
-```tsx
-<Route path="/equipe" element={<TeamManagement />} />
-```
-
----
-
-## Arquivos a Criar
-
-| Arquivo | Descrição |
-|---------|-----------|
-| `src/pages/TeamManagement.tsx` | Página de gestão de equipe para coordenadores |
-| `src/components/team/TeamUserManagement.tsx` | Componente de listagem/aprovação simplificado |
+- Adicionar mini-barra de probabilidade de alta (reutilizar lógica do BedCard)
+- Tornar o botão "Regulação" condicional (só aparece se houver regulação ativa)
 
 ---
 
@@ -188,49 +45,157 @@ Adicionar rota protegida:
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `supabase/functions/get-users-with-email/index.ts` | Aceitar coordenadores e filtrar dados |
-| `src/components/dashboard/DashboardHeader.tsx` | Botão "Equipe" para coordenadores |
-| `src/components/dashboard/MobileNav.tsx` | Menu "Equipe" para coordenadores em mobile |
-| `src/App.tsx` | Adicionar rota `/equipe` |
+| `src/components/nir/NIRDashboard.tsx` | Toggle de modo, queries adicionais, stats de ocupação |
+| `src/components/nir/NIRBedCard.tsx` | Barra de probabilidade, botão condicional |
 
 ---
 
-## Migração de Banco de Dados
+## Detalhes Técnicos
 
-Novas RLS policies para permitir que coordenadores:
-1. Visualizem profiles de plantonistas/diaristas
-2. Atualizem approval_status de plantonistas/diaristas
+### NIRDashboard.tsx
+
+**Novo estado e toggle:**
+```tsx
+const [viewMode, setViewMode] = useState<'regulation' | 'overview'>('regulation');
+```
+
+**Queries adicionais (dentro do fetchAllData):**
+```typescript
+// Buscar dados clínicos para cálculo de probabilidade
+const [antibioticsResult, devicesResult, venousResult, precautionsResult] = await Promise.all([
+  supabase.from('antibiotics').select('patient_id').in('patient_id', patientIds).eq('is_active', true),
+  supabase.from('invasive_devices').select('patient_id, device_type').in('patient_id', patientIds).eq('is_active', true),
+  supabase.from('venous_access').select('patient_id, access_type').in('patient_id', patientIds).eq('is_active', true),
+  supabase.from('patient_precautions').select('patient_id, precaution_type').in('patient_id', patientIds).eq('is_active', true)
+]);
+```
+
+**Nova lógica de filtro:**
+```typescript
+const filterBeds = (beds: BedWithPatient[]): BedWithPatient[] => {
+  // Modo visão geral: todos os leitos ocupados
+  if (viewMode === 'overview') {
+    return beds.filter(b => b.patient !== null);
+  }
+  
+  // Modo regulação: apenas com regulação ativa (lógica atual)
+  return beds.filter(b => {
+    const regs = b.patient?.patient_regulation || [];
+    if (regs.length === 0) return false;
+    if (statusFilter === 'all') return true;
+    return regs.some(r => r.status === statusFilter);
+  });
+};
+```
+
+**Stats panorâmicos (modo visão geral):**
+```tsx
+// Calcular estatísticas globais
+const totalOccupied = unitsWithBeds.reduce((sum, u) => sum + u.stats.occupied, 0);
+const totalCritical = /* pacientes com TOT ou DVA */;
+const totalProbableDischarges = /* pacientes com probabilidade >= 80% */;
+```
+
+### NIRBedCard.tsx
+
+**Adicionar props para dados clínicos:**
+```typescript
+interface PatientWithModality extends Patient {
+  // Existentes
+  respiratory_modality?: string;
+  has_active_dva?: boolean;
+  patient_regulation?: PatientRegulation[];
+  
+  // Novos para cálculo de probabilidade
+  active_antibiotics_count?: number;
+  active_devices_count?: number;
+  has_central_access?: boolean;
+  has_sepsis_or_shock?: boolean;
+  has_tot_device?: boolean;
+}
+```
+
+**Reutilizar lógica de calculateDischargeProbability do BedCard:**
+```typescript
+// Copiar função calculateDischargeProbability
+const { probability, status, color } = calculateDischargeProbability(patient);
+```
+
+**Botão condicional:**
+```tsx
+{/* Botão de regulação - só aparece se houver regulação ativa */}
+{activeRegulations.length > 0 && (
+  <Button
+    variant={urgentStatus || hasUrgentSignal ? 'default' : 'outline'}
+    size="sm"
+    className="w-full gap-2 ..."
+    onClick={() => setIsDialogOpen(true)}
+  >
+    <Building2 className="h-4 w-4" />
+    Regulação
+    {pendingCount > 0 && <Badge>{pendingCount}</Badge>}
+  </Button>
+)}
+
+{/* Mini barra de probabilidade de alta */}
+<div className="mt-2 flex items-center gap-2">
+  <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+    <div 
+      className={cn("h-full transition-all", colorClasses[color])}
+      style={{ width: `${barWidth}%` }}
+    />
+  </div>
+  <span className="text-xs text-muted-foreground">
+    {status === 'palliative' ? 'CP' : `${probability}%`}
+  </span>
+</div>
+```
 
 ---
 
-## Segurança
+## Interface Visual
 
-| Verificação | Local |
-|-------------|-------|
-| Autorização no backend | Edge function verifica role antes de retornar dados |
-| Filtro de dados | Coordenadores só recebem dados de plantonistas/diaristas |
-| RLS no banco | Políticas impedem UPDATE em profiles de coordenadores/admins |
-| Sem acesso a roles | Coordenadores não podem alterar roles (não há policy para isso) |
-| Sem acesso a unidades | Coordenadores não podem atribuir unidades (não há policy para isso) |
-
----
-
-## Fluxo do Coordenador
+### Header com Toggle
 
 ```text
-1. Login como coordenador
-2. Clica em "Equipe" no header
-3. Vê lista de plantonistas e diaristas
-4. Vê usuários pendentes em destaque
-5. Clica em Aprovar/Rejeitar
-6. Sistema atualiza via RLS (backend valida)
+┌─────────────────────────────────────────────────────┐
+│ 🏢 Painel de Regulação                              │
+│                                                     │
+│ [🔄 Regulação] [📊 Visão Geral]                     │
+│                                                     │
+│ (modo Regulação)          (modo Visão Geral)        │
+│ 5 Aguard. | 3 Reg.        45 Ocup. | 8 Altas | 12 ♠│
+└─────────────────────────────────────────────────────┘
+```
+
+### Cards no Modo Visão Geral
+
+```text
+┌────────────┐  ┌────────────┐  ┌────────────┐
+│ Leito 1    │  │ Leito 2    │  │ Leito 3    │
+│ JAB  D12   │  │ MCS  D5    │  │ PFS  D3    │
+│ 67 anos    │  │ 45 anos    │  │ 72 anos    │
+│ [TOT][DVA] │  │ [VNI]      │  │ [AA]       │
+│ ▓▓▓▓▓▓▓▓▓▓ │  │ ▓▓▓▓▓▓░░░░ │  │ ▓▓▓▓▓▓▓▓▓░ │
+│ 0%         │  │ 65%        │  │ 90%        │
+│ [Regulação]│  │            │  │            │
+└────────────┘  └────────────┘  └────────────┘
+  (c/ regulação)  (s/ regulação)  (s/ regulação)
 ```
 
 ---
 
 ## Resultado Esperado
 
-- **Coordenadores**: Podem aprovar equipe assistencial rapidamente
-- **Admins**: Mantêm controle total sobre coordenadores e configurações
-- **Segurança**: Não há escalação de privilégios - coordenadores não podem se promover ou promover outros
+| Modo | O que o NIR vê |
+|------|----------------|
+| **Regulação** | Apenas pacientes com regulação ativa (comportamento atual) |
+| **Visão Geral** | Todos os pacientes com barra de probabilidade de alta |
+
+### Benefícios para o NIR:
+
+1. **Previsibilidade** - Ver quais pacientes estão próximos de alta (barra verde >80%)
+2. **Criticidade** - Identificar pacientes críticos (TOT/DVA) que não sairão tão cedo
+3. **Planejamento** - Visão panorâmica para antecipar fluxo de leitos
+4. **Foco** - Toggle para voltar ao modo regulação quando precisar agir
 
