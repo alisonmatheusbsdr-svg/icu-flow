@@ -287,6 +287,7 @@ export type Database = {
       patient_regulation: {
         Row: {
           created_by: string
+          denial_reason: string | null
           id: string
           is_active: boolean
           notes: string | null
@@ -295,9 +296,11 @@ export type Database = {
           status: string
           support_type: string
           updated_at: string
+          updated_by: string | null
         }
         Insert: {
           created_by: string
+          denial_reason?: string | null
           id?: string
           is_active?: boolean
           notes?: string | null
@@ -306,9 +309,11 @@ export type Database = {
           status?: string
           support_type: string
           updated_at?: string
+          updated_by?: string | null
         }
         Update: {
           created_by?: string
+          denial_reason?: string | null
           id?: string
           is_active?: boolean
           notes?: string | null
@@ -317,6 +322,7 @@ export type Database = {
           status?: string
           support_type?: string
           updated_at?: string
+          updated_by?: string | null
         }
         Relationships: [
           {
@@ -791,7 +797,7 @@ export type Database = {
       is_unit_available: { Args: { _unit_id: string }; Returns: boolean }
     }
     Enums: {
-      app_role: "admin" | "diarista" | "plantonista" | "coordenador"
+      app_role: "admin" | "diarista" | "plantonista" | "coordenador" | "nir"
       approval_status: "pending" | "approved" | "rejected"
       patient_outcome:
         | "alta"
@@ -928,7 +934,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "diarista", "plantonista", "coordenador"],
+      app_role: ["admin", "diarista", "plantonista", "coordenador", "nir"],
       approval_status: ["pending", "approved", "rejected"],
       patient_outcome: [
         "alta",

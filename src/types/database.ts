@@ -1,4 +1,4 @@
-export type AppRole = 'admin' | 'diarista' | 'plantonista' | 'coordenador';
+export type AppRole = 'admin' | 'diarista' | 'plantonista' | 'coordenador' | 'nir';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 export type RespiratoryStatus = 'ar_ambiente' | 'tot';
 export type PatientOutcome = 'alta' | 'obito' | 'transferencia' | 'alta_enfermaria' | 'transferencia_externa' | 'transferencia_interna';
@@ -194,6 +194,8 @@ export interface PatientRegulation {
   is_active: boolean;
   notes: string | null;
   created_by: string;
+  denial_reason: string | null;
+  updated_by: string | null;
 }
 
 // Extended types with relations
