@@ -1,94 +1,186 @@
 
-# Plano: Corrigir Botão "Sair" não aparecendo no MobileNav
 
-## Diagnóstico
+# Plano: Permitir que Coordenadores Aprovem Cadastros da Equipe Assistencial
 
-O botão "Sair" **existe no código** (linhas 282-292 do MobileNav.tsx), mas não está aparecendo na tela. O problema é um erro de layout CSS:
+## Objetivo
 
-```
-Estrutura atual:
-SheetContent
-  └── SheetHeader (altura fixa)
-  └── div.flex.flex-col.h-full  ← PROBLEMA: h-full não funciona corretamente aqui
-      └── User Info (altura fixa)
-      └── Unit Selection (altura fixa)
-      └── Actions (flex-1)
-      └── Logout (mt-auto)  ← Está fora da área visível
-```
-
-O `h-full` no container interno não calcula corretamente a altura porque o `SheetContent` não tem altura definida explicitamente - ele é calculado pelo conteúdo.
+Permitir que usuários com role **coordenador** possam aprovar/rejeitar cadastros de **plantonistas** e **diaristas**, sem acesso a gerenciar coordenadores, NIR ou admins.
 
 ---
 
-## Solução
+## Regras de Negócio
 
-Alterar a estrutura para usar uma altura calculada com `calc()` ou ajustar o layout para garantir que o botão de logout fique sempre visível no final do drawer.
+| Ator | Pode gerenciar |
+|------|----------------|
+| **Admin** | Todos os usuários (plantonista, diarista, nir, coordenador, admin) |
+| **Coordenador** | Apenas plantonista e diarista |
+| **Outros** | Nenhum acesso à gestão de usuários |
 
-### Alteração Proposta
+### O que "gerenciar" significa para o coordenador:
+- Aprovar ou rejeitar cadastros pendentes
+- Visualizar lista de usuários (apenas plantonistas e diaristas)
+- **NÃO** pode alterar roles (isso seria escalação de privilégio)
+- **NÃO** pode atribuir unidades (isso fica com admin)
+
+---
+
+## Implementação
+
+### 1. Atualizar Edge Function `get-users-with-email`
+
+**Arquivo:** `supabase/functions/get-users-with-email/index.ts`
+
+Alterar a lógica de autorização para aceitar coordenadores, mas filtrar os dados:
+
+```typescript
+// Verificar se é admin OU coordenador
+const { data: isAdmin } = await supabaseAdmin.rpc("has_role", {
+  _user_id: userId,
+  _role: "admin",
+});
+
+const { data: isCoordenador } = await supabaseAdmin.rpc("has_role", {
+  _user_id: userId,
+  _role: "coordenador",
+});
+
+if (!isAdmin && !isCoordenador) {
+  return new Response(
+    JSON.stringify({ error: "Forbidden" }),
+    { status: 403, ... }
+  );
+}
+
+// Se for coordenador (não admin), filtrar apenas plantonistas e diaristas
+const allowedRoles = isCoordenador && !isAdmin 
+  ? ['plantonista', 'diarista'] 
+  : null; // null = sem filtro (admin vê tudo)
+
+// Filtrar usuários retornados
+const filteredUsers = allowedRoles 
+  ? usersWithEmail.filter(u => 
+      u.roles.some(r => allowedRoles.includes(r)) || 
+      u.roles.length === 0 // usuários sem role ainda
+    )
+  : usersWithEmail;
+```
+
+---
+
+### 2. Criar Nova RLS Policy para Profiles (UPDATE por Coordenador)
+
+**Migração SQL:**
+
+```sql
+-- Permitir coordenadores atualizarem approval_status de plantonistas/diaristas
+CREATE POLICY "Coordenadores podem aprovar plantonistas e diaristas"
+ON public.profiles
+FOR UPDATE
+TO authenticated
+USING (
+  -- O coordenador só pode atualizar profiles de usuários que são plantonistas ou diaristas
+  public.has_role(auth.uid(), 'coordenador') 
+  AND EXISTS (
+    SELECT 1 FROM public.user_roles ur 
+    WHERE ur.user_id = profiles.id 
+    AND ur.role IN ('plantonista', 'diarista')
+  )
+)
+WITH CHECK (
+  -- Mesma condição no WITH CHECK
+  public.has_role(auth.uid(), 'coordenador') 
+  AND EXISTS (
+    SELECT 1 FROM public.user_roles ur 
+    WHERE ur.user_id = profiles.id 
+    AND ur.role IN ('plantonista', 'diarista')
+  )
+);
+
+-- Permitir coordenadores verem profiles de plantonistas e diaristas
+CREATE POLICY "Coordenadores podem ver perfis de plantonistas e diaristas"
+ON public.profiles
+FOR SELECT
+TO authenticated
+USING (
+  public.has_role(auth.uid(), 'coordenador') 
+  AND EXISTS (
+    SELECT 1 FROM public.user_roles ur 
+    WHERE ur.user_id = profiles.id 
+    AND ur.role IN ('plantonista', 'diarista')
+  )
+);
+```
+
+---
+
+### 3. Criar Nova Página para Coordenadores
+
+**Arquivo:** `src/pages/TeamManagement.tsx`
+
+Nova página acessível para coordenadores em `/equipe`:
+
+```typescript
+// Rota: /equipe
+// Acesso: coordenador OU admin
+// Funcionalidades:
+//   - Listar usuários pendentes (plantonistas/diaristas)
+//   - Aprovar/rejeitar cadastros
+//   - NÃO mostra: selector de role, atribuição de unidades
+```
+
+---
+
+### 4. Criar Componente de Gestão Simplificada
+
+**Arquivo:** `src/components/team/TeamUserManagement.tsx`
+
+Versão simplificada do `UserManagement.tsx` que:
+- Mostra apenas plantonistas e diaristas
+- Oculta o seletor de role
+- Oculta a atribuição de unidades
+- Permite apenas aprovar/rejeitar
+
+---
+
+### 5. Atualizar Navegação
+
+**Arquivo:** `src/components/dashboard/DashboardHeader.tsx`
+
+Adicionar botão para coordenadores acessarem a gestão de equipe:
+
+```tsx
+{!isOnAdmin && hasRole('coordenador') && !hasRole('admin') && (
+  <Button variant="outline" size="sm" onClick={() => navigate('/equipe')} className="gap-2">
+    <Users className="h-4 w-4" />
+    Equipe
+  </Button>
+)}
+```
 
 **Arquivo:** `src/components/dashboard/MobileNav.tsx`
 
-**Mudanças:**
+Adicionar item de menu para coordenadores no drawer mobile.
 
-1. Adicionar altura explícita ao container para caber na viewport
-2. Ajustar o layout para usar `min-h-[calc(100vh-60px)]` onde 60px é aproximadamente a altura do SheetHeader
-3. Garantir que a seção de logout fique sempre no final, visível
+---
 
-### Código Atual (Problema)
+### 6. Atualizar Rotas
+
+**Arquivo:** `src/App.tsx`
+
+Adicionar rota protegida:
+
 ```tsx
-<div className="flex flex-col h-full">
-  {/* User Info */}
-  <div className="p-4 border-b bg-muted/30">...</div>
-  
-  {/* Unit Selection */}
-  <div className="p-4 border-b">...</div>
-  
-  {/* Actions */}
-  <div className="flex-1 p-4 space-y-2 overflow-y-auto">...</div>
-  
-  {/* Logout */}
-  <div className="p-4 border-t mt-auto">  ← Não aparece
-    <Button>Sair</Button>
-  </div>
-</div>
-```
-
-### Código Corrigido
-```tsx
-<div className="flex flex-col min-h-[calc(100vh-60px)]">
-  {/* User Info */}
-  <div className="p-4 border-b bg-muted/30">...</div>
-  
-  {/* Unit Selection */}
-  <div className="p-4 border-b">...</div>
-  
-  {/* Actions */}
-  <div className="flex-1 p-4 space-y-2 overflow-y-auto">...</div>
-  
-  {/* Logout - agora visível */}
-  <div className="p-4 border-t mt-auto">
-    <Button>Sair</Button>
-  </div>
-</div>
+<Route path="/equipe" element={<TeamManagement />} />
 ```
 
 ---
 
-## Resumo da Alteração
+## Arquivos a Criar
 
-| Linha | Antes | Depois |
-|-------|-------|--------|
-| 111 | `className="flex flex-col h-full"` | `className="flex flex-col min-h-[calc(100vh-60px)]"` |
-
----
-
-## Resultado Esperado
-
-Após a correção:
-- O drawer terá altura suficiente para exibir todo o conteúdo
-- O botão "Sair" aparecerá fixo na parte inferior do drawer
-- A área de ações (Liberar para Passagem, Meu Perfil) terá scroll se necessário
-- Layout consistente em todos os tamanhos de tela mobile
+| Arquivo | Descrição |
+|---------|-----------|
+| `src/pages/TeamManagement.tsx` | Página de gestão de equipe para coordenadores |
+| `src/components/team/TeamUserManagement.tsx` | Componente de listagem/aprovação simplificado |
 
 ---
 
@@ -96,4 +188,49 @@ Após a correção:
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/dashboard/MobileNav.tsx` | Corrigir classe do container de `h-full` para `min-h-[calc(100vh-60px)]` |
+| `supabase/functions/get-users-with-email/index.ts` | Aceitar coordenadores e filtrar dados |
+| `src/components/dashboard/DashboardHeader.tsx` | Botão "Equipe" para coordenadores |
+| `src/components/dashboard/MobileNav.tsx` | Menu "Equipe" para coordenadores em mobile |
+| `src/App.tsx` | Adicionar rota `/equipe` |
+
+---
+
+## Migração de Banco de Dados
+
+Novas RLS policies para permitir que coordenadores:
+1. Visualizem profiles de plantonistas/diaristas
+2. Atualizem approval_status de plantonistas/diaristas
+
+---
+
+## Segurança
+
+| Verificação | Local |
+|-------------|-------|
+| Autorização no backend | Edge function verifica role antes de retornar dados |
+| Filtro de dados | Coordenadores só recebem dados de plantonistas/diaristas |
+| RLS no banco | Políticas impedem UPDATE em profiles de coordenadores/admins |
+| Sem acesso a roles | Coordenadores não podem alterar roles (não há policy para isso) |
+| Sem acesso a unidades | Coordenadores não podem atribuir unidades (não há policy para isso) |
+
+---
+
+## Fluxo do Coordenador
+
+```text
+1. Login como coordenador
+2. Clica em "Equipe" no header
+3. Vê lista de plantonistas e diaristas
+4. Vê usuários pendentes em destaque
+5. Clica em Aprovar/Rejeitar
+6. Sistema atualiza via RLS (backend valida)
+```
+
+---
+
+## Resultado Esperado
+
+- **Coordenadores**: Podem aprovar equipe assistencial rapidamente
+- **Admins**: Mantêm controle total sobre coordenadores e configurações
+- **Segurança**: Não há escalação de privilégios - coordenadores não podem se promover ou promover outros
+
