@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Building2, Calendar, Loader2, AlertTriangle, XCircle } from 'lucide-react';
+import { Building2, Calendar, Loader2, AlertTriangle, XCircle, Clock, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { STATUS_CONFIG, NIR_TRANSITIONS, DENIAL_STATUSES, getSupportLabel, formatDateTime } from '@/lib/regulation-config';
 import type { PatientRegulation, RegulationStatus } from '@/types/database';
@@ -251,18 +251,67 @@ export function NIRRegulationDialog({
                   {/* Action buttons - hidden when in denial mode */}
                   {availableTransitions.length > 0 && !isInDenialMode && (
                     <div className="flex flex-wrap gap-2 pt-2 border-t">
-                      {availableTransitions.map((transition) => (
-                        <Button
-                          key={transition.status}
-                          variant={transition.variant || 'default'}
-                          size="sm"
-                          onClick={() => handleActionClick(reg, transition.status)}
-                          disabled={isSaving}
-                        >
-                          {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                          {transition.label}
-                        </Button>
-                      ))}
+                      {availableTransitions.map((transition) => {
+                        // Double-check logic for transfer status
+                        const isTransferAction = transition.status === 'transferido';
+                        const teamConfirmed = reg.team_confirmed_at;
+
+                        // If transfer action and team hasn't confirmed yet
+                        if (isTransferAction && !teamConfirmed) {
+                          return (
+                            <div key={transition.status} className="w-full space-y-2">
+                              <div className="text-xs text-muted-foreground italic flex items-center gap-2 p-2 bg-muted/50 rounded">
+                                <Clock className="h-4 w-4" />
+                                Aguardando equipe assistencial confirmar saída do paciente
+                              </div>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                disabled
+                                className="opacity-50"
+                              >
+                                {transition.label}
+                              </Button>
+                            </div>
+                          );
+                        }
+
+                        // If transfer action and team confirmed
+                        if (isTransferAction && teamConfirmed) {
+                          return (
+                            <div key={transition.status} className="w-full space-y-2">
+                              <div className="text-xs text-green-600 dark:text-green-400 flex items-center gap-2 p-2 bg-green-50 dark:bg-green-950/30 rounded">
+                                <CheckCircle2 className="h-4 w-4" />
+                                Equipe confirmou saída em {formatDateTime(teamConfirmed)}
+                              </div>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() => handleActionClick(reg, transition.status)}
+                                disabled={isSaving}
+                                className="bg-green-600 hover:bg-green-700"
+                              >
+                                {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                                {transition.label}
+                              </Button>
+                            </div>
+                          );
+                        }
+
+                        // Standard button for other actions
+                        return (
+                          <Button
+                            key={transition.status}
+                            variant={transition.variant || 'default'}
+                            size="sm"
+                            onClick={() => handleActionClick(reg, transition.status)}
+                            disabled={isSaving}
+                          >
+                            {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                            {transition.label}
+                          </Button>
+                        );
+                      })}
                     </div>
                   )}
 

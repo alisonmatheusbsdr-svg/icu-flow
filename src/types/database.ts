@@ -208,6 +208,9 @@ export interface PatientRegulation {
   change_reason: string | null;
   changed_at: string | null;
   changed_by: string | null;
+  // Dupla checagem - confirmação pela equipe assistencial
+  team_confirmed_at: string | null;
+  team_confirmed_by: string | null;
   // Outros
   updated_at: string;
   is_active: boolean;
