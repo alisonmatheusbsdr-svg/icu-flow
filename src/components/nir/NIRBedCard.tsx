@@ -3,9 +3,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { NIRRegulationDialog } from './NIRRegulationDialog';
-import { Wind, Heart, Pill, Ban, Building2, Clock, Check, XCircle } from 'lucide-react';
+import { Wind, Heart, Pill, Ban, Building2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Bed, Patient, PatientRegulation } from '@/types/database';
+import { STATUS_CONFIG, ACTIVE_STATUSES } from '@/lib/regulation-config';
+import type { Bed, Patient, PatientRegulation, RegulationStatus } from '@/types/database';
 
 interface PatientWithModality extends Patient {
   respiratory_modality?: string;
@@ -29,12 +30,6 @@ const MODALITY_BADGES: Record<string, { badge: string; className: string }> = {
   'traqueostomia': { badge: 'TQT', className: 'bg-purple-500/20 text-purple-600 border-purple-500/30' },
 };
 
-const STATUS_CONFIG = {
-  aguardando: { icon: Clock, className: 'text-amber-600' },
-  confirmado: { icon: Check, className: 'text-green-600' },
-  negado: { icon: XCircle, className: 'text-red-600' },
-};
-
 export function NIRBedCard({ bed, patient, onUpdate }: NIRBedCardProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
@@ -43,7 +38,21 @@ export function NIRBedCard({ bed, patient, onUpdate }: NIRBedCardProps) {
   );
 
   const activeRegulations = patient.patient_regulation?.filter(r => r.is_active) || [];
-  const pendingCount = activeRegulations.filter(r => r.status === 'aguardando').length;
+  
+  // Count pending actions (status that requires NIR action)
+  const pendingCount = activeRegulations.filter(r => 
+    r.status === 'aguardando_regulacao' || r.status === 'regulado' || r.status === 'aguardando_transferencia'
+  ).length;
+
+  // Get most urgent status for button color
+  const getMostUrgentStatus = (): RegulationStatus | null => {
+    if (activeRegulations.some(r => r.status === 'aguardando_regulacao')) return 'aguardando_regulacao';
+    if (activeRegulations.some(r => r.status === 'regulado')) return 'regulado';
+    if (activeRegulations.some(r => r.status === 'aguardando_transferencia')) return 'aguardando_transferencia';
+    return null;
+  };
+
+  const urgentStatus = getMostUrgentStatus();
 
   return (
     <>
@@ -82,21 +91,20 @@ export function NIRBedCard({ bed, patient, onUpdate }: NIRBedCardProps) {
             )}
           </div>
 
-          {/* Regulation summary badges */}
+          {/* Regulation status badges */}
           {activeRegulations.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-3">
               {activeRegulations.slice(0, 3).map((reg) => {
-                const status = reg.status as keyof typeof STATUS_CONFIG;
-                const StatusIcon = STATUS_CONFIG[status]?.icon || Clock;
-                const statusClass = STATUS_CONFIG[status]?.className || 'text-muted-foreground';
+                const statusConfig = STATUS_CONFIG[reg.status] || STATUS_CONFIG.aguardando_regulacao;
+                const StatusIcon = statusConfig.icon;
                 return (
                   <Badge 
                     key={reg.id} 
                     variant="outline" 
-                    className={cn("text-xs gap-1", statusClass)}
+                    className={cn("text-xs gap-1", statusConfig.className)}
                   >
                     <StatusIcon className="h-3 w-3" />
-                    {reg.support_type.slice(0, 4)}
+                    {statusConfig.shortLabel}
                   </Badge>
                 );
               })}
@@ -110,18 +118,20 @@ export function NIRBedCard({ bed, patient, onUpdate }: NIRBedCardProps) {
           
           {/* Regulation button */}
           <Button
-            variant={pendingCount > 0 ? 'default' : 'outline'}
+            variant={urgentStatus ? 'default' : 'outline'}
             size="sm"
             className={cn(
               "w-full gap-2",
-              pendingCount > 0 && "bg-amber-600 hover:bg-amber-700"
+              urgentStatus === 'aguardando_regulacao' && "bg-amber-600 hover:bg-amber-700",
+              urgentStatus === 'regulado' && "bg-blue-600 hover:bg-blue-700",
+              urgentStatus === 'aguardando_transferencia' && "bg-green-600 hover:bg-green-700"
             )}
             onClick={() => setIsDialogOpen(true)}
           >
             <Building2 className="h-4 w-4" />
             Regulação
             {pendingCount > 0 && (
-              <Badge className="ml-1 bg-white text-amber-700 text-xs h-5 w-5 p-0 flex items-center justify-center rounded-full">
+              <Badge className="ml-1 bg-white text-foreground text-xs h-5 w-5 p-0 flex items-center justify-center rounded-full">
                 {pendingCount}
               </Badge>
             )}

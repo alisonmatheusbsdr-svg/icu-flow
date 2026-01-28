@@ -14,7 +14,7 @@ import { PatientExamsDialog } from './PatientExamsDialog';
 import { PatientComplexityBar } from './PatientComplexityBar';
 import { PrintPreviewModal } from '@/components/print/PrintPreviewModal';
 import { usePrintPatient } from '@/hooks/usePrintPatient';
-import type { PatientWithDetails, Profile, RespiratorySupport, PatientPrecaution } from '@/types/database';
+import type { PatientWithDetails, Profile, RespiratorySupport, PatientPrecaution, RegulationStatus } from '@/types/database';
 
 interface PatientModalProps {
   patientId: string | null;
@@ -90,7 +90,7 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
       })),
       patient_regulation: (regulationRes.data || []).map(r => ({
         ...r,
-        status: r.status as 'aguardando' | 'confirmado' | 'negado'
+        status: r.status as RegulationStatus
       }))
     };
 

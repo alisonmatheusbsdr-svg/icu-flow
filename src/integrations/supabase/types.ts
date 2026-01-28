@@ -286,41 +286,65 @@ export type Database = {
       }
       patient_regulation: {
         Row: {
+          change_reason: string | null
+          changed_at: string | null
+          changed_by: string | null
+          confirmed_at: string | null
           created_by: string
           denial_reason: string | null
+          denied_at: string | null
           id: string
           is_active: boolean
           notes: string | null
           patient_id: string
+          previous_support_type: string | null
+          regulated_at: string | null
           requested_at: string
           status: string
           support_type: string
+          transferred_at: string | null
           updated_at: string
           updated_by: string | null
         }
         Insert: {
+          change_reason?: string | null
+          changed_at?: string | null
+          changed_by?: string | null
+          confirmed_at?: string | null
           created_by: string
           denial_reason?: string | null
+          denied_at?: string | null
           id?: string
           is_active?: boolean
           notes?: string | null
           patient_id: string
+          previous_support_type?: string | null
+          regulated_at?: string | null
           requested_at?: string
           status?: string
           support_type: string
+          transferred_at?: string | null
           updated_at?: string
           updated_by?: string | null
         }
         Update: {
+          change_reason?: string | null
+          changed_at?: string | null
+          changed_by?: string | null
+          confirmed_at?: string | null
           created_by?: string
           denial_reason?: string | null
+          denied_at?: string | null
           id?: string
           is_active?: boolean
           notes?: string | null
           patient_id?: string
+          previous_support_type?: string | null
+          regulated_at?: string | null
           requested_at?: string
           status?: string
           support_type?: string
+          transferred_at?: string | null
           updated_at?: string
           updated_by?: string | null
         }

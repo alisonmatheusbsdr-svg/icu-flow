@@ -4,12 +4,12 @@ import { useAuth } from '@/hooks/useAuth';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Building2, Calendar, Clock, Check, XCircle, Save, Loader2 } from 'lucide-react';
+import { Building2, Calendar, Loader2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
-import type { PatientRegulation } from '@/types/database';
+import { STATUS_CONFIG, NIR_TRANSITIONS, DENIAL_STATUSES, getSupportLabel, formatDateTime } from '@/lib/regulation-config';
+import type { PatientRegulation, RegulationStatus } from '@/types/database';
 
 interface NIRRegulationDialogProps {
   patientId: string;
@@ -21,41 +21,6 @@ interface NIRRegulationDialogProps {
   onUpdate: () => void;
 }
 
-const SUPPORT_TYPES = [
-  { type: 'NEUROLOGIA', label: 'Neurologia', emoji: '🧠' },
-  { type: 'CARDIOLOGIA', label: 'Cardiologia', emoji: '❤️' },
-  { type: 'CRONICOS', label: 'Crônicos', emoji: '🏥' },
-  { type: 'TORACICA', label: 'Torácica', emoji: '🫁' },
-  { type: 'ONCOLOGIA', label: 'Oncologia', emoji: '🎗️' },
-  { type: 'NEFROLOGIA', label: 'Nefrologia', emoji: '💧' },
-  { type: 'OUTROS', label: 'Outros', emoji: '📋' },
-] as const;
-
-const STATUS_CONFIG = {
-  aguardando: { 
-    label: 'Aguardando', 
-    className: 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700',
-    icon: Clock
-  },
-  confirmado: { 
-    label: 'Confirmado', 
-    className: 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700',
-    icon: Check
-  },
-  negado: { 
-    label: 'Negado', 
-    className: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700',
-    icon: XCircle
-  },
-} as const;
-
-type RegulationStatus = keyof typeof STATUS_CONFIG;
-
-interface RegulationEdit {
-  status: RegulationStatus;
-  denial_reason: string;
-}
-
 export function NIRRegulationDialog({
   patientInitials,
   bedNumber,
@@ -65,86 +30,72 @@ export function NIRRegulationDialog({
   onUpdate
 }: NIRRegulationDialogProps) {
   const { user } = useAuth();
-  const [editingStates, setEditingStates] = useState<Record<string, RegulationEdit>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [denialReasons, setDenialReasons] = useState<Record<string, string>>({});
 
-  const getSupportLabel = (type: string) => {
-    const found = SUPPORT_TYPES.find(s => s.type === type);
-    return found ? `${found.emoji} ${found.label}` : type;
-  };
-
-  const formatDateTime = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-BR', { 
-      day: '2-digit', 
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const getEditState = (reg: PatientRegulation): RegulationEdit => {
-    if (editingStates[reg.id]) {
-      return editingStates[reg.id];
+  const getTimestampField = (status: RegulationStatus): string | null => {
+    switch (status) {
+      case 'regulado': return 'regulated_at';
+      case 'aguardando_transferencia': return 'confirmed_at';
+      case 'transferido': return 'transferred_at';
+      case 'negado_nir':
+      case 'negado_hospital': return 'denied_at';
+      default: return null;
     }
-    return {
-      status: reg.status as RegulationStatus,
-      denial_reason: reg.denial_reason || ''
-    };
   };
 
-  const updateEditState = (regId: string, updates: Partial<RegulationEdit>) => {
-    setEditingStates(prev => ({
-      ...prev,
-      [regId]: {
-        ...getEditState(regulations.find(r => r.id === regId)!),
-        ...prev[regId],
-        ...updates
+  const handleTransition = async (reg: PatientRegulation, newStatus: RegulationStatus) => {
+    // Check if denial reason is required
+    if (DENIAL_STATUSES.includes(newStatus)) {
+      const reason = denialReasons[reg.id];
+      if (!reason?.trim()) {
+        toast.error('Justificativa obrigatória para negativa');
+        return;
       }
-    }));
-  };
-
-  const hasChanges = (reg: PatientRegulation): boolean => {
-    const current = getEditState(reg);
-    return (
-      current.status !== reg.status ||
-      current.denial_reason !== (reg.denial_reason || '')
-    );
-  };
-
-  const handleSave = async (reg: PatientRegulation) => {
-    const editState = getEditState(reg);
-    
-    // Validate denial reason if status is "negado"
-    if (editState.status === 'negado' && !editState.denial_reason.trim()) {
-      toast.error('Justificativa obrigatória para regulação negada');
-      return;
     }
 
     setSavingId(reg.id);
-    
+
+    const timestampField = getTimestampField(newStatus);
+    const updateData: Record<string, unknown> = {
+      status: newStatus,
+      updated_by: user?.id
+    };
+
+    // Set the appropriate timestamp
+    if (timestampField) {
+      updateData[timestampField] = new Date().toISOString();
+    }
+
+    // Set denial reason if applicable
+    if (DENIAL_STATUSES.includes(newStatus)) {
+      updateData.denial_reason = denialReasons[reg.id];
+    } else {
+      // Clear denial fields when moving away from denied status
+      if (newStatus === 'regulado' && reg.status === 'negado_hospital') {
+        updateData.denied_at = null;
+        updateData.denial_reason = null;
+      }
+    }
+
     const { error } = await supabase
       .from('patient_regulation')
-      .update({
-        status: editState.status,
-        denial_reason: editState.status === 'negado' ? editState.denial_reason : null,
-        updated_by: user?.id
-      })
+      .update(updateData)
       .eq('id', reg.id);
 
     if (error) {
       toast.error('Erro ao atualizar regulação');
       console.error(error);
     } else {
-      toast.success(`Regulação atualizada para ${STATUS_CONFIG[editState.status].label}`);
-      // Clear edit state
-      setEditingStates(prev => {
+      toast.success(`Status alterado para ${STATUS_CONFIG[newStatus].label}`);
+      // Clear denial reason state
+      setDenialReasons(prev => {
         const { [reg.id]: _, ...rest } = prev;
         return rest;
       });
       onUpdate();
     }
-    
+
     setSavingId(null);
   };
 
@@ -167,100 +118,113 @@ export function NIRRegulationDialog({
             </p>
           ) : (
             activeRegulations.map((reg) => {
-              const editState = getEditState(reg);
-              const statusConfig = STATUS_CONFIG[editState.status];
+              const statusConfig = STATUS_CONFIG[reg.status] || STATUS_CONFIG.aguardando_regulacao;
               const StatusIcon = statusConfig.icon;
-              const isEdited = hasChanges(reg);
+              const availableTransitions = NIR_TRANSITIONS[reg.status] || [];
               const isSaving = savingId === reg.id;
+              const needsDenialReason = availableTransitions.some(t => DENIAL_STATUSES.includes(t.status));
 
               return (
-                <div 
-                  key={reg.id} 
-                  className={`border rounded-lg p-4 space-y-3 ${isEdited ? 'border-primary bg-primary/5' : ''}`}
-                >
+                <div key={reg.id} className="border rounded-lg p-4 space-y-3">
                   {/* Header */}
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-lg">{getSupportLabel(reg.support_type)}</span>
-                    </div>
+                    <span className="font-medium text-lg">{getSupportLabel(reg.support_type)}</span>
                     <Badge variant="outline" className={statusConfig.className}>
                       <StatusIcon className="h-3 w-3 mr-1" />
                       {statusConfig.label}
                     </Badge>
                   </div>
 
-                  {/* Request date */}
-                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                    <Calendar className="h-3.5 w-3.5" />
-                    Solicitado em: {formatDateTime(reg.requested_at)}
+                  {/* Timeline */}
+                  <div className="text-xs text-muted-foreground space-y-0.5">
+                    <div className="flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      Solicitado: {formatDateTime(reg.requested_at)}
+                    </div>
+                    {reg.regulated_at && (
+                      <div>Regulado: {formatDateTime(reg.regulated_at)}</div>
+                    )}
+                    {reg.confirmed_at && (
+                      <div>Vaga confirmada: {formatDateTime(reg.confirmed_at)}</div>
+                    )}
+                    {reg.transferred_at && (
+                      <div>Transferido: {formatDateTime(reg.transferred_at)}</div>
+                    )}
                   </div>
 
-                  {/* Status selector */}
-                  <div className="space-y-2">
-                    <Label>Status</Label>
-                    <Select 
-                      value={editState.status} 
-                      onValueChange={(value) => updateEditState(reg.id, { status: value as RegulationStatus })}
-                      disabled={isSaving}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(Object.keys(STATUS_CONFIG) as RegulationStatus[]).map((status) => {
-                          const config = STATUS_CONFIG[status];
-                          const Icon = config.icon;
-                          return (
-                            <SelectItem key={status} value={status}>
-                              <span className="flex items-center gap-2">
-                                <Icon className="h-4 w-4" />
-                                {config.label}
-                              </span>
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {/* Change specialty indicator */}
+                  {reg.previous_support_type && (
+                    <div className="flex items-start gap-2 p-2 bg-amber-50 dark:bg-amber-950/30 rounded text-xs">
+                      <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-amber-800 dark:text-amber-200 font-medium">
+                          Especialidade alterada pela equipe
+                        </p>
+                        <p className="text-amber-700 dark:text-amber-300">
+                          De: {getSupportLabel(reg.previous_support_type)}
+                        </p>
+                        {reg.change_reason && (
+                          <p className="text-amber-600 dark:text-amber-400 italic mt-1">
+                            "{reg.change_reason}"
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
-                  {/* Denial reason (only shown if status is "negado") */}
-                  {editState.status === 'negado' && (
+                  {/* Existing denial reason */}
+                  {reg.denial_reason && (
+                    <div className="p-2 bg-red-50 dark:bg-red-950/30 rounded text-sm">
+                      <span className="font-medium text-red-700 dark:text-red-300">
+                        {reg.status === 'negado_nir' ? 'Motivo (NIR): ' : 'Motivo (Hospital): '}
+                      </span>
+                      <span className="text-red-600 dark:text-red-400">{reg.denial_reason}</span>
+                    </div>
+                  )}
+
+                  {/* Denial reason input (when needed for next action) */}
+                  {needsDenialReason && (
                     <div className="space-y-2">
-                      <Label className="flex items-center gap-1">
-                        Justificativa <span className="text-destructive">*</span>
+                      <Label className="text-xs flex items-center gap-1">
+                        Justificativa para Negativa <span className="text-destructive">*</span>
                       </Label>
                       <Textarea
-                        placeholder="Informe o motivo da recusa (obrigatório)"
-                        value={editState.denial_reason}
-                        onChange={(e) => updateEditState(reg.id, { denial_reason: e.target.value })}
+                        placeholder="Informe o motivo da recusa..."
+                        value={denialReasons[reg.id] || ''}
+                        onChange={(e) => setDenialReasons(prev => ({ ...prev, [reg.id]: e.target.value }))}
                         disabled={isSaving}
-                        className="min-h-[80px]"
+                        className="min-h-[60px] text-sm"
                       />
                     </div>
                   )}
 
-                  {/* Existing denial reason display (if already denied and not editing) */}
-                  {reg.status === 'negado' && reg.denial_reason && editState.status !== 'negado' && (
-                    <div className="p-2 bg-destructive/10 rounded text-sm">
-                      <span className="font-medium text-destructive">Motivo anterior:</span>{' '}
-                      <span className="text-muted-foreground">{reg.denial_reason}</span>
+                  {/* Action buttons */}
+                  {availableTransitions.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pt-2 border-t">
+                      {availableTransitions.map((transition) => (
+                        <Button
+                          key={transition.status}
+                          variant={transition.variant || 'default'}
+                          size="sm"
+                          onClick={() => handleTransition(reg, transition.status)}
+                          disabled={isSaving}
+                        >
+                          {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                          {transition.label}
+                        </Button>
+                      ))}
                     </div>
                   )}
 
-                  {/* Save button */}
-                  {isEdited && (
-                    <Button 
-                      onClick={() => handleSave(reg)} 
-                      disabled={isSaving}
-                      className="w-full"
-                    >
-                      {isSaving ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <Save className="h-4 w-4 mr-2" />
-                      )}
-                      Salvar Alterações
-                    </Button>
+                  {/* Final state indicator */}
+                  {availableTransitions.length === 0 && (
+                    <p className="text-xs text-muted-foreground italic pt-2 border-t">
+                      {reg.status === 'transferido' 
+                        ? '✓ Regulação concluída com sucesso.'
+                        : reg.status === 'negado_nir'
+                        ? 'Regulação negada. A equipe pode criar nova solicitação.'
+                        : 'Nenhuma ação disponível para este status.'}
+                    </p>
                   )}
                 </div>
               );
