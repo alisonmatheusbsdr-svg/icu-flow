@@ -1,81 +1,51 @@
 
+# Plano: Simplificar Badge de Regulação no BedCard
 
-# Plano: Corrigir Politica RLS para Acoes da Equipe Assistencial
+## Objetivo
 
-## Problema Identificado
+Manter apenas o badge verde "VAGA" no BedCard quando há uma regulação em `aguardando_transferencia`. Remover todos os outros badges relacionados a regulação (impossibilidade clínica, prazo vencido, cancelamento pendente, nova listagem).
 
-O erro "Erro ao sinalizar impossibilidade" ocorre porque as politicas RLS da tabela `patient_regulation` nao permitem que a equipe assistencial atualize os novos campos de clinical hold e cancelamento.
+## Alteração
 
-**Politica atual:**
-```
-Care team can deactivate regulations:
-- qual: is_approved(auth.uid()) AND NOT has_role(auth.uid(), 'nir')
-- with_check: is_active = false
-```
+### Arquivo: `src/components/dashboard/BedCard.tsx`
 
-Isso significa que a equipe assistencial **so pode fazer UPDATE quando `is_active = false`**, bloqueando atualizacoes nos campos `clinical_hold_at`, `clinical_hold_reason`, `team_cancel_requested_at`, etc.
+**Antes (linhas 270-361):** Lógica complexa com múltiplos badges condicionais:
+- CANCELAMENTO PEND. (vermelho)
+- NOVA LISTAGEM SOLIC. (azul)
+- PRAZO VENCIDO (vermelho pulsante)
+- AGUARD. MELHORA (amarelo)
+- VAGA (verde pulsante)
 
-## Solucao
+**Depois:** Simplificado para mostrar apenas o badge "VAGA":
 
-Criar uma nova politica RLS que permita a equipe assistencial atualizar os campos especificos de sinalizacao (clinical hold, cancelamento e relisting) sem a restricao de `is_active = false`.
+```tsx
+{/* Awaiting transfer notification badge */}
+{(() => {
+  const awaitingTransfer = patient.patient_regulation?.find(
+    r => r.is_active && r.status === 'aguardando_transferencia'
+  );
+  if (!awaitingTransfer) return null;
 
----
-
-## Secao Tecnica
-
-### Migracao SQL Necessaria
-
-```sql
--- Drop a politica restritiva atual para care team
-DROP POLICY IF EXISTS "Care team can deactivate regulations" ON patient_regulation;
-
--- Criar politica para permitir equipe assistencial desativar regulacoes
-CREATE POLICY "Care team can deactivate regulations"
-ON patient_regulation
-FOR UPDATE
-TO authenticated
-USING (
-  is_approved(auth.uid()) AND 
-  NOT has_role(auth.uid(), 'nir'::app_role)
-)
-WITH CHECK (is_active = false);
-
--- Criar nova politica para permitir equipe assistencial sinalizar acoes
-CREATE POLICY "Care team can signal clinical actions"
-ON patient_regulation
-FOR UPDATE
-TO authenticated
-USING (
-  is_approved(auth.uid()) AND 
-  NOT has_role(auth.uid(), 'nir'::app_role) AND
-  status = 'aguardando_transferencia'
-)
-WITH CHECK (
-  -- Permite atualizar campos de sinalizacao, mas nao o status principal
-  status = 'aguardando_transferencia'
-);
+  // Only show green vacancy badge
+  return (
+    <div className="mt-2 p-2 bg-green-100 dark:bg-green-950/40 rounded-md border border-green-300 dark:border-green-800 animate-pulse">
+      <div className="flex items-center gap-1.5 text-green-700 dark:text-green-300 text-xs font-medium">
+        <Truck className="h-3.5 w-3.5" />
+        VAGA - {getSupportLabel(awaitingTransfer.support_type)}
+      </div>
+    </div>
+  );
+})()}
 ```
 
-### Explicacao da Nova Politica
+## Resultado
 
-A nova politica "Care team can signal clinical actions":
+- Dashboard mais limpo e menos poluído visualmente
+- Equipe vê apenas quando há vaga disponível
+- Detalhes de status (impossibilidade clínica, prazos, etc.) ficam apenas dentro do modal do paciente na seção "Regulação"
 
-1. **USING (quem pode):** Usuarios aprovados que NAO sao NIR, e a regulacao esta em `aguardando_transferencia`
-2. **WITH CHECK (o que pode):** Permite atualizar desde que o status permaneca `aguardando_transferencia` (nao pode mudar o status)
+## Limpeza de Código
 
-Isso permite que a equipe atualize:
-- `clinical_hold_at`, `clinical_hold_by`, `clinical_hold_reason`
-- `team_cancel_requested_at`, `team_cancel_requested_by`, `team_cancel_reason`
-- `relisting_requested_at`, `relisting_requested_by`, `relisting_reason`
-- `team_confirmed_at`, `team_confirmed_by`
-
-### Resultado Esperado
-
-Apos a migracao, a equipe assistencial podera:
-- Sinalizar impossibilidade clinica
-- Solicitar cancelamento
-- Solicitar nova listagem
-- Confirmar transferencia
-
-Sem alterar o status principal da regulacao (que continua sendo responsabilidade do NIR).
-
+Remover imports não utilizados após a simplificação:
+- `isDeadlineExpired` e `formatDate` de `@/lib/regulation-config` (se não usados em outro lugar)
+- `Clock` e `AlertTriangle` de `lucide-react` (se não usados em outro lugar)
