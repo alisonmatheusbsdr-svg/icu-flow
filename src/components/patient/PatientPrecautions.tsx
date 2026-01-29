@@ -28,6 +28,7 @@ import {
 interface PatientPrecautionsProps {
   patient: PatientWithDetails;
   onUpdate: () => void;
+  canEdit?: boolean;
 }
 
 interface PendingPrecaution {
@@ -129,9 +130,11 @@ const getPrecautionLabel = (type: string, level?: string | null, notes?: string 
   return type;
 };
 
-export const PatientPrecautions = ({ patient, onUpdate }: PatientPrecautionsProps) => {
+export const PatientPrecautions = ({ patient, onUpdate, canEdit: canEditProp }: PatientPrecautionsProps) => {
   const { user } = useAuth();
-  const { canEdit } = useUnit();
+  const { canEdit: canEditFromUnit } = useUnit();
+  // Use prop if provided, otherwise fall back to unit hook
+  const canEdit = canEditProp ?? canEditFromUnit;
   const [isLoading, setIsLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [pendingSelections, setPendingSelections] = useState<PendingPrecaution[]>([]);

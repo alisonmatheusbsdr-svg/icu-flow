@@ -37,6 +37,7 @@ const CENTRAL_ACCESS_TYPES = ['central_nao_tunelizado', 'central_tunelizado', 'h
 interface PatientClinicalDataProps {
   patient: PatientWithDetails;
   onUpdate: () => void;
+  canEdit?: boolean;
 }
 
 // Standard devices with labels
@@ -300,7 +301,7 @@ const DIET_TYPES: Record<string, { label: string; emoji: string }> = {
   'gtt': { label: 'GTT', emoji: '🔘' },
 };
 
-export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataProps) {
+export function PatientClinicalData({ patient, onUpdate, canEdit = true }: PatientClinicalDataProps) {
   const [newDevice, setNewDevice] = useState('');
   const [newAtb, setNewAtb] = useState('');
   const [dvaInputs, setDvaInputs] = useState<Record<string, string>>({});
@@ -644,73 +645,75 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
           </div>
           
           {/* Add device dropdown - now in title */}
-          <DropdownMenu onOpenChange={(open) => { if (!open) { setShowCustomDeviceInput(false); setNewDevice(''); } }}>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" className="h-7 w-7">
-                <Plus className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              {getDevicesWithStatus().map(({ device, isDisabled }) => (
-                <DropdownMenuItem
-                  key={device}
-                  onClick={() => !isDisabled && handleAddDevice(device)}
-                  disabled={isDisabled}
-                  className={cn(
-                    isDisabled 
-                      ? "opacity-50 cursor-not-allowed text-gray-400" 
-                      : "cursor-pointer"
-                  )}
-                >
-                  <span className={cn("font-medium", isDisabled && "text-gray-400")}>
-                    {device}
-                  </span>
-                  <span className={cn(
-                    "ml-2 text-xs",
-                    isDisabled ? "text-gray-300" : "text-muted-foreground"
-                  )}>
-                    {DEVICE_LABELS[device]}
-                  </span>
-                </DropdownMenuItem>
-              ))}
-              
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel className="text-xs text-muted-foreground">Personalizado</DropdownMenuLabel>
-              
-              {!showCustomDeviceInput ? (
-                <DropdownMenuItem 
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setShowCustomDeviceInput(true);
-                  }}
-                  className="cursor-pointer"
-                >
-                  <Plus className="h-3.5 w-3.5 mr-2" />
-                  Adicionar outro...
-                </DropdownMenuItem>
-              ) : (
-                <div className="px-2 py-1.5">
-                  <Input
-                    autoFocus
-                    placeholder="Nome do dispositivo..."
-                    value={newDevice}
-                    onChange={(e) => setNewDevice(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && newDevice.trim()) {
-                        handleAddDevice(newDevice);
-                        setShowCustomDeviceInput(false);
-                      }
-                      if (e.key === 'Escape') {
-                        setShowCustomDeviceInput(false);
-                        setNewDevice('');
-                      }
+          {canEdit && (
+            <DropdownMenu onOpenChange={(open) => { if (!open) { setShowCustomDeviceInput(false); setNewDevice(''); } }}>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" className="h-7 w-7">
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {getDevicesWithStatus().map(({ device, isDisabled }) => (
+                  <DropdownMenuItem
+                    key={device}
+                    onClick={() => !isDisabled && handleAddDevice(device)}
+                    disabled={isDisabled}
+                    className={cn(
+                      isDisabled 
+                        ? "opacity-50 cursor-not-allowed text-gray-400" 
+                        : "cursor-pointer"
+                    )}
+                  >
+                    <span className={cn("font-medium", isDisabled && "text-gray-400")}>
+                      {device}
+                    </span>
+                    <span className={cn(
+                      "ml-2 text-xs",
+                      isDisabled ? "text-gray-300" : "text-muted-foreground"
+                    )}>
+                      {DEVICE_LABELS[device]}
+                    </span>
+                  </DropdownMenuItem>
+                ))}
+                
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-xs text-muted-foreground">Personalizado</DropdownMenuLabel>
+                
+                {!showCustomDeviceInput ? (
+                  <DropdownMenuItem 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setShowCustomDeviceInput(true);
                     }}
-                    className="h-8 text-sm"
-                  />
-                </div>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                    className="cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-2" />
+                    Adicionar outro...
+                  </DropdownMenuItem>
+                ) : (
+                  <div className="px-2 py-1.5">
+                    <Input
+                      autoFocus
+                      placeholder="Nome do dispositivo..."
+                      value={newDevice}
+                      onChange={(e) => setNewDevice(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newDevice.trim()) {
+                          handleAddDevice(newDevice);
+                          setShowCustomDeviceInput(false);
+                        }
+                        if (e.key === 'Escape') {
+                          setShowCustomDeviceInput(false);
+                          setNewDevice('');
+                        }
+                      }}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
         
         <div className="mt-3">
@@ -834,13 +837,15 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
                         {alertLevel === 'danger' && (
                           <AlertCircle className={`h-3.5 w-3.5 ${styles.icon}`} />
                         )}
-                        <button
-                          onClick={() => deviceData && handleRemoveDevice(deviceData.id)}
-                          disabled={isLoading}
-                          className="ml-0.5 p-0.5 rounded hover:bg-foreground/10 transition-colors"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
+                        {canEdit && (
+                          <button
+                            onClick={() => deviceData && handleRemoveDevice(deviceData.id)}
+                            disabled={isLoading}
+                            className="ml-0.5 p-0.5 rounded hover:bg-foreground/10 transition-colors"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
                       </div>
                     </TooltipTrigger>
                     <TooltipContent>
@@ -868,13 +873,15 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
                     onDateChange={(date) => handleUpdateDeviceDate(device.id, date)}
                     className="text-xs opacity-80"
                   />
-                  <button
-                    onClick={() => handleRemoveDevice(device.id)}
-                    disabled={isLoading}
-                    className="ml-0.5 p-0.5 rounded hover:bg-destructive/20 transition-colors"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
+                  {canEdit && (
+                    <button
+                      onClick={() => handleRemoveDevice(device.id)}
+                      disabled={isLoading}
+                      className="ml-0.5 p-0.5 rounded hover:bg-destructive/20 transition-colors"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
               ))}
 
@@ -895,6 +902,7 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
         venousAccess={patient.venous_access || []}
         hasActiveVasoactiveDrugs={(patient.vasoactive_drugs?.filter(d => d.is_active).length || 0) > 0}
         onUpdate={onUpdate}
+        canEdit={canEdit}
       />
 
       {/* Vasoactive Drugs */}
@@ -906,7 +914,7 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
           </div>
           
           {/* Add DVA dropdown - now in title */}
-          {(() => {
+          {canEdit && (() => {
             const activeDvaNames = new Set(patient.vasoactive_drugs?.filter(d => d.is_active).map(d => d.drug_name) || []);
             const availableDvas = Object.entries(VASOACTIVE_DRUGS).filter(([name]) => !activeDvaNames.has(name));
             
@@ -1020,13 +1028,15 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
                       />
                     )}
                     
-                    <button
-                      onClick={() => handleRemoveDva(dva.id)}
-                      disabled={isLoading}
-                      className="ml-0.5 p-0.5 rounded hover:bg-foreground/10 transition-colors"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
+                    {canEdit && (
+                      <button
+                        onClick={() => handleRemoveDva(dva.id)}
+                        disabled={isLoading}
+                        className="ml-0.5 p-0.5 rounded hover:bg-foreground/10 transition-colors"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -1046,6 +1056,7 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
         respiratorySupport={patient.respiratory_support || null}
         currentDietType={patient.diet_type}
         onUpdate={onUpdate}
+        canEdit={canEdit}
       />
 
       {/* Antibiotics / Antibioticoterapia */}
@@ -1069,7 +1080,7 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
             </Button>
             
             {/* Add antibiotic dropdown */}
-          {(() => {
+          {canEdit && (() => {
             const activeAtbNames = new Set(patient.antibiotics?.map(a => a.antibiotic_name) || []);
             
             return (
@@ -1167,14 +1178,16 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
                       onDateChange={(date) => handleUpdateAntibioticDate(atb.id, date)}
                       className="atb-day"
                     />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 ml-2 text-muted-foreground hover:text-destructive"
-                      onClick={() => handleRemoveAntibiotic(atb.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {canEdit && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 ml-2 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleRemoveAntibiotic(atb.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 );
               })}
@@ -1196,32 +1209,34 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
             Profilaxias
           </div>
           
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" className="h-7 w-7">
-                <Plus className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              {Object.entries(PROPHYLAXIS_TYPES)
-                .filter(([type]) => !activeProphylaxisTypes.has(type))
-                .map(([type, config]) => (
-                  <DropdownMenuItem
-                    key={type}
-                    onClick={() => handleAddProphylaxis(type)}
-                    className="cursor-pointer"
-                  >
-                    <span className="mr-2">{config.emoji}</span>
-                    {config.label}
+          {canEdit && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" className="h-7 w-7">
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {Object.entries(PROPHYLAXIS_TYPES)
+                  .filter(([type]) => !activeProphylaxisTypes.has(type))
+                  .map(([type, config]) => (
+                    <DropdownMenuItem
+                      key={type}
+                      onClick={() => handleAddProphylaxis(type)}
+                      className="cursor-pointer"
+                    >
+                      <span className="mr-2">{config.emoji}</span>
+                      {config.label}
+                    </DropdownMenuItem>
+                  ))}
+                {Object.keys(PROPHYLAXIS_TYPES).every(type => activeProphylaxisTypes.has(type)) && (
+                  <DropdownMenuItem disabled>
+                    Todas as profilaxias já estão ativas
                   </DropdownMenuItem>
-                ))}
-              {Object.keys(PROPHYLAXIS_TYPES).every(type => activeProphylaxisTypes.has(type)) && (
-                <DropdownMenuItem disabled>
-                  Todas as profilaxias já estão ativas
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
         
         <div className="mt-3">
@@ -1239,13 +1254,15 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
                             ? 'Prot. Gástrica' 
                             : prophylaxis.prophylaxis_type}
                         </span>
-                        <button
-                          onClick={() => handleRemoveProphylaxis(prophylaxis.id)}
-                          disabled={isLoading}
-                          className="ml-0.5 p-0.5 rounded hover:bg-primary/20 transition-colors"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
+                        {canEdit && (
+                          <button
+                            onClick={() => handleRemoveProphylaxis(prophylaxis.id)}
+                            disabled={isLoading}
+                            className="ml-0.5 p-0.5 rounded hover:bg-primary/20 transition-colors"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
                       </div>
                     </TooltipTrigger>
                     <TooltipContent>
@@ -1272,59 +1289,61 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
             Dieta
           </div>
           
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-7 gap-1">
-                {patient.diet_type ? (
+          {canEdit ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-7 gap-1">
+                  {patient.diet_type ? (
+                    <>
+                      <span>{DIET_TYPES[patient.diet_type]?.emoji}</span>
+                      <span className="text-xs">{DIET_TYPES[patient.diet_type]?.label}</span>
+                    </>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">Selecionar</span>
+                  )}
+                  <ChevronDown className="h-3 w-3 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {Object.entries(DIET_TYPES).map(([type, config]) => {
+                  const isDisabledByTOT = type === 'oral' && isPatientOnTOT();
+                  
+                  return (
+                    <DropdownMenuItem
+                      key={type}
+                      onClick={() => !isDisabledByTOT && handleUpdateDiet(type as DietType)}
+                      disabled={isDisabledByTOT}
+                      className={cn(
+                        'cursor-pointer',
+                        patient.diet_type === type && 'bg-accent',
+                        isDisabledByTOT && 'opacity-50 cursor-not-allowed'
+                      )}
+                    >
+                      <span className="mr-2">{config.emoji}</span>
+                      {config.label}
+                      {isDisabledByTOT && (
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          (TOT ativo)
+                        </span>
+                      )}
+                    </DropdownMenuItem>
+                  );
+                })}
+                {patient.diet_type && (
                   <>
-                    <span>{DIET_TYPES[patient.diet_type]?.emoji}</span>
-                    <span className="text-xs">{DIET_TYPES[patient.diet_type]?.label}</span>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => handleUpdateDiet(null)}
+                      className="cursor-pointer text-muted-foreground"
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Remover dieta
+                    </DropdownMenuItem>
                   </>
-                ) : (
-                  <span className="text-xs text-muted-foreground">Selecionar</span>
                 )}
-                <ChevronDown className="h-3 w-3 ml-1" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              {Object.entries(DIET_TYPES).map(([type, config]) => {
-                const isDisabledByTOT = type === 'oral' && isPatientOnTOT();
-                
-                return (
-                  <DropdownMenuItem
-                    key={type}
-                    onClick={() => !isDisabledByTOT && handleUpdateDiet(type as DietType)}
-                    disabled={isDisabledByTOT}
-                    className={cn(
-                      'cursor-pointer',
-                      patient.diet_type === type && 'bg-accent',
-                      isDisabledByTOT && 'opacity-50 cursor-not-allowed'
-                    )}
-                  >
-                    <span className="mr-2">{config.emoji}</span>
-                    {config.label}
-                    {isDisabledByTOT && (
-                      <span className="ml-auto text-xs text-muted-foreground">
-                        (TOT ativo)
-                      </span>
-                    )}
-                  </DropdownMenuItem>
-                );
-              })}
-              {patient.diet_type && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => handleUpdateDiet(null)}
-                    className="cursor-pointer text-muted-foreground"
-                  >
-                    <X className="h-4 w-4 mr-2" />
-                    Remover dieta
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
         </div>
         
         <div className="mt-3">
@@ -1343,7 +1362,8 @@ export function PatientClinicalData({ patient, onUpdate }: PatientClinicalDataPr
       <div className="section-card">
         <PatientPrecautions 
           patient={patient} 
-          onUpdate={onUpdate} 
+          onUpdate={onUpdate}
+          canEdit={canEdit}
         />
       </div>
 
