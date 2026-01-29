@@ -18,6 +18,7 @@ interface VenousAccessSectionProps {
   venousAccess: VenousAccess[];
   hasActiveVasoactiveDrugs: boolean;
   onUpdate: () => void;
+  canEdit?: boolean;
 }
 
 // Access type configuration
@@ -118,7 +119,8 @@ export function VenousAccessSection({
   patientId, 
   venousAccess, 
   hasActiveVasoactiveDrugs, 
-  onUpdate 
+  onUpdate,
+  canEdit = true 
 }: VenousAccessSectionProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -208,14 +210,16 @@ export function VenousAccessSection({
           )}
         </div>
         
-        <Button 
-          variant="outline" 
-          size="icon" 
-          className="h-7 w-7"
-          onClick={() => setIsAddDialogOpen(true)}
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
+        {canEdit && (
+          <Button 
+            variant="outline" 
+            size="icon" 
+            className="h-7 w-7"
+            onClick={() => setIsAddDialogOpen(true)}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        )}
       </div>
       
       <div className="mt-3">
@@ -262,13 +266,15 @@ export function VenousAccessSection({
                       {isPeripheralWithDva && alertLevel === 'ok' && (
                         <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
                       )}
-                      <button
-                        onClick={() => handleRemove(access.id)}
-                        disabled={isLoading}
-                        className="ml-0.5 p-0.5 rounded hover:bg-foreground/10 transition-colors"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
+                      {canEdit && (
+                        <button
+                          onClick={() => handleRemove(access.id)}
+                          disabled={isLoading}
+                          className="ml-0.5 p-0.5 rounded hover:bg-foreground/10 transition-colors"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
                     </div>
                   </TooltipTrigger>
                   <TooltipContent>

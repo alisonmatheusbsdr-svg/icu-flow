@@ -35,6 +35,7 @@ interface RespiratorySectionProps {
   respiratorySupport: RespiratorySupport | null;
   currentDietType?: DietType;
   onUpdate: () => void;
+  canEdit?: boolean;
 }
 
 // Modality configuration
@@ -56,7 +57,7 @@ export const CLINICAL_STATUS_CONFIG: Record<string, { label: string; color: stri
   'paliativo': { label: 'Paliativo / conforto', color: 'hsl(var(--muted-foreground))' },
 };
 
-export function RespiratorySection({ patientId, respiratorySupport, currentDietType, onUpdate }: RespiratorySectionProps) {
+export function RespiratorySection({ patientId, respiratorySupport, currentDietType, onUpdate, canEdit = true }: RespiratorySectionProps) {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -158,14 +159,16 @@ export function RespiratorySection({ patientId, respiratorySupport, currentDietT
           Suporte Respiratório
         </div>
         
-        <Button 
-          variant="outline" 
-          size="icon" 
-          className="h-7 w-7"
-          onClick={() => setIsEditOpen(true)}
-        >
-          <Edit2 className="h-4 w-4" />
-        </Button>
+        {canEdit && (
+          <Button 
+            variant="outline" 
+            size="icon" 
+            className="h-7 w-7"
+            onClick={() => setIsEditOpen(true)}
+          >
+            <Edit2 className="h-4 w-4" />
+          </Button>
+        )}
       </div>
       
       <div className="mt-3 space-y-3">

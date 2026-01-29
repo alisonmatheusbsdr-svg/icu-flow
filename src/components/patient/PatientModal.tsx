@@ -313,7 +313,7 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
             
             {/* Grid - 1 coluna mobile, 2 colunas desktop */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-              <PatientClinicalData patient={patient} onUpdate={() => fetchPatient(true)} />
+              <PatientClinicalData patient={patient} onUpdate={() => fetchPatient(true)} canEdit={canEdit} />
               <PatientEvolutions 
                 patient={patient} 
                 authorProfiles={authorProfiles} 
