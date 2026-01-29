@@ -1,92 +1,116 @@
 
-# Plano: Permitir NIR Visualizar Dados do Paciente
 
-## Objetivo
+# Plano: Modo Somente Leitura nos Dados Clínicos para NIR
 
-Permitir que o NIR clique no card do paciente para abrir o `PatientModal` em modo de visualização (read-only). O NIR poderá ver todos os dados clínicos, mas não poderá editá-los.
+## Problema Identificado
 
----
+O `PatientModal` usa `canEdit` do hook `useUnit()` para controlar os botões principais (Editar, Evoluir, Desfecho), **mas os componentes filhos de dados clínicos não verificam essa permissão**:
 
-## Situação Atual
-
-| Componente | Comportamento |
-|------------|---------------|
-| `NIRBedCard` | Não tem click handler no card - apenas botão "Regulação" |
-| `NIRDashboard` | Não tem `PatientModal` - apenas renderiza cards |
-| `BedGrid` | Usa `PatientModal` com estados `selectedPatientId` e `selectedBedNumber` |
-
-O NIR não consegue acessar a tela do paciente porque:
-1. O `NIRBedCard` não é clicável
-2. O `NIRDashboard` não tem o `PatientModal` integrado
+| Componente | Problema |
+|------------|----------|
+| `PatientClinicalData` | Botões "+" para adicionar dispositivos, drogas, antibióticos, dieta sempre visíveis |
+| `RespiratorySection` | Botão "Editar" sempre visível |
+| `VenousAccessSection` | Botão "+" e botões "X" para remover acessos sempre visíveis |
+| `PatientPrecautions` | Botões de edição sempre visíveis |
 
 ---
 
 ## Solução
 
-### 1. Modificar NIRBedCard
+Propagar a prop `canEdit` do `PatientModal` para todos os componentes filhos que possuem controles de edição.
 
-Adicionar prop `onPatientClick` e tornar o card clicável:
+### Componentes a Modificar
+
+#### 1. PatientModal.tsx
+Já obtém `canEdit` do `useUnit()`. Precisamos passá-lo para `PatientClinicalData`:
 
 ```tsx
-interface NIRBedCardProps {
-  bed: Bed;
-  patient: PatientWithModality;
+<PatientClinicalData 
+  patient={patient} 
+  onUpdate={() => fetchPatient(true)} 
+  canEdit={canEdit}  // Nova prop
+/>
+```
+
+#### 2. PatientClinicalData.tsx
+Receber `canEdit` e condicionar todos os controles de edição:
+
+```tsx
+interface PatientClinicalDataProps {
+  patient: PatientWithDetails;
   onUpdate: () => void;
-  showProbabilityBar?: boolean;
-  onPatientClick?: (patientId: string, bedNumber: number) => void; // Nova prop
+  canEdit?: boolean;  // Nova prop (default true para compatibilidade)
 }
 
-// No card
-<Card 
-  className="bed-occupied cursor-pointer hover:shadow-md transition-shadow"
-  onClick={() => onPatientClick?.(patient.id, bed.bed_number)}
->
+// Condicionar botões de adicionar
+{canEdit && (
+  <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <Button variant="outline" size="icon" className="h-7 w-7">
+        <Plus className="h-4 w-4" />
+      </Button>
+    </DropdownMenuTrigger>
+    ...
+  </DropdownMenu>
+)}
+
+// Condicionar botões de remover (X) em cada badge
+{canEdit && (
+  <button onClick={() => handleRemoveDevice(device.id)}>
+    <X className="h-3 w-3" />
+  </button>
+)}
 ```
 
-### 2. Modificar NIRDashboard
-
-Adicionar estados e PatientModal:
+#### 3. RespiratorySection.tsx
+Receber e usar `canEdit`:
 
 ```tsx
-// Novos estados
-const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
-const [selectedBedNumber, setSelectedBedNumber] = useState<number>(0);
+interface RespiratorySectionProps {
+  patientId: string;
+  respiratorySupport: RespiratorySupport | null;
+  currentDietType?: DietType;
+  onUpdate: () => void;
+  canEdit?: boolean;  // Nova prop
+}
 
-// Handler
-const handlePatientClick = (patientId: string, bedNumber: number) => {
-  setSelectedPatientId(patientId);
-  setSelectedBedNumber(bedNumber);
-};
-
-const handleCloseModal = () => {
-  setSelectedPatientId(null);
-  setSelectedBedNumber(0);
-  fetchAllData(); // Refresh após fechar
-};
-
-// Passar callback para NIRBedCard
-<NIRBedCard
-  ...
-  onPatientClick={handlePatientClick}
-/>
-
-// Adicionar PatientModal no final
-<PatientModal
-  patientId={selectedPatientId}
-  bedNumber={selectedBedNumber}
-  isOpen={!!selectedPatientId}
-  onClose={handleCloseModal}
-/>
+// Condicionar botão de editar
+{canEdit && (
+  <Button onClick={() => setIsEditOpen(true)}>
+    <Edit2 className="h-4 w-4" />
+  </Button>
+)}
 ```
 
----
+#### 4. VenousAccessSection.tsx
+Receber e usar `canEdit`:
 
-## Comportamento do PatientModal para NIR
+```tsx
+interface VenousAccessSectionProps {
+  patientId: string;
+  venousAccess: VenousAccess[];
+  hasActiveVasoactiveDrugs: boolean;
+  onUpdate: () => void;
+  canEdit?: boolean;  // Nova prop
+}
 
-O `PatientModal` já usa o hook `useUnit().canEdit` para controlar permissões:
-- Botões de edição só aparecem se `canEdit === true`
-- NIR não tem sessão de unidade ativa, então `canEdit` será `false`
-- NIR verá os dados em modo read-only automaticamente
+// Condicionar botão de adicionar
+{canEdit && (
+  <Button onClick={() => setIsAddDialogOpen(true)}>
+    <Plus className="h-4 w-4" />
+  </Button>
+)}
+
+// Condicionar botão de remover
+{canEdit && (
+  <button onClick={() => handleRemove(access.id)}>
+    <X className="h-3 w-3" />
+  </button>
+)}
+```
+
+#### 5. PatientPrecautions.tsx
+Receber e usar `canEdit` para os controles de precauções.
 
 ---
 
@@ -94,51 +118,36 @@ O `PatientModal` já usa o hook `useUnit().canEdit` para controlar permissões:
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/nir/NIRBedCard.tsx` | Adicionar prop `onPatientClick`, tornar card clicável |
-| `src/components/nir/NIRDashboard.tsx` | Adicionar estados, handler e PatientModal |
+| `src/components/patient/PatientModal.tsx` | Passar `canEdit` para `PatientClinicalData` |
+| `src/components/patient/PatientClinicalData.tsx` | Receber `canEdit`, condicionar todos os botões "+", "X", dropdowns, dieta |
+| `src/components/patient/RespiratorySection.tsx` | Receber `canEdit`, condicionar botão de editar |
+| `src/components/patient/VenousAccessSection.tsx` | Receber `canEdit`, condicionar botões "+" e "X" |
+| `src/components/patient/PatientPrecautions.tsx` | Receber `canEdit`, condicionar controles de edição |
 
 ---
 
-## Interface Visual
+## Comportamento Esperado
 
-### Antes (sem click)
-```text
-┌────────────┐
-│ Leito 1    │
-│ JAB  D12   │  ← Não clicável
-│ 67 anos    │
-│ [TOT][DVA] │
-│ [Regulação]│  ← Único ponto de interação
-└────────────┘
-```
+### Para NIR (canEdit = false)
 
-### Depois (clicável)
-```text
-┌────────────┐
-│ Leito 1    │
-│ JAB  D12   │  ← Click abre PatientModal (read-only)
-│ 67 anos    │
-│ [TOT][DVA] │
-│ [Regulação]│  ← Mantém funcionalidade de regulação
-└────────────┘
-```
+| Seção | Visualização | Edição |
+|-------|-------------|--------|
+| Dispositivos | ✅ Vê badges com dias e alertas | ❌ Sem botão "+", sem botão "X" |
+| DVA | ✅ Vê drogas ativas e doses | ❌ Sem adicionar/remover |
+| Antibióticos | ✅ Vê lista com dias | ❌ Sem adicionar/remover |
+| Suporte Respiratório | ✅ Vê modalidade e parâmetros | ❌ Sem botão editar |
+| Acessos Venosos | ✅ Vê acessos e alertas | ❌ Sem adicionar/remover |
+| Dieta | ✅ Vê dieta atual | ❌ Sem trocar |
+| Precauções | ✅ Vê badges de risco | ❌ Sem editar níveis |
 
----
-
-## Resultado Esperado
-
-| Ação | Resultado |
-|------|-----------|
-| Click no card | Abre PatientModal em modo read-only |
-| NIR vê | Todos os dados clínicos, evoluções, exames |
-| NIR não vê | Botões "Editar", "Evoluir", "Registrar Desfecho" |
-| Click em "Regulação" | Continua abrindo dialog de regulação (não propagando click) |
+### Para Plantonista/Diarista (canEdit = true)
+Comportamento atual mantido - todos os controles visíveis.
 
 ---
 
 ## Segurança
 
-- NIR já possui RLS de leitura para pacientes e dados clínicos
-- O `PatientModal` respeita `canEdit` do `useUnit` hook
-- Sem sessão de unidade = sem permissão de edição
-- Apenas visualização, sem alterações
+A prop `canEdit` controla apenas a **interface**. A segurança real é garantida pelo RLS do banco:
+- NIR não tem permissão de UPDATE em tabelas clínicas
+- Mesmo que tentasse manipular a UI, o backend rejeitaria
+
