@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { CharacterCounter } from '@/components/ui/character-counter';
 import { toast } from 'sonner';
-import { FileText } from 'lucide-react';
+import { FileText, Edit2 } from 'lucide-react';
 import type { PatientWithDetails } from '@/types/database';
 
 const PLAN_CHAR_LIMIT = 250;
@@ -54,14 +54,15 @@ export function TherapeuticPlan({ patient, onUpdate }: TherapeuticPlanProps) {
         </h3>
         {canEditPlan && !isPlanEditing && (
           <Button 
-            variant="ghost" 
+            variant="outline" 
             size="sm" 
             onClick={() => {
               setNewPlan(currentPlan?.content || '');
               setIsPlanEditing(true);
             }}
-            className="text-[hsl(var(--warning))] hover:text-[hsl(var(--warning))]"
+            className="border-warning text-warning hover:bg-warning hover:text-warning-foreground gap-1"
           >
+            <Edit2 className="h-3.5 w-3.5" />
             Editar
           </Button>
         )}
