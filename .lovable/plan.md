@@ -1,102 +1,239 @@
 
+# Plano: Sistema de Transferência de Leitos com Drag & Drop para NIR
 
-# Plano: Melhorar Visibilidade do Botão "Editar" no Plano Terapêutico
+## Objetivo
 
-## Problema
+Permitir que usuários NIR transfiram pacientes entre leitos da mesma UTI arrastando o card do paciente para um leito vago, com diálogo de confirmação antes de efetivar a mudança.
 
-O botão "Editar" está com baixa visibilidade porque:
-- Usa `variant="ghost"` (sem fundo, apenas texto)
-- Cor do texto é `warning` (amarelo)
-- Fundo da seção é `warning/10` (amarelo claro)
-- Resultado: texto amarelo em fundo amarelo = quase invisível
+## Fluxo de Uso
 
 ```text
-┌─────────────────────────────────────────────┐
-│ 📄 Plano Terapêutico            [Editar]   │  ← Botão quase invisível
-│                                              │     (amarelo em amarelo)
-│ Conteúdo do plano...                         │
-└─────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                         NIR Dashboard                                │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐               │
+│   │ Leito 1 │  │ Leito 2 │  │ Leito 3 │  │ Leito 4 │               │
+│   │  J.S.   │  │  VAGO   │  │  M.R.   │  │BLOQUEADO│               │
+│   │ [Drag]  │  │ [Drop]  │  │ [Drag]  │  │    🔒   │               │
+│   └─────────┘  └─────────┘  └─────────┘  └─────────┘               │
+│                     │                                                │
+│         ┌───────────┴───────────┐                                   │
+│         │    Arrasta J.S.       │                                   │
+│         │    para Leito 2       │                                   │
+│         └───────────────────────┘                                   │
+│                     │                                                │
+│                     ▼                                                │
+│   ┌────────────────────────────────────────────────────┐            │
+│   │        Dialog de Confirmação                        │            │
+│   │                                                     │            │
+│   │  Confirmar Transferência de Leito?                  │            │
+│   │                                                     │            │
+│   │  Paciente: J.S. (72a)                               │            │
+│   │  De: Leito 1 → Para: Leito 2                        │            │
+│   │                                                     │            │
+│   │        [Cancelar]    [Confirmar Transferência]      │            │
+│   └────────────────────────────────────────────────────┘            │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-## Solução
+## Regras de Negócio
 
-Trocar o estilo do botão para ter mais contraste visual mantendo a identidade da seção:
+| Regra | Descrição |
+|-------|-----------|
+| Origem | Apenas cards com pacientes podem ser arrastados |
+| Destino | Apenas leitos VAGOS aceitam drop (não bloqueados, não ocupados) |
+| Mesma UTI | Transferência apenas dentro da mesma unidade |
+| Permissão | Apenas usuários NIR podem executar essa ação |
+| Confirmação | Dialog obrigatório antes de efetivar |
+| Feedback Visual | Leito vago destaca quando válido como drop target |
 
-### Opção Proposta: Botão com fundo warning
+## Arquitetura Técnica
+
+### 1. Nova Dependência
+
+```bash
+npm install @dnd-kit/core @dnd-kit/utilities
+```
+
+### 2. Novos Componentes
+
+| Componente | Responsabilidade |
+|------------|------------------|
+| `NIRDndContext.tsx` | Provider do DnD Kit que envolve o grid |
+| `NIRDraggableBedCard.tsx` | Wrapper draggable para NIRBedCard |
+| `NIRDroppableEmptyBed.tsx` | Wrapper droppable para leitos vagos |
+| `TransferBedDialog.tsx` | Modal de confirmação de transferência |
+
+### 3. Estrutura de Arquivos
+
+```text
+src/components/nir/
+├── NIRDashboard.tsx          (modificar - adicionar DndContext)
+├── NIRBedCard.tsx            (existente - sem mudanças)
+├── NIREmptyBedCard.tsx       (existente - sem mudanças)
+├── NIRDraggableBedCard.tsx   (novo - wrapper draggable)
+├── NIRDroppableEmptyBed.tsx  (novo - wrapper droppable)
+└── TransferBedDialog.tsx     (novo - dialog confirmação)
+```
+
+## Implementação Detalhada
+
+### Passo 1: Instalar DnD Kit
+
+Adicionar ao projeto:
+- `@dnd-kit/core` - biblioteca principal
+- `@dnd-kit/utilities` - helpers para CSS transforms
+
+### Passo 2: NIRDraggableBedCard
+
+Componente que torna o NIRBedCard arrastável:
 
 ```tsx
-<Button 
-  variant="outline" 
-  size="sm" 
-  onClick={() => {
-    setNewPlan(currentPlan?.content || '');
-    setIsPlanEditing(true);
-  }}
-  className="border-warning text-warning hover:bg-warning hover:text-warning-foreground"
->
-  <Edit2 className="h-3.5 w-3.5 mr-1" />
-  Editar
-</Button>
+// Encapsula NIRBedCard com useDraggable
+// Dados no drag: { patientId, patientInitials, bedId, bedNumber, unitId }
+// Visual: cursor grab, opacidade durante drag
 ```
 
-### Mudanças Visuais
+### Passo 3: NIRDroppableEmptyBed
 
-| Antes | Depois |
-|-------|--------|
-| `variant="ghost"` | `variant="outline"` |
-| Sem borda | Borda amarela visível |
-| Sem ícone | Ícone de lápis para reforço visual |
-| Hover discreto | Hover com fundo amarelo sólido |
+Componente que aceita drop em leitos vagos:
 
-### Visual Esperado
-
-```text
-┌─────────────────────────────────────────────┐
-│ 📄 Plano Terapêutico     [ ✏️ Editar ]     │  ← Botão com borda
-│                                              │     e ícone visível
-│ Conteúdo do plano...                         │
-└─────────────────────────────────────────────┘
+```tsx
+// Encapsula NIREmptyBedCard com useDroppable
+// Aceita apenas: leito vago (não bloqueado) da mesma unidade
+// Visual: borda destacada quando over (isOver), fundo verde claro
 ```
 
-## Arquivo a Modificar
+### Passo 4: TransferBedDialog
+
+Dialog de confirmação:
+
+```tsx
+interface TransferBedDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
+  patient: { id: string; initials: string; age: number };
+  fromBed: { number: number };
+  toBed: { id: string; number: number };
+  isLoading: boolean;
+}
+```
+
+Conteúdo:
+- Título: "Confirmar Transferência de Leito?"
+- Info: Paciente, idade, leito origem → leito destino
+- Botões: Cancelar | Confirmar Transferência
+
+### Passo 5: Modificar NIRDashboard
+
+Integrar o sistema de drag and drop:
+
+```tsx
+import { DndContext, DragEndEvent, DragOverlay } from '@dnd-kit/core';
+
+// Estado para controlar o dialog
+const [transferData, setTransferData] = useState<TransferData | null>(null);
+
+// Handler do drop
+function handleDragEnd(event: DragEndEvent) {
+  const { active, over } = event;
+  
+  if (!over) return; // Drop fora de área válida
+  
+  // Extrair dados do drag
+  const patientData = active.data.current;
+  const targetBedData = over.data.current;
+  
+  // Verificar se é transferência válida
+  if (targetBedData.type === 'empty-bed' && !targetBedData.isBlocked) {
+    setTransferData({
+      patient: patientData,
+      fromBedNumber: patientData.bedNumber,
+      toBed: targetBedData
+    });
+  }
+}
+
+// Executar transferência no banco
+async function executeTransfer() {
+  // 1. Atualizar bed_id do paciente
+  await supabase.from('patients')
+    .update({ bed_id: transferData.toBed.id })
+    .eq('id', transferData.patient.id);
+    
+  // 2. Atualizar is_occupied dos leitos
+  await supabase.from('beds')
+    .update({ is_occupied: false })
+    .eq('id', originalBedId);
+    
+  await supabase.from('beds')
+    .update({ is_occupied: true })
+    .eq('id', transferData.toBed.id);
+    
+  // 3. Refresh data
+  fetchAllData();
+}
+```
+
+### Passo 6: Feedback Visual
+
+Durante o drag:
+- Card sendo arrastado: opacidade reduzida, sombra elevada
+- Leitos vagos válidos: borda verde brilhante
+- Leito sob hover: fundo verde claro pulsante
+
+Cursor states:
+- Card com paciente: `cursor-grab` → `cursor-grabbing` durante drag
+- Leito vago: `cursor-copy` quando há item sendo arrastado
+- Leito bloqueado: `cursor-not-allowed`
+
+## Alterações no Banco de Dados
+
+Nenhuma migração necessária. A transferência usa campos existentes:
+- `patients.bed_id` - atualizado para novo leito
+- `beds.is_occupied` - alternado entre leitos
+
+## Políticas RLS
+
+As políticas existentes já suportam:
+- NIR pode ler pacientes de todas unidades (via `is_approved`)
+- NIR pode atualizar pacientes (via `is_approved`)
+- Verificação de unidade via `has_unit_access`
+
+## Arquivos a Criar
+
+| Arquivo | Tipo | Descrição |
+|---------|------|-----------|
+| `src/components/nir/NIRDraggableBedCard.tsx` | Novo | Wrapper draggable |
+| `src/components/nir/NIRDroppableEmptyBed.tsx` | Novo | Wrapper droppable |
+| `src/components/nir/TransferBedDialog.tsx` | Novo | Dialog confirmação |
+
+## Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/patient/TherapeuticPlan.tsx` | Mudar estilo do botão "Editar" |
+| `package.json` | Adicionar @dnd-kit/core e @dnd-kit/utilities |
+| `src/components/nir/NIRDashboard.tsx` | Integrar DndContext e handlers |
 
-## Código Final
+## Considerações de UX
 
-```tsx
-// Linha 56-67 atual:
-{canEditPlan && !isPlanEditing && (
-  <Button 
-    variant="ghost" 
-    size="sm" 
-    onClick={() => { ... }}
-    className="text-[hsl(var(--warning))] hover:text-[hsl(var(--warning))]"
-  >
-    Editar
-  </Button>
-)}
+1. **Mobile**: DnD Kit suporta touch nativamente
+2. **Acessibilidade**: Keyboard support via @dnd-kit/accessibility
+3. **Animações**: Transições suaves ao soltar
+4. **Undo**: Se erro na API, mostrar toast com opção de tentar novamente
 
-// Novo:
-{canEditPlan && !isPlanEditing && (
-  <Button 
-    variant="outline" 
-    size="sm" 
-    onClick={() => { ... }}
-    className="border-warning text-warning hover:bg-warning hover:text-warning-foreground gap-1"
-  >
-    <Edit2 className="h-3.5 w-3.5" />
-    Editar
-  </Button>
-)}
-```
+## Sequência de Implementação
 
-## Resultado
+1. Instalar dependências (@dnd-kit/core, @dnd-kit/utilities)
+2. Criar TransferBedDialog (pode testar isoladamente)
+3. Criar NIRDraggableBedCard
+4. Criar NIRDroppableEmptyBed
+5. Integrar no NIRDashboard com DndContext
+6. Testar fluxo completo
 
-- Botão claramente visível com borda amarela
-- Ícone de lápis reforça a ação
-- Hover com feedback visual (fundo amarelo sólido)
-- Mantém identidade visual da seção (cores warning)
+## Resultado Esperado
 
+O NIR poderá reorganizar pacientes entre leitos de forma intuitiva, arrastando cards e confirmando a transferência, melhorando a eficiência operacional na gestão de leitos.
