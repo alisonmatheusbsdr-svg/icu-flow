@@ -1,7 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
+import { DndContext, DragEndEvent, DragOverlay, PointerSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { supabase } from '@/integrations/supabase/client';
 import { NIRBedCard } from './NIRBedCard';
 import { NIREmptyBedCard } from './NIREmptyBedCard';
+import { NIRDraggableBedCard } from './NIRDraggableBedCard';
+import { NIRDroppableEmptyBed } from './NIRDroppableEmptyBed';
+import { TransferBedDialog } from './TransferBedDialog';
 import { PatientModal } from '@/components/patient/PatientModal';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +15,7 @@ import { Loader2, Building2, ChevronDown, Clock, FileCheck, Truck, CheckCircle2,
 import { cn } from '@/lib/utils';
 import { STATUS_CONFIG, ACTIVE_STATUSES } from '@/lib/regulation-config';
 import type { Bed, Patient, PatientRegulation, RegulationStatus } from '@/types/database';
+import { toast } from 'sonner';
 
 interface Unit {
   id: string;
@@ -116,6 +121,29 @@ export function NIRDashboard() {
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [selectedBedNumber, setSelectedBedNumber] = useState<number>(0);
   const [viewMode, setViewMode] = useState<ViewMode>('regulation');
+
+  // Drag-and-drop state
+  const [transferData, setTransferData] = useState<{
+    patient: { id: string; initials: string; age: number };
+    fromBed: { id: string; number: number };
+    toBed: { id: string; number: number };
+  } | null>(null);
+  const [isTransferring, setIsTransferring] = useState(false);
+
+  // Configure DnD sensors for both mouse and touch
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 200,
+        tolerance: 5,
+      },
+    })
+  );
 
   const fetchAllData = useCallback(async () => {
     setIsLoading(true);
@@ -293,6 +321,85 @@ export function NIRDashboard() {
     fetchAllData();
   };
 
+  // Drag-and-drop handler
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (!over) return; // Dropped outside valid area
+    
+    const patientData = active.data.current;
+    const targetBedData = over.data.current;
+    
+    // Validate: target must be empty bed from same unit
+    if (
+      targetBedData?.type === 'empty-bed' && 
+      !targetBedData.isBlocked &&
+      patientData?.unitId === targetBedData.unitId
+    ) {
+      setTransferData({
+        patient: {
+          id: patientData.patientId,
+          initials: patientData.patientInitials,
+          age: patientData.patientAge
+        },
+        fromBed: {
+          id: patientData.bedId,
+          number: patientData.bedNumber
+        },
+        toBed: {
+          id: targetBedData.bedId,
+          number: targetBedData.bedNumber
+        }
+      });
+    }
+  };
+
+  // Execute bed transfer
+  const executeTransfer = async () => {
+    if (!transferData) return;
+
+    setIsTransferring(true);
+
+    try {
+      // 1. Update patient's bed_id
+      const { error: patientError } = await supabase
+        .from('patients')
+        .update({ bed_id: transferData.toBed.id })
+        .eq('id', transferData.patient.id);
+
+      if (patientError) throw patientError;
+
+      // 2. Mark old bed as unoccupied
+      const { error: oldBedError } = await supabase
+        .from('beds')
+        .update({ is_occupied: false })
+        .eq('id', transferData.fromBed.id);
+
+      if (oldBedError) throw oldBedError;
+
+      // 3. Mark new bed as occupied
+      const { error: newBedError } = await supabase
+        .from('beds')
+        .update({ is_occupied: true })
+        .eq('id', transferData.toBed.id);
+
+      if (newBedError) throw newBedError;
+
+      toast.success(
+        `Paciente ${transferData.patient.initials} transferido para Leito ${transferData.toBed.number}`
+      );
+
+      // Refresh data
+      fetchAllData();
+    } catch (error) {
+      console.error('Error transferring patient:', error);
+      toast.error('Erro ao transferir paciente. Tente novamente.');
+    } finally {
+      setIsTransferring(false);
+      setTransferData(null);
+    }
+  };
+
   // Filter beds based on status filter and view mode
   const filterBeds = (beds: BedWithPatient[]): BedWithPatient[] => {
     // Modo visão geral: todos os leitos (ocupados + vagos)
@@ -344,7 +451,8 @@ export function NIRDashboard() {
   });
 
   return (
-    <div className="space-y-4">
+    <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+      <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col gap-4 mb-6">
         <div className="flex items-center justify-between gap-3">
@@ -554,16 +662,32 @@ export function NIRDashboard() {
                   <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 pt-3">
                     {filteredBeds.map((bed) => (
                       bed.patient ? (
-                        <NIRBedCard
-                          key={bed.id}
-                          bed={bed}
-                          patient={bed.patient}
-                          onUpdate={fetchAllData}
-                          showProbabilityBar={viewMode === 'overview'}
-                          onPatientClick={handlePatientClick}
-                        />
+                        viewMode === 'overview' ? (
+                          <NIRDraggableBedCard
+                            key={bed.id}
+                            bed={bed}
+                            patient={bed.patient}
+                            unitId={unit.id}
+                            onUpdate={fetchAllData}
+                            showProbabilityBar={true}
+                            onPatientClick={handlePatientClick}
+                          />
+                        ) : (
+                          <NIRBedCard
+                            key={bed.id}
+                            bed={bed}
+                            patient={bed.patient}
+                            onUpdate={fetchAllData}
+                            showProbabilityBar={false}
+                            onPatientClick={handlePatientClick}
+                          />
+                        )
                       ) : (
-                        <NIREmptyBedCard key={bed.id} bed={bed} />
+                        viewMode === 'overview' ? (
+                          <NIRDroppableEmptyBed key={bed.id} bed={bed} unitId={unit.id} />
+                        ) : (
+                          <NIREmptyBedCard key={bed.id} bed={bed} />
+                        )
                       )
                     ))}
                   </div>
@@ -596,6 +720,18 @@ export function NIRDashboard() {
         isOpen={!!selectedPatientId}
         onClose={handleCloseModal}
       />
+
+      {/* Transfer Bed Confirmation Dialog */}
+      <TransferBedDialog
+        isOpen={!!transferData}
+        onClose={() => setTransferData(null)}
+        onConfirm={executeTransfer}
+        patient={transferData?.patient || null}
+        fromBed={transferData?.fromBed || null}
+        toBed={transferData?.toBed || null}
+        isLoading={isTransferring}
+      />
     </div>
+    </DndContext>
   );
 }
