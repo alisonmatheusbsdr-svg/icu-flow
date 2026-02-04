@@ -845,6 +845,11 @@ export type Database = {
     }
     Functions: {
       cleanup_expired_sessions: { Args: never; Returns: undefined }
+      has_active_session_in_unit: {
+        Args: { _unit_id: string; _user_id: string }
+        Returns: boolean
+      }
+      has_privileged_role: { Args: { _user_id: string }; Returns: boolean }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
