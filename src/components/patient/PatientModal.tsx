@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useUnit } from '@/hooks/useUnit';
+import { useAuth } from '@/hooks/useAuth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { ClipboardList, Edit, Loader2, LogOut, MoreHorizontal, PenLine, Printer } from 'lucide-react';
+import { ArrowLeftRight, ClipboardList, Edit, Loader2, LogOut, MoreHorizontal, PenLine, Printer } from 'lucide-react';
 import { TherapeuticPlan } from './TherapeuticPlan';
 import { PatientClinicalData } from './PatientClinicalData';
 import { PatientEvolutions } from './PatientEvolutions';
@@ -15,6 +16,7 @@ import { EditPatientDialog } from './EditPatientDialog';
 import { PatientExamsDialog } from './PatientExamsDialog';
 import { PatientComplexityBar } from './PatientComplexityBar';
 import { PrintPreviewModal } from '@/components/print/PrintPreviewModal';
+import { TransferBedSelectDialog } from '@/components/nir/TransferBedSelectDialog';
 import { usePrintPatient } from '@/hooks/usePrintPatient';
 import type { PatientWithDetails, Profile, RespiratorySupport, PatientPrecaution, RegulationStatus } from '@/types/database';
 
@@ -33,9 +35,13 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
   const [isDischargeDialogOpen, setIsDischargeDialogOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isExamsDialogOpen, setIsExamsDialogOpen] = useState(false);
+  const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
+  const [currentUnitId, setCurrentUnitId] = useState<string | null>(null);
   const { isPreparing, printData, showPreview, preparePrint, closePreview } = usePrintPatient();
   const { canEdit } = useUnit();
+  const { hasRole } = useAuth();
   const isMobile = useIsMobile();
+  const isNIR = hasRole('nir');
 
   const fetchPatient = async (isRefresh = false) => {
     if (!patientId) return;
@@ -58,7 +64,7 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
       return;
     }
 
-    const [devicesRes, drugsRes, antibioticsRes, plansRes, evolutionsRes, prophylaxisRes, venousAccessRes, respiratorySupportRes, tasksRes, precautionsRes, examsRes, regulationRes] = await Promise.all([
+    const [devicesRes, drugsRes, antibioticsRes, plansRes, evolutionsRes, prophylaxisRes, venousAccessRes, respiratorySupportRes, tasksRes, precautionsRes, examsRes, regulationRes, bedRes] = await Promise.all([
       supabase.from('invasive_devices').select('*').eq('patient_id', patientId).eq('is_active', true),
       supabase.from('vasoactive_drugs').select('*').eq('patient_id', patientId).eq('is_active', true),
       supabase.from('antibiotics').select('*').eq('patient_id', patientId).eq('is_active', true),
@@ -70,8 +76,14 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
       supabase.from('patient_tasks').select('*').eq('patient_id', patientId),
       supabase.from('patient_precautions').select('*').eq('patient_id', patientId).eq('is_active', true),
       supabase.from('patient_exams').select('*').eq('patient_id', patientId).order('exam_date', { ascending: false }),
-      supabase.from('patient_regulation').select('*').eq('patient_id', patientId).eq('is_active', true).order('requested_at', { ascending: false })
+      supabase.from('patient_regulation').select('*').eq('patient_id', patientId).eq('is_active', true).order('requested_at', { ascending: false }),
+      patientData.bed_id ? supabase.from('beds').select('unit_id').eq('id', patientData.bed_id).maybeSingle() : null
     ]);
+
+    // Armazenar unit_id para transferência
+    if (bedRes?.data?.unit_id) {
+      setCurrentUnitId(bedRes.data.unit_id);
+    }
 
     const patientWithDetails: PatientWithDetails = {
       ...patientData,
@@ -163,6 +175,12 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
           <ClipboardList className="h-4 w-4 mr-2" />
           Exames
         </DropdownMenuItem>
+        {isNIR && patient?.bed_id && currentUnitId && (
+          <DropdownMenuItem onClick={() => setIsTransferDialogOpen(true)}>
+            <ArrowLeftRight className="h-4 w-4 mr-2" />
+            Transferir Leito
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem 
           onClick={() => patient && preparePrint(patient, bedNumber, authorProfiles)}
           disabled={isPreparing}
@@ -218,9 +236,20 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
         className="flex items-center gap-2"
       >
         <ClipboardList className="h-4 w-4" />
-        Exames
-      </Button>
-      <Button
+          Exames
+        </Button>
+        {isNIR && patient?.bed_id && currentUnitId && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsTransferDialogOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <ArrowLeftRight className="h-4 w-4" />
+            Transferir Leito
+          </Button>
+        )}
+        <Button
         variant="outline"
         size="sm"
         onClick={() => patient && preparePrint(patient, bedNumber, authorProfiles)}
@@ -369,6 +398,19 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
             isOpen={isExamsDialogOpen}
             onClose={() => setIsExamsDialogOpen(false)}
             onUpdate={() => fetchPatient(true)}
+          />
+        )}
+
+        {/* Transfer Bed Dialog - NIR only */}
+        {patient && patient.bed_id && currentUnitId && (
+          <TransferBedSelectDialog
+            isOpen={isTransferDialogOpen}
+            onClose={() => setIsTransferDialogOpen(false)}
+            patient={{ id: patient.id, initials: patient.initials, age: patient.age }}
+            currentBedId={patient.bed_id}
+            currentBedNumber={bedNumber}
+            currentUnitId={currentUnitId}
+            onSuccess={onClose}
           />
         )}
 
