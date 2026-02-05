@@ -1,0 +1,66 @@
+-- Atualizar função discharge_patient para incluir plantonista com acesso à unidade
+CREATE OR REPLACE FUNCTION public.discharge_patient(
+  _patient_id uuid,
+  _outcome patient_outcome,
+  _user_id uuid
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _bed_id uuid;
+  _bed_unit_id uuid;
+  _is_plantonista boolean;
+BEGIN
+  -- Verificar se o usuário está aprovado
+  IF NOT is_approved(_user_id) THEN
+    RAISE EXCEPTION 'User not approved';
+  END IF;
+  
+  -- Obter dados do paciente e leito
+  SELECT p.bed_id, b.unit_id 
+  INTO _bed_id, _bed_unit_id
+  FROM patients p
+  LEFT JOIN beds b ON b.id = p.bed_id
+  WHERE p.id = _patient_id AND p.is_active = true;
+  
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Patient not found or not active';
+  END IF;
+  
+  -- Verificar se é plantonista
+  _is_plantonista := has_role(_user_id, 'plantonista');
+  
+  -- Verificar acesso (NOVA LÓGICA):
+  -- 1. Privileged roles (admin, coord, diarista, nir) - sem restrição
+  -- 2. Plantonista com acesso à unidade - permitido (NÃO depende de sessão)
+  -- 3. Qualquer usuário com sessão ativa na unidade - permitido
+  IF NOT (
+    has_privileged_role(_user_id) OR 
+    (_is_plantonista AND _bed_unit_id IS NOT NULL AND has_unit_access(_user_id, _bed_unit_id)) OR
+    (_bed_unit_id IS NOT NULL AND has_active_session_in_unit(_user_id, _bed_unit_id))
+  ) THEN
+    RAISE EXCEPTION 'User does not have access to this patient';
+  END IF;
+  
+  -- Atualizar paciente
+  UPDATE patients
+  SET 
+    outcome = _outcome,
+    outcome_date = NOW(),
+    is_active = false,
+    bed_id = NULL
+  WHERE id = _patient_id;
+  
+  -- Liberar leito
+  IF _bed_id IS NOT NULL THEN
+    UPDATE beds
+    SET is_occupied = false
+    WHERE id = _bed_id;
+  END IF;
+  
+  RETURN true;
+END;
+$$;
