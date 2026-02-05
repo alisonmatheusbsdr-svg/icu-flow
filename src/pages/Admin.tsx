@@ -7,6 +7,7 @@ import { UserManagement } from '@/components/admin/UserManagement';
 import { UnitManagement } from '@/components/admin/UnitManagement';
 import { PrintLogsManagement } from '@/components/admin/PrintLogsManagement';
 import { Users, Building2, Printer, Loader2 } from 'lucide-react';
+import { Footer } from '@/components/Footer';
 
 export default function Admin() {
   const navigate = useNavigate();
@@ -69,6 +70,7 @@ export default function Admin() {
           </TabsContent>
         </Tabs>
       </main>
+      <Footer />
     </div>
   );
 }

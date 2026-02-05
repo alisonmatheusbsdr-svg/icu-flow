@@ -8,6 +8,7 @@ import { PatientClinicalData } from '@/components/patient/PatientClinicalData';
 import { PatientEvolutions } from '@/components/patient/PatientEvolutions';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2 } from 'lucide-react';
+import { Footer } from '@/components/Footer';
 import type { PatientWithDetails, Profile } from '@/types/database';
 
 export default function PatientDetails() {
@@ -169,6 +170,7 @@ export default function PatientDetails() {
           />
         </div>
       </main>
+      <Footer />
     </div>
   );
 }
