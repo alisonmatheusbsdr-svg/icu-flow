@@ -13,6 +13,7 @@ import { SinapseLogo } from '@/components/SinapseLogo';
 import { Checkbox } from '@/components/ui/checkbox';
 import { TermsAndPrivacyDialog } from '@/components/terms/TermsAndPrivacyDialog';
 import type { AppRole } from '@/types/database';
+import { Footer } from '@/components/Footer';
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -328,6 +329,7 @@ export default function Auth() {
           </Tabs>
         </Card>
       </div>
+      <Footer />
     </div>
   );
 }

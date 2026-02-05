@@ -9,6 +9,7 @@ import { NIRDashboard } from '@/components/nir/NIRDashboard';
 import { PendingApproval } from '@/components/dashboard/PendingApproval';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Eye } from 'lucide-react';
+import { Footer } from '@/components/Footer';
 
 const ACTIVITY_DEBOUNCE_MS = 60 * 1000; // 1 minute debounce
 
@@ -132,6 +133,7 @@ export default function Dashboard() {
         
         {renderMainContent()}
       </main>
+      <Footer />
     </div>
   );
 }

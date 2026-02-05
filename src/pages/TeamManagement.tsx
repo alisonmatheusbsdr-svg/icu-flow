@@ -9,6 +9,7 @@ import { Users, Printer, FileText, MonitorSmartphone } from 'lucide-react';
 import { ActiveSessionsCard } from '@/components/admin/ActiveSessionsCard';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { TermsContent } from '@/components/terms/TermsContent';
+import { Footer } from '@/components/Footer';
 
 export default function TeamManagement() {
   const navigate = useNavigate();
@@ -99,6 +100,7 @@ export default function TeamManagement() {
           </TabsContent>
         </Tabs>
       </main>
+      <Footer />
     </div>
   );
 }
