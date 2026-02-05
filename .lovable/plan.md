@@ -1,137 +1,152 @@
 
-# Plano: Corrigir Persistência do Erro de RLS no Desfecho por Plantonista
+# Plano Revisado: Incluir Plantonista na Autorização de Desfecho
 
-## Diagnóstico
+## Diagnóstico Confirmado
 
-### Problema Atual
-O erro de RLS continua ocorrendo mesmo após a migração que adicionou a cláusula `WITH CHECK`. A análise detalhada revelou que:
+A análise detalhada do banco de dados revelou que:
 
-1. A migração `20260205120728` foi aplicada corretamente
-2. A cláusula `WITH CHECK` permite `bed_id = NULL` (verificado diretamente no banco)
-3. O problema está na **cláusula USING**, não na WITH CHECK
-
-### Causa Raiz
-A cláusula `USING` da política de UPDATE ainda exige **sessão ativa** para acessar o registro do paciente:
-
-```text
-┌──────────────────────────────────────────────────────────────────┐
-│ Cenário de Falha                                                 │
-├──────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  1. Plantonista abre modal do paciente (sessão ativa: 25min)     │
-│  2. Navega pelo sistema, faz outras coisas                       │
-│  3. Volta ao modal para confirmar desfecho (sessão: 32min)       │
-│  4. Sessão EXPIROU (>30 min de inatividade)                      │
-│  5. USING retorna FALSE → Acesso negado ao registro              │
-│  6. UPDATE falha com "violates row-level security"               │
-│                                                                  │
-└──────────────────────────────────────────────────────────────────┘
+1. **O log de erro mostra um UPDATE direto na tabela patients**, não uma chamada RPC:
+```sql
+UPDATE "public"."patients" SET "bed_id" = ..., "is_active" = ..., "outcome" = ...
 ```
 
-O heartbeat acontece ao clicar/teclar/scroll no **Dashboard**, mas quando o usuário está dentro de um **modal** do paciente, as interações podem não estar triggando o heartbeat corretamente.
+2. **O código atual está correto** (`PatientDischargeDialog.tsx` usa RPC `discharge_patient`)
 
-### Verificação Adicional
-A sessão do plantonista de teste (`dcddc2aa-66ed-464e-8d30-c868d6fdc63f`) mostra:
-- `last_activity`: 2026-02-05 12:21:25
-- `time_since_last_activity`: 01:24:41 (expirada)
+3. **O erro ocorreu às 15:39:28** - provavelmente o site publicado ainda não refletiu as últimas mudanças de código
 
-## Solução
+4. **A função `discharge_patient` exige:**
+   - `has_privileged_role` (não inclui plantonista)
+   - OU `has_active_session_in_unit` (depende da sessão estar ativa)
 
-Implementar duas correções:
+## Problema Principal
 
-### 1. Atualizar Heartbeat no Modal do Paciente
-Adicionar listener de atividade na página de detalhes do paciente (`PatientDetails.tsx`), garantindo que interações dentro do modal também atualizem a sessão.
+Mesmo com o RPC implementado, a função `discharge_patient` falha para plantonistas quando:
+- A sessão expirou (>30 min sem atividade)
+- Ou há problemas no reconhecimento da sessão
 
-### 2. Atualizar Sessão Antes de Operações Críticas
-Modificar `PatientDischargeDialog` para chamar `updateActivity()` antes de executar o UPDATE, garantindo que a sessão esteja ativa no momento da operação.
+Como você mencionou que o erro ocorre **mesmo logo após o login**, isso sugere que o site publicado pode estar usando código antigo ou há um problema de sincronização.
 
-## Arquivos a Modificar
+## Solução em Duas Partes
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/pages/PatientDetails.tsx` | Adicionar listener de atividade como no Dashboard |
-| `src/components/patient/PatientDischargeDialog.tsx` | Chamar `updateActivity` antes do UPDATE |
+### Parte 1: Atualizar a Função `discharge_patient`
+
+Adicionar verificação específica para o role `plantonista`, permitindo desfecho com base apenas em:
+- Usuário aprovado
+- Possui acesso à unidade (`has_unit_access`)
+
+Isso elimina a dependência da sessão ativa para desfechos.
+
+### Parte 2: Garantir que o Código Publicado Está Atualizado
+
+Verificar se a versão publicada do site contém a chamada RPC correta.
 
 ## Detalhes Técnicos
 
-### PatientDetails.tsx
+### Nova Função SQL
 
-```typescript
-// Adicionar imports
-import { useUnit } from '@/hooks/useUnit';
-import { useCallback, useRef, useEffect } from 'react';
-
-// Dentro do componente
-const { updateActivity, activeSession } = useUnit();
-const lastActivityUpdate = useRef<number>(0);
-const ACTIVITY_DEBOUNCE_MS = 30 * 1000; // 30 seconds
-
-const handleUserActivity = useCallback(() => {
-  if (!activeSession) return;
-  const now = Date.now();
-  if (now - lastActivityUpdate.current >= ACTIVITY_DEBOUNCE_MS) {
-    lastActivityUpdate.current = now;
-    updateActivity();
-  }
-}, [activeSession, updateActivity]);
-
-useEffect(() => {
-  if (!activeSession) return;
-  window.addEventListener('click', handleUserActivity);
-  window.addEventListener('keypress', handleUserActivity);
-  window.addEventListener('scroll', handleUserActivity);
-
-  return () => {
-    window.removeEventListener('click', handleUserActivity);
-    window.removeEventListener('keypress', handleUserActivity);
-    window.removeEventListener('scroll', handleUserActivity);
-  };
-}, [activeSession, handleUserActivity]);
+```sql
+CREATE OR REPLACE FUNCTION public.discharge_patient(
+  _patient_id uuid,
+  _outcome patient_outcome,
+  _user_id uuid
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _bed_id uuid;
+  _bed_unit_id uuid;
+  _is_plantonista boolean;
+BEGIN
+  -- Verificar se o usuário está aprovado
+  IF NOT is_approved(_user_id) THEN
+    RAISE EXCEPTION 'User not approved';
+  END IF;
+  
+  -- Obter dados do paciente e leito
+  SELECT p.bed_id, b.unit_id 
+  INTO _bed_id, _bed_unit_id
+  FROM patients p
+  LEFT JOIN beds b ON b.id = p.bed_id
+  WHERE p.id = _patient_id AND p.is_active = true;
+  
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Patient not found or not active';
+  END IF;
+  
+  -- Verificar se é plantonista
+  _is_plantonista := has_role(_user_id, 'plantonista');
+  
+  -- Verificar acesso (NOVA LÓGICA):
+  -- 1. Privileged roles (admin, coord, diarista, nir) - sem restrição
+  -- 2. Plantonista com acesso à unidade - permitido
+  -- 3. Qualquer usuário com sessão ativa na unidade - permitido
+  IF NOT (
+    has_privileged_role(_user_id) OR 
+    (_is_plantonista AND _bed_unit_id IS NOT NULL 
+       AND has_unit_access(_user_id, _bed_unit_id)) OR
+    (_bed_unit_id IS NOT NULL 
+       AND has_active_session_in_unit(_user_id, _bed_unit_id))
+  ) THEN
+    RAISE EXCEPTION 'User does not have access to this patient';
+  END IF;
+  
+  -- Atualizar paciente
+  UPDATE patients
+  SET 
+    outcome = _outcome,
+    outcome_date = NOW(),
+    is_active = false,
+    bed_id = NULL
+  WHERE id = _patient_id;
+  
+  -- Liberar leito
+  IF _bed_id IS NOT NULL THEN
+    UPDATE beds
+    SET is_occupied = false
+    WHERE id = _bed_id;
+  END IF;
+  
+  RETURN true;
+END;
+$$;
 ```
 
-### PatientDischargeDialog.tsx
+### Comparação: Antes vs Depois
 
-```typescript
-// Adicionar import
-import { useUnit } from '@/hooks/useUnit';
+| Condição | Antes | Depois |
+|----------|-------|--------|
+| Privileged (admin, coord, diarista, nir) | Permitido | Permitido |
+| Plantonista com sessão ativa | Permitido | Permitido |
+| Plantonista com acesso à unidade (sem sessão) | **Bloqueado** | **Permitido** |
+| Outro role sem sessão | Bloqueado | Bloqueado |
 
-// Dentro do componente
-const { updateActivity } = useUnit();
+### Segurança Mantida
 
-const handleDischarge = async () => {
-  if (!outcome) return;
-  setIsLoading(true);
+A nova lógica é segura porque:
+- O usuário **deve estar aprovado** (`is_approved`)
+- O plantonista **deve ter atribuição à unidade** (`has_unit_access`)
+- Não há bypass para usuários sem permissão
 
-  try {
-    // Atualizar sessão antes da operação crítica
-    await updateActivity();
-    
-    const { error: patientError } = await supabase
-      .from('patients')
-      .update({...})
-      .eq('id', patientId);
-    // ... resto do código
-  }
-}
-```
+### Restrições do Plantonista Preservadas
+
+| Funcionalidade | Plantonista |
+|----------------|-------------|
+| Registrar desfecho | ✅ (após correção) |
+| Editar plano terapêutico | ❌ Bloqueado |
+| Ver múltiplas UTIs | ❌ Bloqueado |
+| Editar dados clínicos | ✅ Com sessão ativa |
+
+## Passos de Implementação
+
+1. Criar migração SQL para atualizar a função `discharge_patient`
+2. Publicar as alterações para o ambiente de produção
+3. Testar o fluxo de desfecho como plantonista
 
 ## Resultado Esperado
 
-1. Interações na página de detalhes do paciente também atualizam a sessão
-2. Antes de operações críticas (desfecho), a sessão é explicitamente atualizada
-3. Plantonistas conseguem registrar desfechos mesmo após navegação prolongada
-4. Nenhuma alteração em políticas RLS necessária (já estão corretas)
-
-## Segurança Mantida
-
-- A lógica de sessão ativa continua sendo verificada
-- Apenas a atualização de atividade é acionada automaticamente
-- Não há bypass de segurança - apenas garantia de que sessões válidas não expirem indevidamente
-
-## Testes Sugeridos
-
-1. Login como plantonista
-2. Abrir modal do paciente
-3. Aguardar alguns minutos sem interação
-4. Confirmar que clicar no modal atualiza a sessão
-5. Registrar desfecho com sucesso
+- Plantonistas conseguirão registrar desfechos independente do estado da sessão
+- A segurança é mantida via verificação de aprovação e acesso à unidade
+- Comportamento consistente entre preview e produção
