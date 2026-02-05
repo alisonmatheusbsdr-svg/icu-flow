@@ -67,8 +67,24 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
   };
 
   const handleChangePassword = async () => {
-    if (newPassword.length < 6) {
-      toast.error('A senha deve ter pelo menos 6 caracteres');
+    if (newPassword.length < 8) {
+      toast.error('A senha deve ter pelo menos 8 caracteres');
+      return;
+    }
+    if (!/[A-Z]/.test(newPassword)) {
+      toast.error('A senha deve conter pelo menos uma letra maiúscula');
+      return;
+    }
+    if (!/[a-z]/.test(newPassword)) {
+      toast.error('A senha deve conter pelo menos uma letra minúscula');
+      return;
+    }
+    if (!/[0-9]/.test(newPassword)) {
+      toast.error('A senha deve conter pelo menos um número');
+      return;
+    }
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword)) {
+      toast.error('A senha deve conter pelo menos um caractere especial');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -158,7 +174,7 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Mínimo 6 caracteres"
+                placeholder="Mín. 8 caracteres, maiúscula, número e especial"
                 disabled={isPasswordLoading}
               />
             </div>
