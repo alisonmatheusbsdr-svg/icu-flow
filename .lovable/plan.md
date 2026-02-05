@@ -1,28 +1,60 @@
 
-# Plano: Ajustar Placeholders e Adicionar Seletor de UF no CRM
 
-## Mudancas
+# Plano: Desconectar Usuario da UTI (Admin/Coordenador)
 
-### 1. Remover "Dr." do placeholder de nome
-- `src/pages/Auth.tsx`: placeholder de "Dr. Joao Silva" para "Joao Silva"
-- `src/components/profile/ProfileDialog.tsx`: mesmo ajuste
+## Contexto
 
-### 2. Adicionar seletor de UF para o CRM
-Em vez de apenas um campo de texto com "CRM-PE 123456", vamos colocar um Select de UF ao lado do campo numerico do CRM. O valor salvo no banco sera no formato "CRM-UF 123456".
+A politica de seguranca (RLS) ja permite que Admins e Coordenadores deletem qualquer sessao ativa. O que falta e apenas a **interface** para essa acao.
 
-**Nos dois arquivos** (Auth.tsx e ProfileDialog.tsx):
-- Adicionar um `Select` com as 27 UFs brasileiras (AC, AL, AM, AP, BA, CE, DF, ES, GO, MA, MG, MS, MT, PA, PB, PE, PI, PR, RJ, RN, RO, RR, RS, SC, SE, SP, TO)
-- Default: "PE" (ja que por enquanto todos sao PE)
-- Layout: Select de UF (compacto) + Input numerico lado a lado
-- O valor salvo sera composto: `CRM-${uf} ${numero}`
-- Placeholder do campo numerico: "123456"
+## Onde adicionar
 
-### 3. ProfileDialog - Parse do CRM existente
-Quando o dialog de perfil abrir, fazer parse do CRM salvo (ex: "CRM-PE 123456") para separar a UF e o numero nos campos corretos.
+Na pagina **Admin** (`/admin`), na aba "Unidades" (`UnitManagement.tsx`), vamos mostrar quem esta conectado em cada UTI e um botao para desconectar.
 
-## Arquivos a Modificar
+Na pagina **Gestao** (`/equipe`), adicionar uma nova aba "Sessoes" para que Coordenadores tambem possam ver e encerrar sessoes.
 
-| Arquivo | Mudanca |
-|---------|---------|
-| `src/pages/Auth.tsx` | Placeholder nome, seletor UF + campo CRM |
-| `src/components/profile/ProfileDialog.tsx` | Placeholder nome, seletor UF + campo CRM com parse |
+## Alteracoes
+
+### 1. Componente: `src/components/admin/ActiveSessionsCard.tsx` (novo)
+
+Componente reutilizavel que:
+- Busca sessoes ativas (tabela `active_sessions`) com join no `profiles` (nome) e `units` (nome da UTI)
+- Filtra sessoes expiradas (> 30 min sem atividade)
+- Lista cada sessao mostrando: nome do usuario, UTI, tempo conectado, status (bloqueante/visualizando/passagem)
+- Botao "Desconectar" ao lado de cada sessao
+- Confirmacao via AlertDialog antes de desconectar
+- Ao confirmar, faz `DELETE` na `active_sessions` pelo `id` da sessao (ja permitido pela RLS)
+- Subscription em realtime para atualizar automaticamente
+
+### 2. Modificar: `src/components/admin/UnitManagement.tsx`
+
+Importar e renderizar o `ActiveSessionsCard` acima da lista de unidades.
+
+### 3. Modificar: `src/pages/TeamManagement.tsx`
+
+Adicionar uma nova aba "Sessoes" com o mesmo componente `ActiveSessionsCard`.
+
+## Fluxo do Usuario
+
+```text
+1. Admin/Coordenador acessa Admin ou Gestao
+2. Ve card "Sessoes Ativas" com lista de quem esta conectado
+3. Clica "Desconectar" ao lado de um usuario
+4. Confirma no dialog: "Desconectar [Nome] da [UTI]?"
+5. Sessao e deletada do banco
+6. Plantonista desconectado vera que perdeu acesso na proxima interacao
+```
+
+## Arquivos
+
+| Arquivo | Acao |
+|---------|------|
+| `src/components/admin/ActiveSessionsCard.tsx` | Criar componente de sessoes ativas |
+| `src/components/admin/UnitManagement.tsx` | Adicionar card de sessoes |
+| `src/pages/TeamManagement.tsx` | Adicionar aba "Sessoes" |
+
+## Seguranca
+
+- A RLS ja existe: "Admins can delete any session" permite `DELETE` para `admin` e `coordenador`
+- Nenhuma migracao necessaria
+- O componente usa o client Supabase autenticado, entao a RLS e respeitada automaticamente
+
