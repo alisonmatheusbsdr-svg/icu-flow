@@ -91,8 +91,24 @@ export default function Auth() {
       return;
     }
 
-    if (signupPassword.length < 6) {
-      toast.error('A senha deve ter pelo menos 6 caracteres');
+    if (signupPassword.length < 8) {
+      toast.error('A senha deve ter pelo menos 8 caracteres');
+      return;
+    }
+    if (!/[A-Z]/.test(signupPassword)) {
+      toast.error('A senha deve conter pelo menos uma letra maiúscula');
+      return;
+    }
+    if (!/[a-z]/.test(signupPassword)) {
+      toast.error('A senha deve conter pelo menos uma letra minúscula');
+      return;
+    }
+    if (!/[0-9]/.test(signupPassword)) {
+      toast.error('A senha deve conter pelo menos um número');
+      return;
+    }
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(signupPassword)) {
+      toast.error('A senha deve conter pelo menos um caractere especial');
       return;
     }
 
@@ -249,7 +265,7 @@ export default function Auth() {
                     <Input
                       id="signup-password"
                       type="password"
-                      placeholder="Mínimo 6 caracteres"
+                      placeholder="Mín. 8 caracteres, maiúscula, número e especial"
                       value={signupPassword}
                       onChange={(e) => setSignupPassword(e.target.value)}
                       disabled={isLoading}
