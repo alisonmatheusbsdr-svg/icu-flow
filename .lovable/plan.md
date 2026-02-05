@@ -1,137 +1,137 @@
 
-# Plano: Corrigir RLS de Patients para Permitir Desfecho por Plantonista
+# Plano: Corrigir Persistência do Erro de RLS no Desfecho por Plantonista
 
 ## Diagnóstico
 
-### Problema Identificado
-O log do banco de dados mostra:
-```
-new row violates row-level security policy for table "patients"
-```
+### Problema Atual
+O erro de RLS continua ocorrendo mesmo após a migração que adicionou a cláusula `WITH CHECK`. A análise detalhada revelou que:
+
+1. A migração `20260205120728` foi aplicada corretamente
+2. A cláusula `WITH CHECK` permite `bed_id = NULL` (verificado diretamente no banco)
+3. O problema está na **cláusula USING**, não na WITH CHECK
 
 ### Causa Raiz
-A política de UPDATE na tabela `patients` foi recentemente alterada para exigir segurança baseada em sessão ativa. O problema ocorre na seguinte sequência:
+A cláusula `USING` da política de UPDATE ainda exige **sessão ativa** para acessar o registro do paciente:
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│ Plantonista tenta registrar DESFECHO (Transferência Externa)   │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  UPDATE patients SET                                            │
-│    bed_id = NULL,        ← Libera o leito                       │
-│    is_active = false,                                           │
-│    outcome = 'transferencia_externa'                            │
-│  WHERE id = '...'                                               │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ Política RLS (UPDATE) - USANDO apenas USING sem WITH CHECK     │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ANTES do UPDATE (verificação USING):                           │
-│  • bed_id = 'abc123' (não nulo)                                 │
-│  • has_active_session_in_unit() → TRUE ✅                       │
-│                                                                 │
-│  DEPOIS do UPDATE (mesmo USING reutilizado como WITH CHECK):    │
-│  • bed_id = NULL                                                │
-│  • Entra em: (bed_id IS NULL AND has_privileged_role())        │
-│  • has_privileged_role('plantonista') → FALSE ❌                │
-│                                                                 │
-│  RESULTADO: Violação de RLS!                                    │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│ Cenário de Falha                                                 │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  1. Plantonista abre modal do paciente (sessão ativa: 25min)     │
+│  2. Navega pelo sistema, faz outras coisas                       │
+│  3. Volta ao modal para confirmar desfecho (sessão: 32min)       │
+│  4. Sessão EXPIROU (>30 min de inatividade)                      │
+│  5. USING retorna FALSE → Acesso negado ao registro              │
+│  6. UPDATE falha com "violates row-level security"               │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-O administrador consegue porque `has_privileged_role('admin')` retorna TRUE.
+O heartbeat acontece ao clicar/teclar/scroll no **Dashboard**, mas quando o usuário está dentro de um **modal** do paciente, as interações podem não estar triggando o heartbeat corretamente.
+
+### Verificação Adicional
+A sessão do plantonista de teste (`dcddc2aa-66ed-464e-8d30-c868d6fdc63f`) mostra:
+- `last_activity`: 2026-02-05 12:21:25
+- `time_since_last_activity`: 01:24:41 (expirada)
 
 ## Solução
 
-Adicionar uma cláusula `WITH CHECK` separada à política de UPDATE que permita:
-1. Plantonistas com sessão ativa definir `bed_id = NULL` (registrar desfecho)
-2. Manter a segurança: só pode "soltar" paciente se tinha acesso ao leito original
+Implementar duas correções:
 
-### Lógica da Nova Política
+### 1. Atualizar Heartbeat no Modal do Paciente
+Adicionar listener de atividade na página de detalhes do paciente (`PatientDetails.tsx`), garantindo que interações dentro do modal também atualizem a sessão.
 
-| Cenário | USING (linha original) | WITH CHECK (linha resultante) |
-|---------|------------------------|-------------------------------|
-| Plantonista atualiza dados | Sessão ativa na unidade do leito ✅ | Mesmo leito mantido ✅ |
-| Plantonista registra desfecho | Sessão ativa na unidade do leito ✅ | bed_id = NULL permitido ✅ |
-| Plantonista tenta mover para outra unidade | ✅ | Falha (sem acesso à nova unidade) ❌ |
-| Admin/Coordenador/Diarista | Privileged role ✅ | Qualquer alteração permitida ✅ |
-
-## Alterações Necessárias
-
-### 1. Nova Migração SQL
-
-```sql
--- Recria política de UPDATE com WITH CHECK separado
-DROP POLICY IF EXISTS "Approved users can update patients in assigned units" 
-ON public.patients;
-
-CREATE POLICY "Approved users can update patients in assigned units"
-ON public.patients FOR UPDATE
-USING (
-  -- Verifica acesso à linha ORIGINAL
-  (auth.uid() IS NOT NULL) AND 
-  is_approved(auth.uid()) AND 
-  (
-    (bed_id IS NULL AND has_privileged_role(auth.uid())) OR 
-    (bed_id IS NOT NULL AND EXISTS (
-      SELECT 1 FROM beds b
-      WHERE b.id = patients.bed_id 
-      AND has_unit_access(auth.uid(), b.unit_id)
-      AND (
-        has_active_session_in_unit(auth.uid(), b.unit_id) OR
-        has_privileged_role(auth.uid())
-      )
-    ))
-  )
-)
-WITH CHECK (
-  -- Verifica se o resultado é permitido
-  (auth.uid() IS NOT NULL) AND 
-  is_approved(auth.uid()) AND 
-  (
-    -- Privileged roles podem fazer qualquer alteração
-    has_privileged_role(auth.uid()) OR
-    
-    -- Plantonistas podem:
-    (
-      -- Liberar leito (desfecho) - bed_id vai para NULL
-      (bed_id IS NULL) OR
-      
-      -- Manter no mesmo leito ou mover dentro da mesma unidade com sessão ativa
-      (bed_id IS NOT NULL AND EXISTS (
-        SELECT 1 FROM beds b
-        WHERE b.id = bed_id 
-        AND has_unit_access(auth.uid(), b.unit_id)
-        AND has_active_session_in_unit(auth.uid(), b.unit_id)
-      ))
-    )
-  )
-);
-```
+### 2. Atualizar Sessão Antes de Operações Críticas
+Modificar `PatientDischargeDialog` para chamar `updateActivity()` antes de executar o UPDATE, garantindo que a sessão esteja ativa no momento da operação.
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| Nova migração SQL | Recriar política de UPDATE com WITH CHECK apropriado |
+| `src/pages/PatientDetails.tsx` | Adicionar listener de atividade como no Dashboard |
+| `src/components/patient/PatientDischargeDialog.tsx` | Chamar `updateActivity` antes do UPDATE |
 
-## Segurança Mantida
+## Detalhes Técnicos
 
-- Plantonistas só podem atualizar pacientes em unidades onde têm sessão ativa
-- Plantonistas podem definir `bed_id = NULL` (necessário para desfecho)
-- Plantonistas NÃO podem mover pacientes para unidades sem sessão ativa
-- Roles privilegiados (admin, coordenador, diarista, nir) mantêm acesso flexível
+### PatientDetails.tsx
+
+```typescript
+// Adicionar imports
+import { useUnit } from '@/hooks/useUnit';
+import { useCallback, useRef, useEffect } from 'react';
+
+// Dentro do componente
+const { updateActivity, activeSession } = useUnit();
+const lastActivityUpdate = useRef<number>(0);
+const ACTIVITY_DEBOUNCE_MS = 30 * 1000; // 30 seconds
+
+const handleUserActivity = useCallback(() => {
+  if (!activeSession) return;
+  const now = Date.now();
+  if (now - lastActivityUpdate.current >= ACTIVITY_DEBOUNCE_MS) {
+    lastActivityUpdate.current = now;
+    updateActivity();
+  }
+}, [activeSession, updateActivity]);
+
+useEffect(() => {
+  if (!activeSession) return;
+  window.addEventListener('click', handleUserActivity);
+  window.addEventListener('keypress', handleUserActivity);
+  window.addEventListener('scroll', handleUserActivity);
+
+  return () => {
+    window.removeEventListener('click', handleUserActivity);
+    window.removeEventListener('keypress', handleUserActivity);
+    window.removeEventListener('scroll', handleUserActivity);
+  };
+}, [activeSession, handleUserActivity]);
+```
+
+### PatientDischargeDialog.tsx
+
+```typescript
+// Adicionar import
+import { useUnit } from '@/hooks/useUnit';
+
+// Dentro do componente
+const { updateActivity } = useUnit();
+
+const handleDischarge = async () => {
+  if (!outcome) return;
+  setIsLoading(true);
+
+  try {
+    // Atualizar sessão antes da operação crítica
+    await updateActivity();
+    
+    const { error: patientError } = await supabase
+      .from('patients')
+      .update({...})
+      .eq('id', patientId);
+    // ... resto do código
+  }
+}
+```
 
 ## Resultado Esperado
 
-Após a correção, o fluxo funcionará:
-1. Plantonista abre modal do paciente regulado
-2. Clica em "Registrar Desfecho"
-3. Seleciona "Transferência Externa"
-4. Confirma → UPDATE executa com sucesso
-5. Leito é liberado automaticamente
+1. Interações na página de detalhes do paciente também atualizam a sessão
+2. Antes de operações críticas (desfecho), a sessão é explicitamente atualizada
+3. Plantonistas conseguem registrar desfechos mesmo após navegação prolongada
+4. Nenhuma alteração em políticas RLS necessária (já estão corretas)
+
+## Segurança Mantida
+
+- A lógica de sessão ativa continua sendo verificada
+- Apenas a atualização de atividade é acionada automaticamente
+- Não há bypass de segurança - apenas garantia de que sessões válidas não expirem indevidamente
+
+## Testes Sugeridos
+
+1. Login como plantonista
+2. Abrir modal do paciente
+3. Aguardar alguns minutos sem interação
+4. Confirmar que clicar no modal atualiza a sessão
+5. Registrar desfecho com sucesso
