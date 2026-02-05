@@ -5,7 +5,8 @@ import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { TeamUserManagement } from '@/components/team/TeamUserManagement';
 import { PrintLogsManagement } from '@/components/admin/PrintLogsManagement';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, Printer, FileText } from 'lucide-react';
+import { Users, Printer, FileText, MonitorSmartphone } from 'lucide-react';
+import { ActiveSessionsCard } from '@/components/admin/ActiveSessionsCard';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { TermsContent } from '@/components/terms/TermsContent';
 
@@ -66,6 +67,10 @@ export default function TeamManagement() {
               <Printer className="h-4 w-4" />
               Impressões
             </TabsTrigger>
+            <TabsTrigger value="sessions" className="gap-2">
+              <MonitorSmartphone className="h-4 w-4" />
+              Sessões
+            </TabsTrigger>
             <TabsTrigger value="terms" className="gap-2">
               <FileText className="h-4 w-4" />
               Termos
@@ -78,6 +83,10 @@ export default function TeamManagement() {
 
           <TabsContent value="prints">
             <PrintLogsManagement />
+          </TabsContent>
+
+          <TabsContent value="sessions">
+            <ActiveSessionsCard />
           </TabsContent>
 
           <TabsContent value="terms">
