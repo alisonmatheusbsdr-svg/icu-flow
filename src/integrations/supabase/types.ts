@@ -555,6 +555,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          accepted_terms_at: string | null
           approval_status: Database["public"]["Enums"]["approval_status"]
           created_at: string
           crm: string
@@ -563,6 +564,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          accepted_terms_at?: string | null
           approval_status?: Database["public"]["Enums"]["approval_status"]
           created_at?: string
           crm: string
@@ -571,6 +573,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          accepted_terms_at?: string | null
           approval_status?: Database["public"]["Enums"]["approval_status"]
           created_at?: string
           crm?: string
