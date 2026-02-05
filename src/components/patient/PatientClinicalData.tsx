@@ -272,6 +272,7 @@ const COMMON_ANTIBIOTICS: Record<string, { category: string; emoji: string }> = 
   'Linezolida': { category: 'outro', emoji: '🧪' },
   'Clindamicina': { category: 'outro', emoji: '🧪' },
   'Fluconazol': { category: 'outro', emoji: '🧪' },
+  'Azitromicina': { category: 'outro', emoji: '🧪' },
 };
 
 const ATB_CATEGORIES = [
