@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useUnit } from '@/hooks/useUnit';
 import {
   Dialog,
   DialogContent,
@@ -61,6 +62,7 @@ export function PatientDischargeDialog({
   onSuccess,
 }: PatientDischargeDialogProps) {
   const { toast } = useToast();
+  const { updateActivity } = useUnit();
   const [outcome, setOutcome] = useState<DischargeOutcome | ''>('');
   const [isLoading, setIsLoading] = useState(false);
   const [justification, setJustification] = useState('');
@@ -79,6 +81,9 @@ export function PatientDischargeDialog({
     setIsLoading(true);
 
     try {
+      // Atualizar sessão antes da operação crítica para garantir RLS
+      await updateActivity();
+
       const { error: patientError } = await supabase
         .from('patients')
         .update({
