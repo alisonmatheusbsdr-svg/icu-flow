@@ -1,134 +1,122 @@
 
-# Plano: Adicionar Funcionalidade de Deletar Membro da Equipe
+# Plano: Termos de Uso e Politica de Privacidade
 
-## Contexto
+## Objetivo
 
-Atualmente o sistema permite:
-- **Aceitar**: Aprovar cadastro pendente
-- **Rejeitar**: Negar cadastro pendente  
-- **Revogar**: Mudar status de aprovado para rejeitado
+Criar um documento completo de **"Termos de Uso e Politica de Privacidade"** (nome mais claro e profissional) que:
+1. Aparece no formulario de cadastro como checkbox obrigatorio
+2. Pode ser lido em um popup (Dialog) antes de aceitar
+3. Nao permite copiar texto ou imprimir o conteudo
+4. Registra no banco de dados que o usuario aceitou e quando
 
-Falta a opção de **deletar permanentemente** um usuário do sistema.
+## Alteracoes
 
-## Requisitos de Segurança
+### 1. Migracao: Adicionar campo `accepted_terms_at` na tabela `profiles`
 
-| Papel | Pode deletar |
-|-------|-------------|
-| Admin | Qualquer usuário (exceto a si mesmo) |
-| Coordenador | Apenas plantonistas e diaristas |
-
-## Arquitetura da Solução
-
-### 1. Nova Edge Function: `delete-user`
-
-Necessária porque deletar usuários do Supabase Auth requer a `service_role_key`, que não pode ser exposta no frontend.
-
-A função irá:
-1. Verificar se o usuário solicitante é Admin ou Coordenador
-2. Se Coordenador, verificar se o usuário-alvo é plantonista/diarista
-3. Impedir auto-exclusão
-4. Deletar registros relacionados (user_roles, user_units, active_sessions)
-5. Deletar profile
-6. Deletar usuário do auth.users
-
-### 2. Diálogo de Confirmação
-
-Criar componente `DeleteUserDialog` com:
-- Aviso sobre ação irreversível
-- Nome do usuário a ser deletado
-- Botão de confirmação com texto "Excluir permanentemente"
-
-### 3. Integração nos Componentes
-
-**Arquivos a modificar:**
-- `src/components/team/TeamUserManagement.tsx` - Adicionar função e botão de deletar
-- `src/components/team/TeamUserCard.tsx` - Adicionar botão de deletar no card mobile
-
-**Arquivos a criar:**
-- `supabase/functions/delete-user/index.ts` - Edge function para deletar
-- `src/components/team/DeleteUserDialog.tsx` - Diálogo de confirmação
-
-## Detalhes Técnicos
-
-### Edge Function: delete-user
-
-```typescript
-// Fluxo principal:
-1. Validar token JWT do solicitante
-2. Verificar papel (admin ou coordenador)
-3. Buscar dados do usuário-alvo
-4. Validar permissões (coordenador só deleta plantonista/diarista)
-5. Impedir auto-exclusão
-6. Deletar em cascata:
-   - user_roles
-   - user_units  
-   - active_sessions
-   - print_logs (SET NULL)
-   - profiles
-   - auth.users (via Admin API)
-7. Retornar sucesso
+```sql
+ALTER TABLE public.profiles 
+ADD COLUMN accepted_terms_at timestamptz DEFAULT NULL;
 ```
 
-### Interface do Botão
+Isso registra **quando** o usuario aceitou os termos. Se for `NULL`, nunca aceitou.
 
-O botão "Excluir" aparecerá:
-- Para **usuários rejeitados** (já não têm acesso, faz sentido limpar)
-- Para **qualquer usuário** (Admin sempre, Coordenador conforme permissão)
+### 2. Novo Componente: `TermsAndPrivacyDialog.tsx`
 
-Posicionamento: Junto aos outros botões de ação, com ícone de lixeira e cor vermelha.
+Componente de Dialog com o documento completo, incluindo:
 
-### Diálogo de Confirmação
+**Conteudo do documento:**
+- Introducao e definicoes (Sinapse UTI, dados de saude)
+- Objeto do sistema (passagem de plantao, gestao de leitos)
+- Responsabilidades do usuario
+- Coleta e tratamento de dados (LGPD - Lei 13.709/2018)
+- Base legal para tratamento (art. 7 e art. 11 da LGPD)
+- Compartilhamento de dados
+- Seguranca da informacao
+- Direitos do titular dos dados (art. 18 da LGPD)
+- Retencao e exclusao de dados
+- Atualizacoes dos termos
+- Disposicoes finais
 
-```text
-┌─────────────────────────────────────────┐
-│  ⚠️ Excluir Usuário                     │
-├─────────────────────────────────────────┤
-│                                         │
-│  Tem certeza que deseja excluir         │
-│  permanentemente o usuário:             │
-│                                         │
-│  Dr. João Silva (CRM: 12345-SP)         │
-│                                         │
-│  Esta ação não pode ser desfeita.       │
-│  O usuário perderá acesso ao sistema    │
-│  e precisará se cadastrar novamente.    │
-│                                         │
-│         [Cancelar]  [Excluir]           │
-└─────────────────────────────────────────┘
+**Protecoes contra copia/impressao:**
+- CSS: `user-select: none` no conteudo do documento
+- CSS: `@media print { display: none }` para esconder na impressao
+- JS: `onContextMenu={e => e.preventDefault()}` para bloquear menu de contexto
+- JS: `onCopy={e => e.preventDefault()}` para bloquear Ctrl+C
+
+### 3. Modificacao: `Auth.tsx` - Formulario de Cadastro
+
+Adicionar antes do botao "Criar conta":
+
+```
+[x] Li e aceito os Termos de Uso e Politica de Privacidade
+                        ↑ link clicavel que abre o Dialog
 ```
 
-## Fluxo do Usuário
+- Checkbox obrigatorio (`acceptedTerms` state)
+- Validacao: se nao marcou, mostra erro "Voce precisa aceitar os termos para criar sua conta"
+- Ao criar conta com sucesso, salva `accepted_terms_at` no profile
 
-```text
-1. Coordenador vê lista de equipe
-2. Clica no ícone de lixeira (🗑️) em um plantonista
-3. Diálogo de confirmação aparece
-4. Confirma a exclusão
-5. Edge function executa a deleção
-6. Lista atualiza automaticamente
-7. Toast de sucesso exibido
-```
+### 4. Modificacao: `useAuth.tsx` - Salvar aceite
+
+Apos o signUp bem-sucedido, atualizar o profile com `accepted_terms_at: new Date().toISOString()`.
+
+### 5. Nova Aba em TeamManagement: "Termos"
+
+Adicionar uma terceira aba na pagina `/equipe` para que Admin/Coordenador possam visualizar o documento completo dos termos vigentes (somente leitura, sem edicao).
 
 ## Arquivos a Criar/Modificar
 
-| Arquivo | Ação |
+| Arquivo | Acao |
 |---------|------|
-| `supabase/functions/delete-user/index.ts` | Criar edge function |
-| `src/components/team/DeleteUserDialog.tsx` | Criar diálogo de confirmação |
-| `src/components/team/TeamUserManagement.tsx` | Adicionar função e integrar diálogo |
-| `src/components/team/TeamUserCard.tsx` | Adicionar botão de deletar (mobile) |
+| Nova migracao SQL | Adicionar `accepted_terms_at` em `profiles` |
+| `src/components/terms/TermsAndPrivacyDialog.tsx` | Criar componente do documento |
+| `src/components/terms/TermsContent.tsx` | Conteudo textual dos termos (separado para reutilizar) |
+| `src/pages/Auth.tsx` | Adicionar checkbox + dialog no signup |
+| `src/hooks/useAuth.tsx` | Salvar `accepted_terms_at` apos signup |
+| `src/pages/TeamManagement.tsx` | Adicionar aba "Termos" |
 
-## Considerações de Segurança
+## Fluxo do Usuario
 
-- Edge function valida papel do solicitante no servidor
-- Coordenador não pode deletar coordenadores, NIR ou admins
-- Usuário não pode deletar a si mesmo
-- Todas as ações são logadas no console da edge function
-- Deleção em cascata garante limpeza completa dos dados
+```text
+CADASTRO
+1. Usuario preenche formulario
+2. Ve checkbox: "Li e aceito os Termos de Uso e Politica de Privacidade"
+3. Pode clicar no link para abrir popup e ler o documento
+4. No popup: texto completo, scroll, sem possibilidade de copiar/imprimir
+5. Fecha popup e marca o checkbox
+6. Clica "Criar conta"
+7. Sistema registra accepted_terms_at no profile
 
-## Resultado Esperado
+GESTAO (/equipe)
+1. Coordenador/Admin acessa aba "Termos"
+2. Visualiza o documento completo vigente
+```
 
-1. Novo botão "Excluir" visível na lista de usuários
-2. Diálogo de confirmação antes de deletar
-3. Usuário removido completamente do sistema
-4. Interface atualizada automaticamente após exclusão
+## Conteudo Resumido do Documento
+
+O documento tera ~15 secoes cobrindo:
+
+| Secao | Conteudo Principal |
+|-------|-------------------|
+| 1. Introducao | O que e o Sinapse UTI e a quem se destina |
+| 2. Definicoes | Termos tecnicos: usuario, dados pessoais, dados sensiveis |
+| 3. Objeto | Finalidade: passagem de plantao, gestao de leitos UTI |
+| 4. Cadastro e Acesso | Responsabilidade por credenciais, aprovacao por admin |
+| 5. Responsabilidades | Veracidade das informacoes, uso adequado |
+| 6. Coleta de Dados | Quais dados sao coletados (nome, CRM, email, acoes) |
+| 7. Base Legal LGPD | Art. 7 (consentimento) e Art. 11 (dados sensiveis de saude) |
+| 8. Finalidade do Tratamento | Para que os dados sao usados |
+| 9. Compartilhamento | Com quem dados podem ser compartilhados |
+| 10. Seguranca | Medidas tecnicas (criptografia, RLS, controle de acesso) |
+| 11. Direitos do Titular | Acesso, correcao, exclusao, portabilidade (Art. 18) |
+| 12. Retencao | Prazo de armazenamento e politica de exclusao |
+| 13. Cookies e Logs | Sessoes, logs de impressao, rastreabilidade |
+| 14. Atualizacoes | Como os termos podem ser atualizados |
+| 15. Contato e DPO | Canal para exercicio de direitos |
+
+## Seguranca
+
+- O aceite e registrado com timestamp no banco de dados
+- O campo `accepted_terms_at` e auditavel
+- Protecoes contra copia sao uma camada adicional (nao substituem direitos legais)
+- O documento referencia explicitamente a LGPD (Lei 13.709/2018)
