@@ -11,6 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Loader2, RefreshCw, Building2, BedDouble } from 'lucide-react';
+import { ActiveSessionsCard } from './ActiveSessionsCard';
 
 interface Unit {
   id: string;
@@ -264,6 +265,9 @@ export function UnitManagement() {
 
   return (
     <div className="space-y-6">
+      {/* Active Sessions */}
+      <ActiveSessionsCard />
+
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
