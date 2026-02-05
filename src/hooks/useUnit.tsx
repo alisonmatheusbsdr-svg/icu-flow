@@ -1,6 +1,7 @@
-import { useState, useEffect, createContext, useContext, ReactNode, useCallback } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import { toast } from '@/hooks/use-toast';
 
 interface Unit {
   id: string;
@@ -142,6 +143,42 @@ export function UnitProvider({ children }: { children: ReactNode }) {
       fetchActiveSession();
     }
   }, [units, user, fetchActiveSession]);
+
+  // Realtime listener: detect when our session is deleted remotely
+  const activeSessionRef = useRef(activeSession);
+  activeSessionRef.current = activeSession;
+
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('session-disconnect')
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'active_sessions',
+        },
+        (payload) => {
+          const currentSession = activeSessionRef.current;
+          if (currentSession && payload.old && (payload.old as any).id === currentSession.id) {
+            setActiveSession(null);
+            setSelectedUnit(null);
+            toast({
+              title: 'Sessão encerrada',
+              description: 'Sua sessão foi encerrada por questões de segurança. Caso ainda esteja no plantão na UTI selecionada, conecte-se novamente.',
+              variant: 'destructive',
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
 
   // Heartbeat - update activity every 5 minutes
   useEffect(() => {
