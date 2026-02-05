@@ -506,6 +506,53 @@ export type Database = {
           },
         ]
       }
+      print_logs: {
+        Row: {
+          bed_numbers: number[] | null
+          created_at: string | null
+          id: string
+          patient_count: number | null
+          patient_ids: string[] | null
+          print_type: string
+          unit_id: string | null
+          unit_name: string | null
+          user_id: string | null
+          user_name: string
+        }
+        Insert: {
+          bed_numbers?: number[] | null
+          created_at?: string | null
+          id?: string
+          patient_count?: number | null
+          patient_ids?: string[] | null
+          print_type: string
+          unit_id?: string | null
+          unit_name?: string | null
+          user_id?: string | null
+          user_name: string
+        }
+        Update: {
+          bed_numbers?: number[] | null
+          created_at?: string | null
+          id?: string
+          patient_count?: number | null
+          patient_ids?: string[] | null
+          print_type?: string
+          unit_id?: string | null
+          unit_name?: string | null
+          user_id?: string | null
+          user_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "print_logs_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           approval_status: Database["public"]["Enums"]["approval_status"]

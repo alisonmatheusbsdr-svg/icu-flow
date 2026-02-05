@@ -7,6 +7,7 @@ interface PrintPatientSheetProps {
   bedNumber: number;
   evolutionSummary?: string | null;
   authorProfiles?: Record<string, Profile>;
+  printedBy?: string;
 }
 
 // Helper to calculate days since a date
@@ -43,7 +44,8 @@ export function PrintPatientSheet({
   patient, 
   bedNumber, 
   evolutionSummary,
-  authorProfiles = {}
+  authorProfiles = {},
+  printedBy
 }: PrintPatientSheetProps) {
   const daysAdmitted = getDays(patient.admission_date);
   const currentPlan = patient.therapeutic_plans?.[0]?.content || null;
@@ -301,6 +303,13 @@ export function PrintPatientSheet({
                 </div>
               ))}
           </div>
+        </div>
+      )}
+
+      {/* Print Footer with user name */}
+      {printedBy && (
+        <div className="print-footer">
+          Impresso por: {printedBy} | {format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR })}
         </div>
       )}
     </div>

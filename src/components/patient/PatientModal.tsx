@@ -38,7 +38,7 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
   const [currentUnitId, setCurrentUnitId] = useState<string | null>(null);
   const { isPreparing, printData, showPreview, preparePrint, closePreview } = usePrintPatient();
-  const { canEdit } = useUnit();
+  const { canEdit, selectedUnit } = useUnit();
   const { hasRole } = useAuth();
   const isMobile = useIsMobile();
   const isNIR = hasRole('nir');
@@ -423,6 +423,8 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
             bedNumber={printData.bedNumber}
             evolutionSummary={printData.evolutionSummary}
             authorProfiles={printData.authorProfiles}
+            unitId={selectedUnit?.id}
+            unitName={selectedUnit?.name}
           />
         )}
       </DialogContent>

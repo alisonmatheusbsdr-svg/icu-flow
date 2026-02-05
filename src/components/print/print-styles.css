@@ -339,6 +339,19 @@
     flex: 1;
     color: #d32f2f;
   }
+
+  /* Print footer with user name */
+  .print-footer {
+    position: fixed;
+    bottom: 4mm;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 6pt;
+    color: #999;
+    border-top: 0.5px solid #eee;
+    padding-top: 2px;
+  }
 }
 
 /* Screen preview styles (for debugging) */
@@ -646,5 +659,15 @@
   .print-preview-container .print-exam-content {
     flex: 1;
     color: #d32f2f;
+  }
+
+  /* Print footer - Preview (shows in preview but positioned differently) */
+  .print-preview-container .print-footer {
+    margin-top: 8px;
+    text-align: center;
+    font-size: 6pt;
+    color: #999;
+    border-top: 0.5px solid #eee;
+    padding-top: 4px;
   }
 }

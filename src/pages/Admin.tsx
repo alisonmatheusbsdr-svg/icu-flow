@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { UserManagement } from '@/components/admin/UserManagement';
 import { UnitManagement } from '@/components/admin/UnitManagement';
-import { Users, Building2, Loader2 } from 'lucide-react';
+import { PrintLogsManagement } from '@/components/admin/PrintLogsManagement';
+import { Users, Building2, Printer, Loader2 } from 'lucide-react';
 
 export default function Admin() {
   const navigate = useNavigate();
@@ -50,6 +50,10 @@ export default function Admin() {
               <Building2 className="h-4 w-4" />
               Unidades
             </TabsTrigger>
+            <TabsTrigger value="prints" className="gap-2">
+              <Printer className="h-4 w-4" />
+              Impressões
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="users">
@@ -58,6 +62,10 @@ export default function Admin() {
 
           <TabsContent value="units">
             <UnitManagement />
+          </TabsContent>
+
+          <TabsContent value="prints">
+            <PrintLogsManagement />
           </TabsContent>
         </Tabs>
       </main>

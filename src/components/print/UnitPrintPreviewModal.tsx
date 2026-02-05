@@ -3,6 +3,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Printer, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { PrintPatientSheet } from './PrintPatientSheet';
+import { usePrintLog } from '@/hooks/usePrintLog';
 import type { PatientWithDetails, Profile } from '@/types/database';
 import './print-styles.css';
 
@@ -16,6 +17,7 @@ interface PatientPrintData {
 interface UnitPrintPreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
+  unitId: string;
   unitName: string;
   patients: PatientPrintData[];
   isLoading?: boolean;
@@ -25,6 +27,7 @@ interface UnitPrintPreviewModalProps {
 export function UnitPrintPreviewModal({
   isOpen,
   onClose,
+  unitId,
   unitName,
   patients,
   isLoading = false,
@@ -33,6 +36,7 @@ export function UnitPrintPreviewModal({
   const [currentIndex, setCurrentIndex] = useState(0);
   const printContainerRef = useRef<HTMLDivElement>(null);
   const allPatientsRef = useRef<HTMLDivElement>(null);
+  const { logPrint, userName } = usePrintLog();
 
   const currentPatient = patients[currentIndex];
   const totalPatients = patients.length;
@@ -45,7 +49,16 @@ export function UnitPrintPreviewModal({
     setCurrentIndex(prev => Math.min(totalPatients - 1, prev + 1));
   };
 
-  const handlePrintAll = () => {
+  const handlePrintAll = async () => {
+    // Log the print action
+    await logPrint({
+      printType: 'unit_batch',
+      unitId,
+      unitName,
+      patientIds: patients.map(p => p.patient.id),
+      bedNumbers: patients.map(p => p.bedNumber)
+    });
+
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
@@ -280,6 +293,18 @@ export function UnitPrintPreviewModal({
           .print-dva-dose { font-size: 7pt; color: #666; }
           .print-resp-detail { font-size: 7pt; color: #666; }
           .print-no-data { font-size: 8pt; color: #999; font-style: italic; }
+          
+          .print-footer {
+            position: fixed;
+            bottom: 4mm;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 6pt;
+            color: #999;
+            border-top: 0.5px solid #eee;
+            padding-top: 2px;
+          }
         </style>
       </head>
       <body>
@@ -297,9 +322,18 @@ export function UnitPrintPreviewModal({
     }, 250);
   };
 
-  const handlePrintCurrent = () => {
+  const handlePrintCurrent = async () => {
     if (!currentPatient) return;
     
+    // Log the print action for single patient
+    await logPrint({
+      printType: 'single_patient',
+      unitId,
+      unitName,
+      patientIds: [currentPatient.patient.id],
+      bedNumbers: [currentPatient.bedNumber]
+    });
+
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
@@ -378,6 +412,18 @@ export function UnitPrintPreviewModal({
           .print-dva-dose { font-size: 7pt; color: #666; }
           .print-resp-detail { font-size: 7pt; color: #666; }
           .print-no-data { font-size: 8pt; color: #999; font-style: italic; }
+          
+          .print-footer {
+            position: fixed;
+            bottom: 4mm;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 6pt;
+            color: #999;
+            border-top: 0.5px solid #eee;
+            padding-top: 2px;
+          }
         </style>
       </head>
       <body>
@@ -504,6 +550,7 @@ export function UnitPrintPreviewModal({
                     bedNumber={currentPatient.bedNumber}
                     evolutionSummary={currentPatient.evolutionSummary}
                     authorProfiles={currentPatient.authorProfiles}
+                    printedBy={userName}
                   />
                 </div>
               )}
@@ -518,6 +565,7 @@ export function UnitPrintPreviewModal({
                   bedNumber={p.bedNumber}
                   evolutionSummary={p.evolutionSummary}
                   authorProfiles={p.authorProfiles}
+                  printedBy={userName}
                 />
               ))}
             </div>
