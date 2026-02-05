@@ -29,14 +29,17 @@ export default function Auth() {
   const [signupPassword, setSignupPassword] = useState('');
   const [signupPasswordConfirm, setSignupPasswordConfirm] = useState('');
   const [signupNome, setSignupNome] = useState('');
-  const [signupCrm, setSignupCrm] = useState('');
+  const [signupCrmNumber, setSignupCrmNumber] = useState('');
+  const [signupCrmUf, setSignupCrmUf] = useState('PE');
   const [signupRole, setSignupRole] = useState<AppRole>('plantonista');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+
+  const UF_OPTIONS = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT','PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO'];
 
   const handleRoleChange = (role: AppRole) => {
     setSignupRole(role);
     if (role === 'nir') {
-      setSignupCrm('');
+      setSignupCrmNumber('');
     }
   };
 
@@ -81,7 +84,7 @@ export default function Auth() {
       return;
     }
     
-    if (requiresCrm && !signupCrm) {
+    if (requiresCrm && !signupCrmNumber.trim()) {
       toast.error('CRM é obrigatório para equipe assistencial');
       return;
     }
@@ -117,7 +120,7 @@ export default function Auth() {
       return;
     }
 
-    const crmValue = requiresCrm ? signupCrm : 'N/A';
+    const crmValue = requiresCrm ? `CRM-${signupCrmUf} ${signupCrmNumber.trim()}` : 'N/A';
 
     setIsLoading(true);
     const { error } = await signUp(signupEmail, signupPassword, signupNome, crmValue, signupRole);
@@ -202,7 +205,7 @@ export default function Auth() {
                     <Input
                       id="signup-nome"
                       type="text"
-                      placeholder="Dr. João Silva"
+                      placeholder="João Silva"
                       value={signupNome}
                       onChange={(e) => setSignupNome(e.target.value)}
                       disabled={isLoading}
@@ -238,15 +241,28 @@ export default function Auth() {
                   </div>
                   {signupRole !== 'nir' && (
                     <div className="space-y-2">
-                      <Label htmlFor="signup-crm">CRM</Label>
-                      <Input
-                        id="signup-crm"
-                        type="text"
-                        placeholder="CRM-PE 123456"
-                        value={signupCrm}
-                        onChange={(e) => setSignupCrm(e.target.value)}
-                        disabled={isLoading}
-                      />
+                      <Label>CRM</Label>
+                      <div className="flex gap-2">
+                        <Select value={signupCrmUf} onValueChange={setSignupCrmUf}>
+                          <SelectTrigger className="w-[100px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {UF_OPTIONS.map(uf => (
+                              <SelectItem key={uf} value={uf}>{uf}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          id="signup-crm"
+                          type="text"
+                          placeholder="123456"
+                          value={signupCrmNumber}
+                          onChange={(e) => setSignupCrmNumber(e.target.value)}
+                          disabled={isLoading}
+                          className="flex-1"
+                        />
+                      </div>
                     </div>
                   )}
                   <div className="space-y-2">

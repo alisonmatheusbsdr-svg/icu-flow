@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { User, Lock, Loader2 } from 'lucide-react';
 
@@ -22,7 +23,10 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
   const { profile, updateProfile, updatePassword } = useAuth();
   
   const [nome, setNome] = useState('');
-  const [crm, setCrm] = useState('');
+  const [crmUf, setCrmUf] = useState('PE');
+  const [crmNumber, setCrmNumber] = useState('');
+
+  const UF_OPTIONS = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT','PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO'];
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isProfileLoading, setIsProfileLoading] = useState(false);
@@ -32,7 +36,16 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
   useEffect(() => {
     if (open && profile) {
       setNome(profile.nome || '');
-      setCrm(profile.crm || '');
+      // Parse CRM: "CRM-PE 123456" -> uf=PE, number=123456
+      const crmStr = profile.crm || '';
+      const match = crmStr.match(/^CRM-([A-Z]{2})\s*(.*)$/);
+      if (match) {
+        setCrmUf(match[1]);
+        setCrmNumber(match[2]);
+      } else {
+        setCrmUf('PE');
+        setCrmNumber(crmStr);
+      }
     }
   }, [open, profile]);
 
@@ -49,13 +62,14 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
       toast.error('O nome deve ter pelo menos 3 caracteres');
       return;
     }
-    if (!crm.trim()) {
-      toast.error('O CRM é obrigatório');
+    if (!crmNumber.trim()) {
+      toast.error('O número do CRM é obrigatório');
       return;
     }
 
     setIsProfileLoading(true);
-    const { error } = await updateProfile({ nome: nome.trim(), crm: crm.trim() });
+    const crmValue = `CRM-${crmUf} ${crmNumber.trim()}`;
+    const { error } = await updateProfile({ nome: nome.trim(), crm: crmValue });
     setIsProfileLoading(false);
 
     if (error) {
@@ -132,20 +146,33 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
                 id="profile-nome"
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
-                placeholder="Dr. João Silva"
+                placeholder="João Silva"
                 disabled={isProfileLoading}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="profile-crm">CRM</Label>
-              <Input
-                id="profile-crm"
-                value={crm}
-                onChange={(e) => setCrm(e.target.value)}
-                placeholder="CRM-PE 123456"
-                disabled={isProfileLoading}
-              />
+              <Label>CRM</Label>
+              <div className="flex gap-2">
+                <Select value={crmUf} onValueChange={setCrmUf} disabled={isProfileLoading}>
+                  <SelectTrigger className="w-[100px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {UF_OPTIONS.map(uf => (
+                      <SelectItem key={uf} value={uf}>{uf}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  id="profile-crm"
+                  value={crmNumber}
+                  onChange={(e) => setCrmNumber(e.target.value)}
+                  placeholder="123456"
+                  disabled={isProfileLoading}
+                  className="flex-1"
+                />
+              </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-4">
