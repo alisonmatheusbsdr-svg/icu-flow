@@ -1,119 +1,134 @@
 
-# Plano: Navegação do Coordenador e Remoção do Dropdown
+# Plano: Adicionar Funcionalidade de Deletar Membro da Equipe
 
-## Objetivo
+## Contexto
 
-1. Dar acesso visual aos logs de impressão para coordenadores
-2. Melhorar navegação entre modo assistencial e gestão
-3. Remover o dropdown de unidades (coordenador/diarista sempre vê Visão Geral)
+Atualmente o sistema permite:
+- **Aceitar**: Aprovar cadastro pendente
+- **Rejeitar**: Negar cadastro pendente  
+- **Revogar**: Mudar status de aprovado para rejeitado
 
-## Alterações
+Falta a opção de **deletar permanentemente** um usuário do sistema.
 
-### 1. TeamManagement.tsx - Adicionar Aba "Impressões"
+## Requisitos de Segurança
 
-Transformar a página `/equipe` em um hub com abas:
-- **Equipe**: gestão de usuários (existente)
-- **Impressões**: histórico de impressões (reutilizar `PrintLogsManagement`)
+| Papel | Pode deletar |
+|-------|-------------|
+| Admin | Qualquer usuário (exceto a si mesmo) |
+| Coordenador | Apenas plantonistas e diaristas |
 
-### 2. DashboardHeader.tsx - Simplificar Header
+## Arquitetura da Solução
 
-**Remover o dropdown para coordenadores/diaristas:**
-- Eles sempre veem a "Visão Geral"
-- Mostrar apenas um badge estático "Visão Geral" ao invés do dropdown
+### 1. Nova Edge Function: `delete-user`
 
-**Melhorar navegação:**
-- Renomear botão "Equipe" → "Gestão"
-- Em `/equipe`: mostrar botão "Acesso Assistencial" para voltar
+Necessária porque deletar usuários do Supabase Auth requer a `service_role_key`, que não pode ser exposta no frontend.
 
-### 3. Lógica de Exibição do Dropdown
+A função irá:
+1. Verificar se o usuário solicitante é Admin ou Coordenador
+2. Se Coordenador, verificar se o usuário-alvo é plantonista/diarista
+3. Impedir auto-exclusão
+4. Deletar registros relacionados (user_roles, user_units, active_sessions)
+5. Deletar profile
+6. Deletar usuário do auth.users
 
-```
-Quem vê o dropdown?
-├── Admin em "Acesso Assistencial" → SIM (pode querer ver unidade específica)
-├── Coordenador/Diarista → NÃO (sempre Visão Geral)
-└── Plantonista → NÃO (badge fixo da unidade travada)
-```
+### 2. Diálogo de Confirmação
 
-## Arquivos a Modificar
+Criar componente `DeleteUserDialog` com:
+- Aviso sobre ação irreversível
+- Nome do usuário a ser deletado
+- Botão de confirmação com texto "Excluir permanentemente"
 
-| Arquivo | Mudança |
-|---------|---------|
-| `src/pages/TeamManagement.tsx` | Adicionar Tabs com Equipe + Impressões |
-| `src/components/dashboard/DashboardHeader.tsx` | Remover dropdown para coord/diarista, melhorar navegação |
+### 3. Integração nos Componentes
 
-## Resultado Visual do Header
+**Arquivos a modificar:**
+- `src/components/team/TeamUserManagement.tsx` - Adicionar função e botão de deletar
+- `src/components/team/TeamUserCard.tsx` - Adicionar botão de deletar no card mobile
 
-**Antes (Coordenador):**
-```
-[Logo] [Dropdown: Visão Geral ▼] ... [Equipe] [Perfil] [Sair]
-```
-
-**Depois (Coordenador):**
-```
-[Logo] [Badge: Visão Geral] ... [Gestão] [Perfil] [Sair]
-```
-
-**Em /equipe:**
-```
-[Logo] ... [Acesso Assistencial] [Perfil] [Sair]
-```
-
-## Fluxo do Coordenador
-
-```text
-DASHBOARD (/dashboard)
-├── Vê "Visão Geral" automaticamente (sem dropdown)
-├── Botão "Gestão" → vai para /equipe
-└── Acesso aos pacientes normalmente
-
-GESTÃO (/equipe)
-├── Aba "Equipe" → aprovar/rejeitar usuários
-├── Aba "Impressões" → ver histórico de impressões
-└── Botão "Acesso Assistencial" → volta para /dashboard
-```
+**Arquivos a criar:**
+- `supabase/functions/delete-user/index.ts` - Edge function para deletar
+- `src/components/team/DeleteUserDialog.tsx` - Diálogo de confirmação
 
 ## Detalhes Técnicos
 
-### Header - Nova Lógica do Seletor
-
-O dropdown só aparece para Admin em modo assistencial quando ele quiser navegar entre unidades específicas. Para coordenadores e diaristas, mostra-se um badge fixo:
+### Edge Function: delete-user
 
 ```typescript
-// Coordenador/Diarista: sempre Visão Geral, sem dropdown
-if (canViewAllUnits && !hasRole('admin')) {
-  // Mostra badge "Visão Geral" fixo
-}
-
-// Admin em modo assistencial: mantém dropdown para flexibilidade
-if (hasRole('admin') && !isOnAdmin) {
-  // Mostra dropdown normal
-}
+// Fluxo principal:
+1. Validar token JWT do solicitante
+2. Verificar papel (admin ou coordenador)
+3. Buscar dados do usuário-alvo
+4. Validar permissões (coordenador só deleta plantonista/diarista)
+5. Impedir auto-exclusão
+6. Deletar em cascata:
+   - user_roles
+   - user_units  
+   - active_sessions
+   - print_logs (SET NULL)
+   - profiles
+   - auth.users (via Admin API)
+7. Retornar sucesso
 ```
 
-### TeamManagement - Estrutura com Abas
+### Interface do Botão
 
-```typescript
-<Tabs defaultValue="users">
-  <TabsList>
-    <TabsTrigger value="users">
-      <Users /> Equipe
-    </TabsTrigger>
-    <TabsTrigger value="prints">
-      <Printer /> Impressões
-    </TabsTrigger>
-  </TabsList>
-  
-  <TabsContent value="users">
-    <TeamUserManagement />
-  </TabsContent>
-  
-  <TabsContent value="prints">
-    <PrintLogsManagement />
-  </TabsContent>
-</Tabs>
+O botão "Excluir" aparecerá:
+- Para **usuários rejeitados** (já não têm acesso, faz sentido limpar)
+- Para **qualquer usuário** (Admin sempre, Coordenador conforme permissão)
+
+Posicionamento: Junto aos outros botões de ação, com ícone de lixeira e cor vermelha.
+
+### Diálogo de Confirmação
+
+```text
+┌─────────────────────────────────────────┐
+│  ⚠️ Excluir Usuário                     │
+├─────────────────────────────────────────┤
+│                                         │
+│  Tem certeza que deseja excluir         │
+│  permanentemente o usuário:             │
+│                                         │
+│  Dr. João Silva (CRM: 12345-SP)         │
+│                                         │
+│  Esta ação não pode ser desfeita.       │
+│  O usuário perderá acesso ao sistema    │
+│  e precisará se cadastrar novamente.    │
+│                                         │
+│         [Cancelar]  [Excluir]           │
+└─────────────────────────────────────────┘
 ```
 
-## Segurança
+## Fluxo do Usuário
 
-- RLS já permite coordenador ler `print_logs` (implementado anteriormente)
-- Nenhuma migração necessária
+```text
+1. Coordenador vê lista de equipe
+2. Clica no ícone de lixeira (🗑️) em um plantonista
+3. Diálogo de confirmação aparece
+4. Confirma a exclusão
+5. Edge function executa a deleção
+6. Lista atualiza automaticamente
+7. Toast de sucesso exibido
+```
+
+## Arquivos a Criar/Modificar
+
+| Arquivo | Ação |
+|---------|------|
+| `supabase/functions/delete-user/index.ts` | Criar edge function |
+| `src/components/team/DeleteUserDialog.tsx` | Criar diálogo de confirmação |
+| `src/components/team/TeamUserManagement.tsx` | Adicionar função e integrar diálogo |
+| `src/components/team/TeamUserCard.tsx` | Adicionar botão de deletar (mobile) |
+
+## Considerações de Segurança
+
+- Edge function valida papel do solicitante no servidor
+- Coordenador não pode deletar coordenadores, NIR ou admins
+- Usuário não pode deletar a si mesmo
+- Todas as ações são logadas no console da edge function
+- Deleção em cascata garante limpeza completa dos dados
+
+## Resultado Esperado
+
+1. Novo botão "Excluir" visível na lista de usuários
+2. Diálogo de confirmação antes de deletar
+3. Usuário removido completamente do sistema
+4. Interface atualizada automaticamente após exclusão
