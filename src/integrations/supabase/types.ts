@@ -845,6 +845,24 @@ export type Database = {
     }
     Functions: {
       cleanup_expired_sessions: { Args: never; Returns: undefined }
+      debug_patient_update_check: {
+        Args: { _new_bed_id: string; _user_id: string }
+        Returns: {
+          auth_uid_not_null: boolean
+          bed_is_null: boolean
+          full_check_result: boolean
+          is_user_approved: boolean
+          is_user_privileged: boolean
+        }[]
+      }
+      discharge_patient: {
+        Args: {
+          _outcome: Database["public"]["Enums"]["patient_outcome"]
+          _patient_id: string
+          _user_id: string
+        }
+        Returns: boolean
+      }
       has_active_session_in_unit: {
         Args: { _unit_id: string; _user_id: string }
         Returns: boolean

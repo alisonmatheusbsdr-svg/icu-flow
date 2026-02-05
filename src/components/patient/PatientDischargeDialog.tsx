@@ -81,29 +81,20 @@ export function PatientDischargeDialog({
     setIsLoading(true);
 
     try {
-      // Atualizar sessão antes da operação crítica para garantir RLS
+      // Atualizar sessão antes da operação crítica
       await updateActivity();
 
-      const { error: patientError } = await supabase
-        .from('patients')
-        .update({
-          outcome: outcome as PatientOutcome,
-          outcome_date: new Date().toISOString(),
-          is_active: false,
-          bed_id: null,
-        })
-        .eq('id', patientId);
+      // Usar função RPC que bypassa RLS para operação atômica
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
 
-      if (patientError) throw patientError;
+      const { error } = await supabase.rpc('discharge_patient', {
+        _patient_id: patientId,
+        _outcome: outcome,
+        _user_id: user.id
+      });
 
-      if (bedId) {
-        const { error: bedError } = await supabase
-          .from('beds')
-          .update({ is_occupied: false })
-          .eq('id', bedId);
-
-        if (bedError) throw bedError;
-      }
+      if (error) throw error;
 
       const label = outcomeOptions.find(o => o.value === outcome)?.label || outcome;
       toast({
