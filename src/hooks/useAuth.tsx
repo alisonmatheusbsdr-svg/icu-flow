@@ -133,6 +133,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user_id: data.user.id,
         role: role
       });
+
+      // Record terms acceptance timestamp
+      await supabase.from('profiles').update({
+        accepted_terms_at: new Date().toISOString()
+      }).eq('id', data.user.id);
     }
 
     return { error };

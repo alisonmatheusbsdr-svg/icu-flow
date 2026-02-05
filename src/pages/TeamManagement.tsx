@@ -5,7 +5,9 @@ import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { TeamUserManagement } from '@/components/team/TeamUserManagement';
 import { PrintLogsManagement } from '@/components/admin/PrintLogsManagement';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, Printer } from 'lucide-react';
+import { Users, Printer, FileText } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { TermsContent } from '@/components/terms/TermsContent';
 
 export default function TeamManagement() {
   const navigate = useNavigate();
@@ -64,6 +66,10 @@ export default function TeamManagement() {
               <Printer className="h-4 w-4" />
               Impressões
             </TabsTrigger>
+            <TabsTrigger value="terms" className="gap-2">
+              <FileText className="h-4 w-4" />
+              Termos
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="users">
@@ -72,6 +78,15 @@ export default function TeamManagement() {
 
           <TabsContent value="prints">
             <PrintLogsManagement />
+          </TabsContent>
+
+          <TabsContent value="terms">
+            <div className="bg-card rounded-lg border p-6">
+              <h2 className="text-lg font-semibold mb-4">Termos de Uso e Política de Privacidade Vigentes</h2>
+              <ScrollArea className="max-h-[70vh]">
+                <TermsContent />
+              </ScrollArea>
+            </div>
           </TabsContent>
         </Tabs>
       </main>

@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { Stethoscope, UserPlus, LogIn, ClipboardList } from 'lucide-react';
 import { SinapseLogo } from '@/components/SinapseLogo';
+import { Checkbox } from '@/components/ui/checkbox';
+import { TermsAndPrivacyDialog } from '@/components/terms/TermsAndPrivacyDialog';
 import type { AppRole } from '@/types/database';
 
 export default function Auth() {
@@ -29,6 +31,7 @@ export default function Auth() {
   const [signupNome, setSignupNome] = useState('');
   const [signupCrm, setSignupCrm] = useState('');
   const [signupRole, setSignupRole] = useState<AppRole>('plantonista');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const handleRoleChange = (role: AppRole) => {
     setSignupRole(role);
@@ -90,6 +93,11 @@ export default function Auth() {
 
     if (signupPassword.length < 6) {
       toast.error('A senha deve ter pelo menos 6 caracteres');
+      return;
+    }
+
+    if (!acceptedTerms) {
+      toast.error('Você precisa aceitar os Termos de Uso e Política de Privacidade');
       return;
     }
 
@@ -257,6 +265,24 @@ export default function Auth() {
                       onChange={(e) => setSignupPasswordConfirm(e.target.value)}
                       disabled={isLoading}
                     />
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <Checkbox
+                      id="accept-terms"
+                      checked={acceptedTerms}
+                      onCheckedChange={(checked) => setAcceptedTerms(checked === true)}
+                      disabled={isLoading}
+                    />
+                    <label htmlFor="accept-terms" className="text-sm leading-tight cursor-pointer">
+                      Li e aceito os{' '}
+                      <TermsAndPrivacyDialog
+                        trigger={
+                          <button type="button" className="text-primary underline hover:text-primary/80">
+                            Termos de Uso e Política de Privacidade
+                          </button>
+                        }
+                      />
+                    </label>
                   </div>
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? 'Criando conta...' : 'Criar conta'}
