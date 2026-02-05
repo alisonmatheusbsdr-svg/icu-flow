@@ -5,10 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Check, X, Loader2, RefreshCw, Users, UserCheck, UserX, Clock } from 'lucide-react';
+import { Check, X, Loader2, RefreshCw, Users, UserCheck, UserX, Clock, Trash2 } from 'lucide-react';
 import { Database } from '@/integrations/supabase/types';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { TeamUserCard } from './TeamUserCard';
+import { DeleteUserDialog } from './DeleteUserDialog';
+import { useAuth } from '@/hooks/useAuth';
 
 type AppRole = Database['public']['Enums']['app_role'];
 type ApprovalStatus = Database['public']['Enums']['approval_status'];
@@ -42,7 +44,11 @@ export function TeamUserManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [updatingUser, setUpdatingUser] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<UserData | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const isMobile = useIsMobile();
+  const { hasRole, user: currentUser } = useAuth();
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -93,6 +99,70 @@ export function TeamUserManagement() {
       toast.error('Erro ao atualizar status');
     } finally {
       setUpdatingUser(null);
+    }
+  };
+
+  // Check if current user can delete a target user based on roles
+  const canDeleteUser = (targetRoles: AppRole[]): boolean => {
+    if (!currentUser) return false;
+    
+    // Admins can delete anyone (except themselves, handled in dialog)
+    if (hasRole('admin')) return true;
+    
+    // Coordinators can only delete plantonistas and diaristas
+    if (hasRole('coordenador')) {
+      const allowedRoles = ['plantonista', 'diarista'];
+      // If user has no roles or only allowed roles, can delete
+      if (targetRoles.length === 0) return true;
+      return targetRoles.every(role => allowedRoles.includes(role));
+    }
+    
+    return false;
+  };
+
+  const handleDeleteClick = (user: UserData) => {
+    // Prevent self-deletion
+    if (user.id === currentUser?.id) {
+      toast.error('Você não pode excluir a si mesmo');
+      return;
+    }
+    setUserToDelete(user);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!userToDelete) return;
+    
+    setIsDeleting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error('Sessão expirada');
+        return;
+      }
+
+      const response = await supabase.functions.invoke('delete-user', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: { targetUserId: userToDelete.id },
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+
+      if (response.data?.error) {
+        throw new Error(response.data.error);
+      }
+
+      setUsers(prev => prev.filter(u => u.id !== userToDelete.id));
+      toast.success('Usuário excluído com sucesso');
+      setDeleteDialogOpen(false);
+      setUserToDelete(null);
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      toast.error(error instanceof Error ? error.message : 'Erro ao excluir usuário');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -205,6 +275,8 @@ export function TeamUserManagement() {
                   roleLabels={roleLabels}
                   isUpdating={updatingUser === user.id}
                   onUpdateApproval={updateApprovalStatus}
+                  canDeleteUser={canDeleteUser}
+                  onDeleteUser={handleDeleteClick}
                 />
               ))}
             </div>
@@ -239,8 +311,30 @@ export function TeamUserManagement() {
                       </TableCell>
                       <TableCell>{getStatusBadge(user.approval_status)}</TableCell>
                       <TableCell className="text-right">
-                        {user.approval_status === 'pending' && (
-                          <div className="flex justify-end gap-2">
+                        <div className="flex justify-end gap-2">
+                          {user.approval_status === 'pending' && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-green-600 hover:text-green-500 hover:bg-green-500/10"
+                                onClick={() => updateApprovalStatus(user.id, 'approved')}
+                                disabled={updatingUser === user.id}
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-red-600 hover:text-red-500 hover:bg-red-500/10"
+                                onClick={() => updateApprovalStatus(user.id, 'rejected')}
+                                disabled={updatingUser === user.id}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                          {user.approval_status === 'rejected' && (
                             <Button
                               size="sm"
                               variant="outline"
@@ -248,42 +342,33 @@ export function TeamUserManagement() {
                               onClick={() => updateApprovalStatus(user.id, 'approved')}
                               disabled={updatingUser === user.id}
                             >
-                              <Check className="h-4 w-4" />
+                              <Check className="h-4 w-4 mr-1" />
+                              Aprovar
                             </Button>
+                          )}
+                          {user.approval_status === 'approved' && (
                             <Button
                               size="sm"
-                              variant="outline"
-                              className="text-red-600 hover:text-red-500 hover:bg-red-500/10"
+                              variant="ghost"
+                              className="text-muted-foreground hover:text-red-500"
                               onClick={() => updateApprovalStatus(user.id, 'rejected')}
                               disabled={updatingUser === user.id}
                             >
-                              <X className="h-4 w-4" />
+                              Revogar
                             </Button>
-                          </div>
-                        )}
-                        {user.approval_status === 'rejected' && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-green-600 hover:text-green-500 hover:bg-green-500/10"
-                            onClick={() => updateApprovalStatus(user.id, 'approved')}
-                            disabled={updatingUser === user.id}
-                          >
-                            <Check className="h-4 w-4 mr-1" />
-                            Aprovar
-                          </Button>
-                        )}
-                        {user.approval_status === 'approved' && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-muted-foreground hover:text-red-500"
-                            onClick={() => updateApprovalStatus(user.id, 'rejected')}
-                            disabled={updatingUser === user.id}
-                          >
-                            Revogar
-                          </Button>
-                        )}
+                          )}
+                          {canDeleteUser(user.roles) && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => handleDeleteClick(user)}
+                              disabled={updatingUser === user.id}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -293,6 +378,15 @@ export function TeamUserManagement() {
           )}
         </CardContent>
       </Card>
+
+      <DeleteUserDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        userName={userToDelete?.nome || ''}
+        userCrm={userToDelete?.crm || ''}
+        onConfirm={handleDeleteConfirm}
+        isDeleting={isDeleting}
+      />
     </div>
   );
 }

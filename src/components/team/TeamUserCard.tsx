@@ -1,7 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Check, X, UserCheck, UserX, Clock, Loader2 } from 'lucide-react';
+import { Check, X, UserCheck, UserX, Clock, Loader2, Trash2 } from 'lucide-react';
 import { Database } from '@/integrations/supabase/types';
 
 type AppRole = Database['public']['Enums']['app_role'];
@@ -28,9 +28,11 @@ interface TeamUserCardProps {
   roleLabels: Record<string, string>;
   isUpdating: boolean;
   onUpdateApproval: (userId: string, status: ApprovalStatus) => void;
+  canDeleteUser: (userRoles: AppRole[]) => boolean;
+  onDeleteUser: (user: UserData) => void;
 }
 
-export function TeamUserCard({ user, roleLabels, isUpdating, onUpdateApproval }: TeamUserCardProps) {
+export function TeamUserCard({ user, roleLabels, isUpdating, onUpdateApproval, canDeleteUser, onDeleteUser }: TeamUserCardProps) {
   const getStatusBadge = (status: ApprovalStatus) => {
     switch (status) {
       case 'approved':
@@ -106,6 +108,16 @@ export function TeamUserCard({ user, roleLabels, isUpdating, onUpdateApproval }:
                   onClick={() => onUpdateApproval(user.id, 'rejected')}
                 >
                   Revogar
+                </Button>
+              )}
+              {canDeleteUser(user.roles) && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                  onClick={() => onDeleteUser(user)}
+                >
+                  <Trash2 className="h-4 w-4" />
                 </Button>
               )}
             </div>
