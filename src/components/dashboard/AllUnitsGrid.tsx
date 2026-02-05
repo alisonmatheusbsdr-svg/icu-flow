@@ -537,6 +537,7 @@ export function AllUnitsGrid() {
       <UnitPrintPreviewModal
         isOpen={!!printingUnitId && !isPrintLoading}
         onClose={handleClosePrintPreview}
+        unitId={printingUnitId || ''}
         unitName={printUnitName}
         patients={printPatients}
       />

@@ -3,6 +3,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Printer } from 'lucide-react';
 import { PrintPatientSheet } from './PrintPatientSheet';
+import { usePrintLog } from '@/hooks/usePrintLog';
 import type { PatientWithDetails, Profile } from '@/types/database';
 import './print-styles.css';
 
@@ -13,6 +14,8 @@ interface PrintPreviewModalProps {
   bedNumber: number;
   evolutionSummary: string | null;
   authorProfiles: Record<string, Profile>;
+  unitId?: string;
+  unitName?: string;
 }
 
 export function PrintPreviewModal({
@@ -21,11 +24,23 @@ export function PrintPreviewModal({
   patient,
   bedNumber,
   evolutionSummary,
-  authorProfiles
+  authorProfiles,
+  unitId,
+  unitName
 }: PrintPreviewModalProps) {
   const printContainerRef = useRef<HTMLDivElement>(null);
+  const { logPrint, userName } = usePrintLog();
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    // Log the print action
+    await logPrint({
+      printType: 'single_patient',
+      unitId,
+      unitName,
+      patientIds: [patient.id],
+      bedNumbers: [bedNumber]
+    });
+
     // Create a new window for printing
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
@@ -256,6 +271,18 @@ export function PrintPreviewModal({
           .print-dva-dose { font-size: 7pt; color: #666; }
           .print-resp-detail { font-size: 7pt; color: #666; }
           .print-no-data { font-size: 8pt; color: #999; font-style: italic; }
+          
+          .print-footer {
+            position: fixed;
+            bottom: 4mm;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 6pt;
+            color: #999;
+            border-top: 0.5px solid #eee;
+            padding-top: 2px;
+          }
         </style>
       </head>
       <body>
@@ -306,6 +333,7 @@ export function PrintPreviewModal({
               bedNumber={bedNumber}
               evolutionSummary={evolutionSummary}
               authorProfiles={authorProfiles}
+              printedBy={userName}
             />
           </div>
         </div>

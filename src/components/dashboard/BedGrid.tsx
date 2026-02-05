@@ -427,6 +427,7 @@ export function BedGrid({ unitId, unitName, bedCount }: BedGridProps) {
       <UnitPrintPreviewModal
         isOpen={isPrintMode}
         onClose={handleClosePrintPreview}
+        unitId={unitId}
         unitName={unitName}
         patients={printPatients}
         isLoading={isPrintLoading}
