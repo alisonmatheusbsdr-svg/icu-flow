@@ -1,60 +1,61 @@
 
 
-# Plano: Desconectar Usuario da UTI (Admin/Coordenador)
+# Plano: Notificacao em Tempo Real ao Ser Desconectado Remotamente
 
-## Contexto
+## Problema
 
-A politica de seguranca (RLS) ja permite que Admins e Coordenadores deletem qualquer sessao ativa. O que falta e apenas a **interface** para essa acao.
+Quando um Admin/Coordenador desconecta remotamente um plantonista, a sessao e deletada no banco mas o plantonista nao recebe nenhum aviso -- ele so percebe quando tenta fazer algo e falha.
 
-## Onde adicionar
+## Solucao
 
-Na pagina **Admin** (`/admin`), na aba "Unidades" (`UnitManagement.tsx`), vamos mostrar quem esta conectado em cada UTI e um botao para desconectar.
-
-Na pagina **Gestao** (`/equipe`), adicionar uma nova aba "Sessoes" para que Coordenadores tambem possam ver e encerrar sessoes.
+Adicionar um listener de Realtime no hook `useUnit.tsx` que monitora mudancas na tabela `active_sessions`. Quando detectar que a sessao do usuario foi deletada externamente (por outro usuario), exibir um toast de aviso e redirecionar para a tela de selecao de unidade.
 
 ## Alteracoes
 
-### 1. Componente: `src/components/admin/ActiveSessionsCard.tsx` (novo)
+### 1. Modificar: `src/hooks/useUnit.tsx`
 
-Componente reutilizavel que:
-- Busca sessoes ativas (tabela `active_sessions`) com join no `profiles` (nome) e `units` (nome da UTI)
-- Filtra sessoes expiradas (> 30 min sem atividade)
-- Lista cada sessao mostrando: nome do usuario, UTI, tempo conectado, status (bloqueante/visualizando/passagem)
-- Botao "Desconectar" ao lado de cada sessao
-- Confirmacao via AlertDialog antes de desconectar
-- Ao confirmar, faz `DELETE` na `active_sessions` pelo `id` da sessao (ja permitido pela RLS)
-- Subscription em realtime para atualizar automaticamente
+Dentro do `UnitProvider`, adicionar uma subscription Realtime que escuta eventos `DELETE` na tabela `active_sessions` filtrados pelo `user_id` do usuario logado:
 
-### 2. Modificar: `src/components/admin/UnitManagement.tsx`
+- Quando receber um evento DELETE cujo `old.id` corresponde ao `activeSession.id` atual:
+  - Limpar o estado local (`activeSession = null`, `selectedUnit = null`)
+  - Disparar um toast com a mensagem: "Sua sessao foi encerrada por questoes de seguranca. Caso ainda esteja no plantao na UTI, conecte-se novamente."
 
-Importar e renderizar o `ActiveSessionsCard` acima da lista de unidades.
+O redirect para `/select-unit` ja acontece automaticamente pelo `Dashboard.tsx` (linha 59), que redireciona plantonistas sem sessao ativa.
 
-### 3. Modificar: `src/pages/TeamManagement.tsx`
+**Detalhe tecnico**: Para que o Realtime envie o registro antigo em eventos DELETE, a tabela `active_sessions` precisa ter `REPLICA IDENTITY FULL`. Vou verificar se ja esta configurado; caso contrario, sera necessaria uma migracao simples.
 
-Adicionar uma nova aba "Sessoes" com o mesmo componente `ActiveSessionsCard`.
+### 2. Verificar/Adicionar migracao (se necessario)
 
-## Fluxo do Usuario
+Se a tabela `active_sessions` nao tiver `REPLICA IDENTITY FULL`, criar uma migracao:
+
+```sql
+ALTER TABLE public.active_sessions REPLICA IDENTITY FULL;
+```
+
+Isso permite que o Realtime envie os dados do registro deletado (incluindo `user_id` e `id`), necessario para filtrar corretamente.
+
+## Fluxo
 
 ```text
-1. Admin/Coordenador acessa Admin ou Gestao
-2. Ve card "Sessoes Ativas" com lista de quem esta conectado
-3. Clica "Desconectar" ao lado de um usuario
-4. Confirma no dialog: "Desconectar [Nome] da [UTI]?"
-5. Sessao e deletada do banco
-6. Plantonista desconectado vera que perdeu acesso na proxima interacao
+1. Plantonista esta conectado na UTI, com sessao ativa
+2. Admin/Coordenador clica "Desconectar" no painel de sessoes
+3. Sessao e deletada do banco
+4. Realtime envia evento DELETE para todos os subscribers
+5. useUnit detecta que o registro deletado e a sessao do usuario
+6. Toast aparece: "Sua sessao foi encerrada por questoes de seguranca..."
+7. Estado local e limpo -> Dashboard redireciona para /select-unit
 ```
 
 ## Arquivos
 
 | Arquivo | Acao |
 |---------|------|
-| `src/components/admin/ActiveSessionsCard.tsx` | Criar componente de sessoes ativas |
-| `src/components/admin/UnitManagement.tsx` | Adicionar card de sessoes |
-| `src/pages/TeamManagement.tsx` | Adicionar aba "Sessoes" |
+| `src/hooks/useUnit.tsx` | Adicionar subscription Realtime para detectar DELETE da propria sessao e exibir toast |
+| Migracao SQL (se necessario) | `ALTER TABLE active_sessions REPLICA IDENTITY FULL` |
 
 ## Seguranca
 
-- A RLS ja existe: "Admins can delete any session" permite `DELETE` para `admin` e `coordenador`
-- Nenhuma migracao necessaria
-- O componente usa o client Supabase autenticado, entao a RLS e respeitada automaticamente
+- Nenhuma alteracao de RLS necessaria
+- O listener apenas observa eventos -- nao faz nenhuma operacao de escrita
+- A mensagem e generica ("questoes de seguranca") para nao expor detalhes de quem desconectou
 
