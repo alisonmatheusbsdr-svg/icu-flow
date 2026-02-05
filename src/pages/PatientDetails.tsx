@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useUnit } from '@/hooks/useUnit';
 import { supabase } from '@/integrations/supabase/client';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { PatientClinicalData } from '@/components/patient/PatientClinicalData';
@@ -13,10 +14,37 @@ export default function PatientDetails() {
   const { patientId } = useParams();
   const navigate = useNavigate();
   const { user, isLoading: authLoading, isApproved } = useAuth();
+  const { updateActivity, activeSession } = useUnit();
   
   const [patient, setPatient] = useState<PatientWithDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [authorProfiles, setAuthorProfiles] = useState<Record<string, Profile>>({});
+
+  // Activity tracking for session heartbeat
+  const lastActivityUpdate = useRef<number>(0);
+  const ACTIVITY_DEBOUNCE_MS = 30 * 1000; // 30 seconds
+
+  const handleUserActivity = useCallback(() => {
+    if (!activeSession) return;
+    const now = Date.now();
+    if (now - lastActivityUpdate.current >= ACTIVITY_DEBOUNCE_MS) {
+      lastActivityUpdate.current = now;
+      updateActivity();
+    }
+  }, [activeSession, updateActivity]);
+
+  useEffect(() => {
+    if (!activeSession) return;
+    window.addEventListener('click', handleUserActivity);
+    window.addEventListener('keypress', handleUserActivity);
+    window.addEventListener('scroll', handleUserActivity);
+
+    return () => {
+      window.removeEventListener('click', handleUserActivity);
+      window.removeEventListener('keypress', handleUserActivity);
+      window.removeEventListener('scroll', handleUserActivity);
+    };
+  }, [activeSession, handleUserActivity]);
 
   const fetchPatient = async () => {
     if (!patientId) return;
