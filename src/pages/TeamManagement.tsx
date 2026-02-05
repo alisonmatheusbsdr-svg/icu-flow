@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { TeamUserManagement } from '@/components/team/TeamUserManagement';
+import { PrintLogsManagement } from '@/components/admin/PrintLogsManagement';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Users, Printer } from 'lucide-react';
 
 export default function TeamManagement() {
   const navigate = useNavigate();
@@ -45,12 +48,32 @@ export default function TeamManagement() {
       <DashboardHeader />
       <main className="container mx-auto px-4 py-6">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-foreground">Gestão de Equipe</h1>
+          <h1 className="text-2xl font-bold text-foreground">Gestão</h1>
           <p className="text-muted-foreground">
-            Aprove ou rejeite cadastros de plantonistas e diaristas
+            Gerencie sua equipe e acompanhe as impressões
           </p>
         </div>
-        <TeamUserManagement />
+        
+        <Tabs defaultValue="users" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="users" className="gap-2">
+              <Users className="h-4 w-4" />
+              Equipe
+            </TabsTrigger>
+            <TabsTrigger value="prints" className="gap-2">
+              <Printer className="h-4 w-4" />
+              Impressões
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="users">
+            <TeamUserManagement />
+          </TabsContent>
+
+          <TabsContent value="prints">
+            <PrintLogsManagement />
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );

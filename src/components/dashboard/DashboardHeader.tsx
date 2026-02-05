@@ -63,6 +63,10 @@ export function DashboardHeader() {
   
   const canViewAllUnits = hasRole('coordenador') || hasRole('diarista') || hasRole('admin');
   const isOnAdmin = location.pathname === '/admin';
+  const isOnTeamPage = location.pathname === '/equipe';
+  
+  // Only admins can switch between units - coordinators/diaristas always see "Visão Geral"
+  const showUnitDropdown = hasRole('admin') && !isOnAdmin && !isOnTeamPage;
   
   // Show handover buttons only for plantonistas with blocking sessions
   const showHandoverControls = activeSession?.is_blocking && !canSwitchUnits;
@@ -144,9 +148,10 @@ export function DashboardHeader() {
             <span className="font-semibold text-foreground hidden sm:inline">Sinapse | UTI</span>
           </button>
 
-          {/* Show dropdown for privileged users, fixed badge for plantonistas - hide on admin page and mobile */}
-          {units.length > 0 && !isOnAdmin && !isMobile && (
-            canSwitchUnits ? (
+          {/* Unit selector logic - hide on admin/team pages and mobile */}
+          {units.length > 0 && !isOnAdmin && !isOnTeamPage && !isMobile && (
+            showUnitDropdown ? (
+              // Admin gets the full dropdown
               <Select 
                 value={showAllUnits ? 'all' : selectedUnit?.id || ''} 
                 onValueChange={(id) => {
@@ -162,15 +167,12 @@ export function DashboardHeader() {
                   <SelectValue placeholder="Selecione a UTI" />
                 </SelectTrigger>
                 <SelectContent>
-                  {/* Coordinators and diaristas can see all units at once */}
-                  {canViewAllUnits && (
-                    <SelectItem value="all">
-                      <div className="flex items-center gap-2">
-                        <LayoutGrid className="h-4 w-4" />
-                        Visão Geral
-                      </div>
-                    </SelectItem>
-                  )}
+                  <SelectItem value="all">
+                    <div className="flex items-center gap-2">
+                      <LayoutGrid className="h-4 w-4" />
+                      Visão Geral
+                    </div>
+                  </SelectItem>
                   {units.map(unit => (
                     <SelectItem key={unit.id} value={unit.id}>
                       <div className="flex items-center gap-2">
@@ -181,7 +183,14 @@ export function DashboardHeader() {
                   ))}
                 </SelectContent>
               </Select>
+            ) : canViewAllUnits && !hasRole('admin') ? (
+              // Coordinators/Diaristas get a fixed "Visão Geral" badge
+              <Badge variant="secondary" className="gap-1.5 px-3 py-1.5 text-sm">
+                <LayoutGrid className="h-3 w-3" />
+                Visão Geral
+              </Badge>
             ) : selectedUnit && (
+              // Plantonistas get their locked unit badge
               <Badge variant="secondary" className="gap-1.5 px-3 py-1.5 text-sm">
                 <Lock className="h-3 w-3" />
                 {selectedUnit.name}
@@ -287,7 +296,7 @@ export function DashboardHeader() {
             </Button>
           )}
 
-          {!isOnAdmin && hasRole('admin') && (
+          {!isOnAdmin && !isOnTeamPage && hasRole('admin') && (
             <Button variant="outline" size="sm" onClick={() => navigate('/admin')} className="gap-2">
               <Settings className="h-4 w-4" />
               Admin
@@ -295,10 +304,18 @@ export function DashboardHeader() {
           )}
 
           {/* Team management button for coordinators (not admins, they have full admin access) */}
-          {!isOnAdmin && hasRole('coordenador') && !hasRole('admin') && (
+          {!isOnAdmin && !isOnTeamPage && hasRole('coordenador') && !hasRole('admin') && (
             <Button variant="outline" size="sm" onClick={() => navigate('/equipe')} className="gap-2">
               <Users className="h-4 w-4" />
-              Equipe
+              Gestão
+            </Button>
+          )}
+
+          {/* Back to dashboard button when on team page */}
+          {isOnTeamPage && (
+            <Button variant="outline" size="sm" onClick={() => navigate('/dashboard')} className="gap-2">
+              <Stethoscope className="h-4 w-4" />
+              Acesso Assistencial
             </Button>
           )}
 
