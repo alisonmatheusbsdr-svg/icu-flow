@@ -1,65 +1,52 @@
 
-# Plano: Adicionar Campo "Equipe Assistente" ao Paciente
 
-## Objetivo
+# Plano: Redirecionar para tela do paciente apos admissao
 
-Adicionar um campo de selecao de especialidade assistente (Ortopedia, Clinica Medica, Urologia, Cirurgia Geral) que aparece na admissao, edicao, modal do paciente e na impressao.
+## Problema
+
+Ao admitir um paciente, o sistema fecha o dialog e volta ao dashboard. O ideal e abrir direto a tela de detalhes do paciente recem-admitido.
 
 ## Alteracoes
 
-### 1. Migracao SQL
+### 1. `AdmitPatientForm.tsx`
 
-Adicionar coluna `specialty_team` na tabela `patients`:
+- Alterar `onSuccess` de `() => void` para `(patientId: string) => void`
+- Apos o insert, capturar o `id` do paciente retornado pelo Supabase (usando `.select().single()`)
+- Chamar `onSuccess(patientId)` com o ID do paciente criado
 
-```sql
-ALTER TABLE public.patients 
-ADD COLUMN specialty_team TEXT DEFAULT NULL;
+### 2. `BedCard.tsx`
+
+- Importar `useNavigate` do react-router-dom
+- No callback `onSuccess` do `AdmitPatientForm`, navegar para `/patient/{patientId}` em vez de apenas fechar o dialog
+
+## Detalhes tecnicos
+
+```typescript
+// AdmitPatientForm.tsx - capturar o ID retornado
+const { data: patientData, error } = await supabase
+  .from('patients')
+  .insert({ ... })
+  .select('id')
+  .single();
+
+onSuccess(patientData.id);
+
+// BedCard.tsx - navegar para o paciente
+const navigate = useNavigate();
+<AdmitPatientForm 
+  bedId={bed.id} 
+  onSuccess={(patientId) => { 
+    setIsAdmitOpen(false); 
+    onUpdate(); 
+    navigate(`/patient/${patientId}`); 
+  }} 
+/>
 ```
 
-### 2. Formulario de Admissao (`AdmitPatientForm.tsx`)
-
-- Adicionar estado `specialtyTeam`
-- Adicionar um grupo de botoes (similar ao de comorbidades) com as 4 opcoes: **Ortopedia**, **Clinica Medica**, **Urologia**, **Cirurgia Geral**
-- Posicionar entre "Hipotese Diagnostica" e "Comorbidades"
-- Incluir `specialty_team` no insert do Supabase
-
-### 3. Dialog de Edicao (`EditPatientDialog.tsx`)
-
-- Adicionar estado `specialtyTeam` inicializado com `patient.specialty_team`
-- Adicionar o mesmo seletor de especialidade
-- Incluir `specialty_team` no update do Supabase
-
-### 4. Modal do Paciente (`PatientModal.tsx`)
-
-- Exibir a especialidade como um Badge ao lado das iniciais no header (onde a seta indica na imagem), similar ao formato ja existente: `Leito 2 - AMBS` ficaria `Leito 2 - J.M.S` com a sigla da especialidade ao lado
-- Formato: exibir a sigla entre as informacoes demograficas (ex: `35a | 84kg | D1` com a especialidade como badge)
-
-### 5. Impressao (`PrintPatientSheet.tsx`)
-
-- Adicionar a especialidade no header da folha de impressao, entre as iniciais e a idade:
-  `LEITO 2 | AMBS | J.M.S | 35a | D1 | HD: Sepse`
-  Ficara: `LEITO 2 | J.M.S | ORTO | 35a | D1 | HD: Sepse`
-
-### 6. Tipo TypeScript (`types/database.ts`)
-
-- Adicionar `specialty_team: string | null;` na interface `Patient`
-
-## Mapa de Siglas
-
-| Especialidade | Sigla exibida |
-|---|---|
-| Ortopedia | ORTO |
-| Clinica Medica | CM |
-| Urologia | URO |
-| Cirurgia Geral | CG |
-
-## Arquivos Modificados
+## Arquivos modificados
 
 | Arquivo | Acao |
 |---|---|
-| Migracao SQL | Nova coluna `specialty_team` |
-| `src/types/database.ts` | Adicionar campo na interface Patient |
-| `src/components/dashboard/AdmitPatientForm.tsx` | Seletor de especialidade na admissao |
-| `src/components/patient/EditPatientDialog.tsx` | Seletor de especialidade na edicao |
-| `src/components/patient/PatientModal.tsx` | Exibir especialidade no header |
-| `src/components/print/PrintPatientSheet.tsx` | Exibir especialidade no header da impressao |
+| `src/components/dashboard/AdmitPatientForm.tsx` | Retornar `patientId` no callback |
+| `src/components/dashboard/BedCard.tsx` | Navegar para `/patient/:id` apos admissao |
+
