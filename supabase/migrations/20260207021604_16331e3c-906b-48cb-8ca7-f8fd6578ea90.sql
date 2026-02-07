@@ -1,0 +1,1 @@
+ALTER TABLE public.patients ADD COLUMN specialty_team TEXT DEFAULT NULL;

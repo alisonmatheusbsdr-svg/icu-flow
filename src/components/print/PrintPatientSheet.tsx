@@ -40,6 +40,13 @@ const DIET_LABELS: Record<string, string> = {
   'gtt': 'GTT',
 };
 
+const SPECIALTY_ABBREV: Record<string, string> = {
+  'Ortopedia': 'ORTO',
+  'Clínica Médica': 'CM',
+  'Urologia': 'URO',
+  'Cirurgia Geral': 'CG',
+};
+
 export function PrintPatientSheet({ 
   patient, 
   bedNumber, 
@@ -81,6 +88,12 @@ export function PrintPatientSheet({
           <span>LEITO {bedNumber}</span>
           <span>|</span>
           <span>{patient.initials}</span>
+          {patient.specialty_team && (
+            <>
+              <span>|</span>
+              <span><strong>{SPECIALTY_ABBREV[patient.specialty_team] || patient.specialty_team}</strong></span>
+            </>
+          )}
           <span>|</span>
           <span>{patient.age}a</span>
           <span>|</span>

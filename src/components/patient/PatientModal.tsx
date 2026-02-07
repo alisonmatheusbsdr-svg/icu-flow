@@ -43,6 +43,16 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
   const isMobile = useIsMobile();
   const isNIR = hasRole('nir');
 
+  const getSpecialtyAbbrev = (team: string): string => {
+    const map: Record<string, string> = {
+      'Ortopedia': 'ORTO',
+      'Clínica Médica': 'CM',
+      'Urologia': 'URO',
+      'Cirurgia Geral': 'CG',
+    };
+    return map[team] || team;
+  };
+
   const fetchPatient = async (isRefresh = false) => {
     if (!patientId) return;
 
@@ -285,9 +295,16 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
           {/* Título e informações demográficas */}
           <div className="flex items-start justify-between gap-2">
             <div>
-              <h2 className="text-lg md:text-xl font-bold text-foreground">
-                Leito {bedNumber} - {patient?.initials || '...'}
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg md:text-xl font-bold text-foreground">
+                  Leito {bedNumber} - {patient?.initials || '...'}
+                </h2>
+                {patient?.specialty_team && (
+                  <Badge variant="outline" className="text-xs font-semibold">
+                    {getSpecialtyAbbrev(patient.specialty_team)}
+                  </Badge>
+                )}
+              </div>
               {patient && (
                 <p className="text-xs md:text-sm text-muted-foreground mt-0.5 md:mt-1">
                   {patient.age}a {patient.weight ? `| ${patient.weight}kg` : ''} | D{daysAdmitted}

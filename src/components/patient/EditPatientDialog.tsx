@@ -16,6 +16,7 @@ import { PatientWithDetails } from "@/types/database";
 import { formatInitials } from "@/lib/utils";
 
 const COMMON_COMORBIDITIES = ['HAS', 'DM', 'DAC', 'DPOC', 'ASMA', 'IRC', 'IRC-HD'];
+const SPECIALTY_TEAMS = ['Ortopedia', 'Clínica Médica', 'Urologia', 'Cirurgia Geral'];
 
 const parseExistingComorbidities = (comorbidities: string | null) => {
   if (!comorbidities) return { selected: [] as string[], others: '' };
@@ -53,6 +54,7 @@ export function EditPatientDialog({
   const [selectedComorbidities, setSelectedComorbidities] = useState<string[]>(selected);
   const [otherComorbidities, setOtherComorbidities] = useState(others);
   const [isPalliative, setIsPalliative] = useState(patient.is_palliative);
+  const [specialtyTeam, setSpecialtyTeam] = useState<string | null>(patient.specialty_team || null);
 
   const toggleComorbidity = (comorbidity: string) => {
     setSelectedComorbidities(prev =>
@@ -82,6 +84,7 @@ export function EditPatientDialog({
           main_diagnosis: mainDiagnosis.trim() || null,
           comorbidities: [...selectedComorbidities, otherComorbidities.trim()].filter(Boolean).join(', ') || null,
           is_palliative: isPalliative,
+          specialty_team: specialtyTeam,
         })
         .eq("id", patient.id);
 
@@ -154,6 +157,23 @@ export function EditPatientDialog({
               onChange={(e) => setMainDiagnosis(e.target.value)}
               placeholder="Ex: Sepse de foco pulmonar"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Equipe Assistente</Label>
+            <div className="flex flex-wrap gap-2">
+              {SPECIALTY_TEAMS.map((team) => (
+                <Button
+                  key={team}
+                  type="button"
+                  variant={specialtyTeam === team ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSpecialtyTeam(prev => prev === team ? null : team)}
+                >
+                  {team}
+                </Button>
+              ))}
+            </div>
           </div>
 
           <div className="space-y-2">

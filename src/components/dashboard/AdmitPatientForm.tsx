@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { formatInitials } from '@/lib/utils';
 
 const COMMON_COMORBIDITIES = ['HAS', 'DM', 'DAC', 'DPOC', 'ASMA', 'IRC', 'IRC-HD'];
+const SPECIALTY_TEAMS = ['Ortopedia', 'Clínica Médica', 'Urologia', 'Cirurgia Geral'];
 
 interface AdmitPatientFormProps {
   bedId: string;
@@ -24,6 +25,7 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
   const [selectedComorbidities, setSelectedComorbidities] = useState<string[]>([]);
   const [otherComorbidities, setOtherComorbidities] = useState('');
   const [isPalliative, setIsPalliative] = useState(false);
+  const [specialtyTeam, setSpecialtyTeam] = useState<string | null>(null);
 
   const toggleComorbidity = (comorbidity: string) => {
     setSelectedComorbidities(prev =>
@@ -49,7 +51,8 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
       weight: weight ? parseFloat(weight) : null,
       main_diagnosis: mainDiagnosis || null,
       comorbidities: [...selectedComorbidities, otherComorbidities.trim()].filter(Boolean).join(', ') || null,
-      is_palliative: isPalliative
+      is_palliative: isPalliative,
+      specialty_team: specialtyTeam
     });
 
     if (patientError) {
@@ -85,6 +88,23 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
       <div className="space-y-2">
         <Label htmlFor="diagnosis">Hipótese Diagnóstica</Label>
         <Input id="diagnosis" placeholder="Ex: Sepse de foco pulmonar" value={mainDiagnosis} onChange={(e) => setMainDiagnosis(e.target.value)} />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Equipe Assistente</Label>
+        <div className="flex flex-wrap gap-2">
+          {SPECIALTY_TEAMS.map((team) => (
+            <Button
+              key={team}
+              type="button"
+              variant={specialtyTeam === team ? "default" : "outline"}
+              size="sm"
+              onClick={() => setSpecialtyTeam(prev => prev === team ? null : team)}
+            >
+              {team}
+            </Button>
+          ))}
+        </div>
       </div>
 
       <div className="space-y-2">
