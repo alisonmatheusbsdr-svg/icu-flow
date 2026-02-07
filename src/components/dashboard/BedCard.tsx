@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -101,6 +102,7 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
   const [isBlockDialogOpen, setIsBlockDialogOpen] = useState(false);
   const [isUnblocking, setIsUnblocking] = useState(false);
   const { hasRole } = useAuth();
+  const navigate = useNavigate();
 
   const canBlockBeds = hasRole('admin') || hasRole('coordenador');
 
@@ -212,7 +214,7 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
             <DialogHeader>
               <DialogTitle>Admitir Paciente - Leito {bed.bed_number}</DialogTitle>
             </DialogHeader>
-            <AdmitPatientForm bedId={bed.id} onSuccess={() => { setIsAdmitOpen(false); onUpdate(); }} />
+            <AdmitPatientForm bedId={bed.id} onSuccess={(patientId) => { setIsAdmitOpen(false); onUpdate(); navigate(`/patient/${patientId}`); }} />
           </DialogContent>
         </Dialog>
         
