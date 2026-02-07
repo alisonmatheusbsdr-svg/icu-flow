@@ -455,6 +455,7 @@ export type Database = {
           outcome: Database["public"]["Enums"]["patient_outcome"] | null
           outcome_date: string | null
           respiratory_status: Database["public"]["Enums"]["respiratory_status"]
+          specialty_team: string | null
           updated_at: string
           weight: number | null
         }
@@ -474,6 +475,7 @@ export type Database = {
           outcome?: Database["public"]["Enums"]["patient_outcome"] | null
           outcome_date?: string | null
           respiratory_status?: Database["public"]["Enums"]["respiratory_status"]
+          specialty_team?: string | null
           updated_at?: string
           weight?: number | null
         }
@@ -493,6 +495,7 @@ export type Database = {
           outcome?: Database["public"]["Enums"]["patient_outcome"] | null
           outcome_date?: string | null
           respiratory_status?: Database["public"]["Enums"]["respiratory_status"]
+          specialty_team?: string | null
           updated_at?: string
           weight?: number | null
         }

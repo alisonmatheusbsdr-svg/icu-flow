@@ -55,6 +55,7 @@ export interface Patient {
   outcome: PatientOutcome | null;
   outcome_date: string | null;
   diet_type: DietType;
+  specialty_team: string | null;
   created_at: string;
   updated_at: string;
 }
