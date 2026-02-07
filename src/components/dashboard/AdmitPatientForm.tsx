@@ -13,7 +13,7 @@ const SPECIALTY_TEAMS = ['Ortopedia', 'Clínica Médica', 'Urologia', 'Cirurgia 
 
 interface AdmitPatientFormProps {
   bedId: string;
-  onSuccess: () => void;
+  onSuccess: (patientId: string) => void;
 }
 
 export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
@@ -44,7 +44,7 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
 
     setIsLoading(true);
 
-    const { error: patientError } = await supabase.from('patients').insert({
+    const { data: patientData, error: patientError } = await supabase.from('patients').insert({
       bed_id: bedId,
       initials: initials.replace(/\./g, '').toUpperCase(),
       age: parseInt(age),
@@ -53,9 +53,9 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
       comorbidities: [...selectedComorbidities, otherComorbidities.trim()].filter(Boolean).join(', ') || null,
       is_palliative: isPalliative,
       specialty_team: specialtyTeam
-    });
+    }).select('id').single();
 
-    if (patientError) {
+    if (patientError || !patientData) {
       toast.error('Erro ao admitir paciente');
       setIsLoading(false);
       return;
@@ -65,7 +65,7 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
 
     toast.success('Paciente admitido com sucesso!');
     setIsLoading(false);
-    onSuccess();
+    onSuccess(patientData.id);
   };
 
   return (
