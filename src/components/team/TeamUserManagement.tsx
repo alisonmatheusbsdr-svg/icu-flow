@@ -3,7 +3,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { Check, X, Loader2, RefreshCw, Users, UserCheck, UserX, Clock, Trash2 } from 'lucide-react';
 import { Database } from '@/integrations/supabase/types';
@@ -31,6 +33,16 @@ interface UserData {
   created_at: string;
 }
 
+interface UnitOption {
+  id: string;
+  name: string;
+}
+
+const COORDINATOR_ROLES: { value: AppRole; label: string }[] = [
+  { value: 'plantonista', label: 'Plantonista' },
+  { value: 'diarista', label: 'Diarista' },
+];
+
 const roleLabels: Record<string, string> = {
   plantonista: 'Plantonista',
   diarista: 'Diarista',
@@ -41,6 +53,7 @@ const roleLabels: Record<string, string> = {
 
 export function TeamUserManagement() {
   const [users, setUsers] = useState<UserData[]>([]);
+  const [allUnits, setAllUnits] = useState<UnitOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [updatingUser, setUpdatingUser] = useState<string | null>(null);
@@ -68,7 +81,7 @@ export function TeamUserManagement() {
       }
 
       setUsers(response.data.users || []);
-    } catch (error) {
+      } catch (error) {
       console.error('Error fetching users:', error);
       toast.error('Erro ao carregar usuários');
     } finally {
@@ -101,6 +114,63 @@ export function TeamUserManagement() {
       setUpdatingUser(null);
     }
   };
+
+  const updateUserRole = async (userId: string, newRole: AppRole) => {
+    setUpdatingUser(userId);
+    try {
+      await supabase.from('user_roles').delete().eq('user_id', userId);
+      const { error } = await supabase
+        .from('user_roles')
+        .insert({ user_id: userId, role: newRole });
+      if (error) throw error;
+      setUsers(prev => prev.map(u => 
+        u.id === userId ? { ...u, roles: [newRole] } : u
+      ));
+      toast.success('Função atualizada com sucesso');
+    } catch (error) {
+      console.error('Error updating role:', error);
+      toast.error('Erro ao atualizar função');
+    } finally {
+      setUpdatingUser(null);
+    }
+  };
+
+  const toggleUserUnit = async (userId: string, unitId: string, isAssigned: boolean) => {
+    setUpdatingUser(userId);
+    try {
+      if (isAssigned) {
+        const { error } = await supabase
+          .from('user_units')
+          .delete()
+          .eq('user_id', userId)
+          .eq('unit_id', unitId);
+        if (error) throw error;
+        setUsers(prev => prev.map(u => 
+          u.id === userId 
+            ? { ...u, units: u.units.filter(unit => unit.id !== unitId) } 
+            : u
+        ));
+      } else {
+        const { error } = await supabase
+          .from('user_units')
+          .insert({ user_id: userId, unit_id: unitId });
+        if (error) throw error;
+        const unitName = allUnits.find(u => u.id === unitId)?.name || 'Unknown';
+        setUsers(prev => prev.map(u => 
+          u.id === userId 
+            ? { ...u, units: [...u.units, { id: unitId, name: unitName }] } 
+            : u
+        ));
+      }
+      toast.success('Unidade atualizada com sucesso');
+    } catch (error) {
+      console.error('Error toggling unit:', error);
+      toast.error('Erro ao atualizar unidade');
+    } finally {
+      setUpdatingUser(null);
+    }
+  };
+
 
   // Check if current user can delete a target user based on roles
   const canDeleteUser = (targetRoles: AppRole[]): boolean => {
@@ -272,9 +342,13 @@ export function TeamUserManagement() {
                 <TeamUserCard
                   key={user.id}
                   user={user}
+                  allUnits={allUnits}
+                  roles={COORDINATOR_ROLES}
                   roleLabels={roleLabels}
                   isUpdating={updatingUser === user.id}
                   onUpdateApproval={updateApprovalStatus}
+                  onUpdateRole={updateUserRole}
+                  onToggleUnit={toggleUserUnit}
                   canDeleteUser={canDeleteUser}
                   onDeleteUser={handleDeleteClick}
                 />
@@ -289,8 +363,9 @@ export function TeamUserManagement() {
                     <TableHead>Nome</TableHead>
                     <TableHead>CRM</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>Função</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Função</TableHead>
+                    <TableHead>Unidades</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -300,14 +375,49 @@ export function TeamUserManagement() {
                       <TableCell className="font-medium">{user.nome}</TableCell>
                       <TableCell>{user.crm}</TableCell>
                       <TableCell className="text-muted-foreground">{user.email}</TableCell>
+                      <TableCell>{getStatusBadge(user.approval_status)}</TableCell>
                       <TableCell>
-                        {user.roles.length > 0 ? (
-                          <Badge variant="secondary">
-                            {user.roles.map(r => roleLabels[r] || r).join(', ')}
-                          </Badge>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">Sem função</span>
-                        )}
+                        <Select
+                          value={user.roles[0] || ''}
+                          onValueChange={(value) => updateUserRole(user.id, value as AppRole)}
+                          disabled={updatingUser === user.id}
+                        >
+                          <SelectTrigger className="w-[140px]">
+                            <SelectValue placeholder="Selecionar..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {COORDINATOR_ROLES.map((role) => (
+                              <SelectItem key={role.value} value={role.value}>
+                                {role.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-2">
+                          {allUnits.map((unit) => {
+                            const isAssigned = user.units.some(u => u.id === unit.id);
+                            return (
+                              <label
+                                key={unit.id}
+                                className="flex items-center gap-1 cursor-pointer text-sm"
+                              >
+                                <Checkbox
+                                  checked={isAssigned}
+                                  onCheckedChange={() => toggleUserUnit(user.id, unit.id, isAssigned)}
+                                  disabled={updatingUser === user.id}
+                                />
+                                <span className={isAssigned ? 'text-foreground' : 'text-muted-foreground'}>
+                                  {unit.name}
+                                </span>
+                              </label>
+                            );
+                          })}
+                          {allUnits.length === 0 && (
+                            <span className="text-muted-foreground text-sm">Sem unidades</span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>{getStatusBadge(user.approval_status)}</TableCell>
                       <TableCell className="text-right">

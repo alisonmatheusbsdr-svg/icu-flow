@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Check, X, ChevronDown, UserCheck, UserX, Clock, Mail, CreditCard } from 'lucide-react';
+import { Check, X, ChevronDown, UserCheck, UserX, Clock, Mail, CreditCard, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/integrations/supabase/types';
 
@@ -40,6 +40,8 @@ interface UserCardProps {
   onUpdateApproval: (userId: string, status: ApprovalStatus) => void;
   onUpdateRole: (userId: string, role: AppRole) => void;
   onToggleUnit: (userId: string, unitId: string, isAssigned: boolean) => void;
+  canDeleteUser?: (userRoles: AppRole[]) => boolean;
+  onDeleteUser?: (user: UserData) => void;
 }
 
 export function UserCard({
@@ -49,7 +51,9 @@ export function UserCard({
   isUpdating,
   onUpdateApproval,
   onUpdateRole,
-  onToggleUnit
+  onToggleUnit,
+  canDeleteUser,
+  onDeleteUser
 }: UserCardProps) {
   const getStatusBadge = (status: ApprovalStatus) => {
     switch (status) {
@@ -201,6 +205,17 @@ export function UserCard({
                   disabled={isUpdating}
                 >
                   Revogar Acesso
+                </Button>
+              )}
+              {canDeleteUser?.(user.roles) && onDeleteUser && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                  onClick={() => onDeleteUser(user)}
+                  disabled={isUpdating}
+                >
+                  <Trash2 className="h-4 w-4" />
                 </Button>
               )}
             </div>

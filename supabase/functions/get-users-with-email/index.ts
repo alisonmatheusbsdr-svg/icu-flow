@@ -120,9 +120,9 @@ Deno.serve(async (req) => {
       console.error("Error fetching user_units:", unitsError);
     }
 
-    // Get all units for the dropdown (only for admins)
+    // Get all units for the dropdown (for admins and coordinators)
     let allUnits: { id: string; name: string }[] = [];
-    if (isAdmin) {
+    if (isAdmin || isCoordenador) {
       const { data: unitsData, error: allUnitsError } = await supabaseAdmin
         .from("units")
         .select("id, name");
