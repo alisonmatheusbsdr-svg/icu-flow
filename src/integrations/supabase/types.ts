@@ -139,6 +139,7 @@ export type Database = {
       }
       evolutions: {
         Row: {
+          clinical_status: string | null
           content: string
           created_at: string
           created_by: string
@@ -146,6 +147,7 @@ export type Database = {
           patient_id: string
         }
         Insert: {
+          clinical_status?: string | null
           content: string
           created_at?: string
           created_by: string
@@ -153,6 +155,7 @@ export type Database = {
           patient_id: string
         }
         Update: {
+          clinical_status?: string | null
           content?: string
           created_at?: string
           created_by?: string

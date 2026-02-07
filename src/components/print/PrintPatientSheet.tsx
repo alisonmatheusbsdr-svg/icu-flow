@@ -280,10 +280,11 @@ export function PrintPatientSheet({
         {latestEvolutions.length > 0 ? (
           latestEvolutions.map((evo, idx) => {
             const authorName = authorProfiles[evo.created_by]?.nome || 'Autor desconhecido';
+            const statusLabel = (evo as any).clinical_status === 'melhor' ? '↑ Melhor' : (evo as any).clinical_status === 'pior' ? '↓ Pior' : (evo as any).clinical_status === 'inalterado' ? '= Inalterado' : null;
             return (
               <div key={evo.id} className="print-evolution-entry">
                 <div className="print-evolution-header">
-                  📝 {evolutionLabels[idx] || `EVO ${idx + 1}`} ({format(new Date(evo.created_at), "dd/MM HH:mm", { locale: ptBR })} - {authorName})
+                  📝 {evolutionLabels[idx] || `EVO ${idx + 1}`} ({format(new Date(evo.created_at), "dd/MM HH:mm", { locale: ptBR })} - {authorName}){statusLabel && ` [${statusLabel}]`}
                 </div>
                 <div className="print-evolution-content">
                   {truncate(evo.content, 420)}

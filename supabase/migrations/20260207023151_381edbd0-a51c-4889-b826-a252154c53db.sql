@@ -1,0 +1,1 @@
+ALTER TABLE public.evolutions ADD COLUMN clinical_status TEXT DEFAULT NULL;
