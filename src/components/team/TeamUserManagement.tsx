@@ -81,7 +81,8 @@ export function TeamUserManagement() {
       }
 
       setUsers(response.data.users || []);
-      } catch (error) {
+      setAllUnits(response.data.allUnits || []);
+    } catch (error) {
       console.error('Error fetching users:', error);
       toast.error('Erro ao carregar usuários');
     } finally {
@@ -419,7 +420,6 @@ export function TeamUserManagement() {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>{getStatusBadge(user.approval_status)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           {user.approval_status === 'pending' && (
