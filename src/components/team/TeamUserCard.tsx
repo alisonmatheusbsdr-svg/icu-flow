@@ -1,7 +1,11 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Check, X, UserCheck, UserX, Clock, Loader2, Trash2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Check, X, ChevronDown, UserCheck, UserX, Clock, Mail, CreditCard, Trash2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Database } from '@/integrations/supabase/types';
 
 type AppRole = Database['public']['Enums']['app_role'];
@@ -23,70 +27,162 @@ interface UserData {
   created_at: string;
 }
 
+interface UnitOption {
+  id: string;
+  name: string;
+}
+
 interface TeamUserCardProps {
   user: UserData;
+  allUnits: UnitOption[];
+  roles: { value: AppRole; label: string }[];
   roleLabels: Record<string, string>;
   isUpdating: boolean;
   onUpdateApproval: (userId: string, status: ApprovalStatus) => void;
+  onUpdateRole: (userId: string, role: AppRole) => void;
+  onToggleUnit: (userId: string, unitId: string, isAssigned: boolean) => void;
   canDeleteUser: (userRoles: AppRole[]) => boolean;
   onDeleteUser: (user: UserData) => void;
 }
 
-export function TeamUserCard({ user, roleLabels, isUpdating, onUpdateApproval, canDeleteUser, onDeleteUser }: TeamUserCardProps) {
+export function TeamUserCard({
+  user,
+  allUnits,
+  roles,
+  roleLabels,
+  isUpdating,
+  onUpdateApproval,
+  onUpdateRole,
+  onToggleUnit,
+  canDeleteUser,
+  onDeleteUser
+}: TeamUserCardProps) {
   const getStatusBadge = (status: ApprovalStatus) => {
     switch (status) {
       case 'approved':
-        return <Badge className="bg-green-500/20 text-green-600 dark:text-green-400 border-green-500/30"><UserCheck className="w-3 h-3 mr-1" /> Aprovado</Badge>;
+        return (
+          <Badge className="bg-green-500/20 text-green-600 dark:text-green-400 border-green-500/30 gap-1">
+            <UserCheck className="w-3 h-3" /> Aprovado
+          </Badge>
+        );
       case 'rejected':
-        return <Badge className="bg-red-500/20 text-red-600 dark:text-red-400 border-red-500/30"><UserX className="w-3 h-3 mr-1" /> Rejeitado</Badge>;
+        return (
+          <Badge className="bg-red-500/20 text-red-600 dark:text-red-400 border-red-500/30 gap-1">
+            <UserX className="w-3 h-3" /> Rejeitado
+          </Badge>
+        );
       case 'pending':
-        return <Badge className="bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 border-yellow-500/30"><Clock className="w-3 h-3 mr-1" /> Pendente</Badge>;
+        return (
+          <Badge className="bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 border-yellow-500/30 gap-1">
+            <Clock className="w-3 h-3" /> Pendente
+          </Badge>
+        );
     }
   };
 
   return (
-    <Card className={isUpdating ? 'opacity-50' : ''}>
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-medium truncate">{user.nome}</h3>
-              {getStatusBadge(user.approval_status)}
+    <Card className={cn("transition-opacity", isUpdating && "opacity-50")}>
+      <Collapsible>
+        <CollapsibleTrigger asChild>
+          <CardContent className="p-4 cursor-pointer hover:bg-accent/50 transition-colors">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-base truncate">{user.nome}</h3>
+                <div className="flex flex-wrap items-center gap-2 mt-1 text-sm text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <CreditCard className="h-3 w-3" />
+                    {user.crm}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground truncate mt-1 flex items-center gap-1">
+                  <Mail className="h-3 w-3" />
+                  {user.email}
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-2">
+                {getStatusBadge(user.approval_status)}
+                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform ui-state-open:rotate-180" />
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground">CRM: {user.crm}</p>
-            <p className="text-sm text-muted-foreground truncate">{user.email}</p>
-            <div className="mt-2">
-              {user.roles.length > 0 ? (
-                <Badge variant="secondary" className="text-xs">
-                  {user.roles.map(r => roleLabels[r] || r).join(', ')}
-                </Badge>
-              ) : (
-                <span className="text-xs text-muted-foreground">Sem função atribuída</span>
-              )}
-            </div>
-          </div>
+          </CardContent>
+        </CollapsibleTrigger>
 
-          {isUpdating ? (
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          ) : (
-            <div className="flex flex-col gap-2">
+        <CollapsibleContent>
+          <div className="px-4 pb-4 pt-2 space-y-4 border-t">
+            {/* Role selection */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Função</label>
+              <Select
+                value={user.roles[0] || ''}
+                onValueChange={(value) => onUpdateRole(user.id, value as AppRole)}
+                disabled={isUpdating}
+              >
+                <SelectTrigger className="w-full mt-1">
+                  <SelectValue placeholder="Selecionar função..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {roles.map((role) => (
+                    <SelectItem key={role.value} value={role.value}>
+                      {role.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Units selection */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Unidades</label>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                {allUnits.map((unit) => {
+                  const isAssigned = user.units.some(u => u.id === unit.id);
+                  return (
+                    <label
+                      key={unit.id}
+                      className="flex items-center gap-2 cursor-pointer text-sm p-2 rounded-md hover:bg-muted"
+                    >
+                      <Checkbox
+                        checked={isAssigned}
+                        onCheckedChange={() => onToggleUnit(user.id, unit.id, isAssigned)}
+                        disabled={isUpdating}
+                      />
+                      <span className={isAssigned ? 'text-foreground' : 'text-muted-foreground'}>
+                        {unit.name}
+                      </span>
+                    </label>
+                  );
+                })}
+                {allUnits.length === 0 && (
+                  <span className="text-muted-foreground text-sm col-span-2">
+                    Nenhuma unidade cadastrada
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex gap-2 pt-2">
               {user.approval_status === 'pending' && (
                 <>
                   <Button
                     size="sm"
                     variant="outline"
-                    className="text-green-600 hover:text-green-500 hover:bg-green-500/10"
+                    className="flex-1 text-green-600 hover:text-green-500 hover:bg-green-500/10"
                     onClick={() => onUpdateApproval(user.id, 'approved')}
+                    disabled={isUpdating}
                   >
-                    <Check className="h-4 w-4" />
+                    <Check className="h-4 w-4 mr-1" />
+                    Aprovar
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
-                    className="text-red-600 hover:text-red-500 hover:bg-red-500/10"
+                    className="flex-1 text-red-600 hover:text-red-500 hover:bg-red-500/10"
                     onClick={() => onUpdateApproval(user.id, 'rejected')}
+                    disabled={isUpdating}
                   >
-                    <X className="h-4 w-4" />
+                    <X className="h-4 w-4 mr-1" />
+                    Rejeitar
                   </Button>
                 </>
               )}
@@ -94,20 +190,23 @@ export function TeamUserCard({ user, roleLabels, isUpdating, onUpdateApproval, c
                 <Button
                   size="sm"
                   variant="outline"
-                  className="text-green-600 hover:text-green-500 hover:bg-green-500/10"
+                  className="flex-1 text-green-600 hover:text-green-500 hover:bg-green-500/10"
                   onClick={() => onUpdateApproval(user.id, 'approved')}
+                  disabled={isUpdating}
                 >
-                  <Check className="h-4 w-4" />
+                  <Check className="h-4 w-4 mr-1" />
+                  Aprovar
                 </Button>
               )}
               {user.approval_status === 'approved' && (
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="text-muted-foreground hover:text-red-500"
+                  className="flex-1 text-muted-foreground hover:text-red-500"
                   onClick={() => onUpdateApproval(user.id, 'rejected')}
+                  disabled={isUpdating}
                 >
-                  Revogar
+                  Revogar Acesso
                 </Button>
               )}
               {canDeleteUser(user.roles) && (
@@ -116,14 +215,15 @@ export function TeamUserCard({ user, roleLabels, isUpdating, onUpdateApproval, c
                   variant="ghost"
                   className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                   onClick={() => onDeleteUser(user)}
+                  disabled={isUpdating}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
               )}
             </div>
-          )}
-        </div>
-      </CardContent>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
     </Card>
   );
 }
