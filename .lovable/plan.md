@@ -1,39 +1,49 @@
 
+# Plano: Adicionar campo obrigatorio de status clinico (Melhor/Pior/Inalterado) na evolucao
 
-# Plano: Abrir pop-up do paciente apos admissao (em vez de navegar para outra pagina)
+## Objetivo
 
-## Problema
-
-Apos admitir um paciente, o sistema navega para `/patient/:id`, que e uma pagina separada com layout diferente do pop-up (modal) ja construido. O correto e permanecer no dashboard e abrir o **PatientModal** (pop-up) do paciente recem-admitido.
-
-## Solucao
-
-Substituir o `navigate()` por uma chamada ao `onPatientClick`, que ja existe no `BedCard` e abre o `PatientModal` no dashboard.
+Adicionar 3 opcoes de selecao unica (Melhor, Pior, Inalterado) entre o titulo "SUA EVOLUCAO" e o textarea. A selecao e obrigatoria para registrar a evolucao e fica salva no banco.
 
 ## Alteracoes
 
-### `src/components/dashboard/BedCard.tsx`
+### 1. Migracao SQL
 
-1. **Remover** o import e uso de `useNavigate`
-2. No callback `onSuccess` do `AdmitPatientForm`, em vez de `navigate(/patient/...)`, chamar `onPatientClick(patientId)` que ja abre o modal existente
-3. O `onUpdate()` continua sendo chamado para atualizar o grid de leitos
+Adicionar coluna `clinical_status` na tabela `evolutions`:
 
-```typescript
-// De:
-onSuccess={(patientId) => { 
-  setIsAdmitOpen(false); 
-  onUpdate(); 
-  navigate(`/patient/${patientId}`); 
-}}
-
-// Para:
-onSuccess={(patientId) => { 
-  setIsAdmitOpen(false); 
-  onUpdate(); 
-  onPatientClick?.(patientId); 
-}}
+```sql
+ALTER TABLE public.evolutions 
+ADD COLUMN clinical_status TEXT DEFAULT NULL;
 ```
 
-### Nenhum outro arquivo precisa ser alterado
+Valores possiveis: `melhor`, `pior`, `inalterado`
 
-O `AdmitPatientForm` ja retorna o `patientId` corretamente. O `BedGrid` ja tem o `PatientModal` configurado e o handler `handlePatientClick`. A unica mudanca e trocar a navegacao pela abertura do modal.
+### 2. `src/components/patient/PatientEvolutions.tsx`
+
+- Adicionar estado `clinicalStatus` (tipo `'melhor' | 'pior' | 'inalterado' | null`)
+- Renderizar 3 checkboxes estilizados como radio (apenas um selecionavel) entre o titulo "SUA EVOLUCAO" e o textarea, com labels: **Melhor**, **Pior**, **Inalterado**
+- Incluir `clinical_status` no insert do Supabase
+- Tornar obrigatorio: o botao "Validar Evolucao" fica desabilitado se `clinicalStatus` for null
+- Mostrar toast de erro se tentar submeter sem selecionar
+- Resetar `clinicalStatus` apos submissao bem-sucedida
+- No historico, exibir o status ao lado da data/autor (ex: badge colorido com "Melhor", "Pior" ou "Inalterado")
+
+### 3. `src/components/print/PrintPatientSheet.tsx`
+
+- Exibir o status clinico ao lado de cada evolucao na impressao
+
+### 4. Mapa visual dos status
+
+| Status | Label | Cor sugerida |
+|---|---|---|
+| melhor | Melhor | Verde |
+| pior | Pior | Vermelho |
+| inalterado | Inalterado | Cinza/Neutro |
+
+## Arquivos modificados
+
+| Arquivo | Acao |
+|---|---|
+| Migracao SQL | Nova coluna `clinical_status` |
+| `src/components/patient/PatientEvolutions.tsx` | Seletor + validacao + exibicao no historico |
+| `src/components/print/PrintPatientSheet.tsx` | Exibir status na impressao |
