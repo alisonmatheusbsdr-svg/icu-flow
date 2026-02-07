@@ -1,52 +1,39 @@
 
 
-# Plano: Redirecionar para tela do paciente apos admissao
+# Plano: Abrir pop-up do paciente apos admissao (em vez de navegar para outra pagina)
 
 ## Problema
 
-Ao admitir um paciente, o sistema fecha o dialog e volta ao dashboard. O ideal e abrir direto a tela de detalhes do paciente recem-admitido.
+Apos admitir um paciente, o sistema navega para `/patient/:id`, que e uma pagina separada com layout diferente do pop-up (modal) ja construido. O correto e permanecer no dashboard e abrir o **PatientModal** (pop-up) do paciente recem-admitido.
+
+## Solucao
+
+Substituir o `navigate()` por uma chamada ao `onPatientClick`, que ja existe no `BedCard` e abre o `PatientModal` no dashboard.
 
 ## Alteracoes
 
-### 1. `AdmitPatientForm.tsx`
+### `src/components/dashboard/BedCard.tsx`
 
-- Alterar `onSuccess` de `() => void` para `(patientId: string) => void`
-- Apos o insert, capturar o `id` do paciente retornado pelo Supabase (usando `.select().single()`)
-- Chamar `onSuccess(patientId)` com o ID do paciente criado
-
-### 2. `BedCard.tsx`
-
-- Importar `useNavigate` do react-router-dom
-- No callback `onSuccess` do `AdmitPatientForm`, navegar para `/patient/{patientId}` em vez de apenas fechar o dialog
-
-## Detalhes tecnicos
+1. **Remover** o import e uso de `useNavigate`
+2. No callback `onSuccess` do `AdmitPatientForm`, em vez de `navigate(/patient/...)`, chamar `onPatientClick(patientId)` que ja abre o modal existente
+3. O `onUpdate()` continua sendo chamado para atualizar o grid de leitos
 
 ```typescript
-// AdmitPatientForm.tsx - capturar o ID retornado
-const { data: patientData, error } = await supabase
-  .from('patients')
-  .insert({ ... })
-  .select('id')
-  .single();
+// De:
+onSuccess={(patientId) => { 
+  setIsAdmitOpen(false); 
+  onUpdate(); 
+  navigate(`/patient/${patientId}`); 
+}}
 
-onSuccess(patientData.id);
-
-// BedCard.tsx - navegar para o paciente
-const navigate = useNavigate();
-<AdmitPatientForm 
-  bedId={bed.id} 
-  onSuccess={(patientId) => { 
-    setIsAdmitOpen(false); 
-    onUpdate(); 
-    navigate(`/patient/${patientId}`); 
-  }} 
-/>
+// Para:
+onSuccess={(patientId) => { 
+  setIsAdmitOpen(false); 
+  onUpdate(); 
+  onPatientClick?.(patientId); 
+}}
 ```
 
-## Arquivos modificados
+### Nenhum outro arquivo precisa ser alterado
 
-| Arquivo | Acao |
-|---|---|
-| `src/components/dashboard/AdmitPatientForm.tsx` | Retornar `patientId` no callback |
-| `src/components/dashboard/BedCard.tsx` | Navegar para `/patient/:id` apos admissao |
-
+O `AdmitPatientForm` ja retorna o `patientId` corretamente. O `BedGrid` ja tem o `PatientModal` configurado e o handler `handlePatientClick`. A unica mudanca e trocar a navegacao pela abertura do modal.
