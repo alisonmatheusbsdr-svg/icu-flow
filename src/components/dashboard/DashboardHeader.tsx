@@ -55,7 +55,8 @@ export function DashboardHeader() {
     isHandoverReceiver,
     startHandoverMode,
     endHandoverMode,
-    assumeShift
+    assumeShift,
+    cleanupSession
   } = useUnit();
   const [timeRemaining, setTimeRemaining] = useState<{ text: string; isUrgent: boolean } | null>(null);
   const [isHandoverLoading, setIsHandoverLoading] = useState(false);
@@ -90,6 +91,7 @@ export function DashboardHeader() {
   }, [activeSession?.last_activity]);
 
   const handleLogout = async () => {
+    await cleanupSession();
     await signOut();
     navigate('/auth');
   };
