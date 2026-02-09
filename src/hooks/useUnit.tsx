@@ -42,6 +42,7 @@ interface UnitContextType {
   endHandoverMode: () => Promise<void>;
   joinAsHandoverReceiver: (unitId: string) => Promise<{ error: string | null }>;
   assumeShift: () => Promise<void>;
+  cleanupSession: () => Promise<void>;
 }
 
 const UnitContext = createContext<UnitContextType | undefined>(undefined);
@@ -144,6 +145,9 @@ export function UnitProvider({ children }: { children: ReactNode }) {
     }
   }, [units, user, fetchActiveSession]);
 
+  // Flag to distinguish voluntary logout from remote session termination
+  const isLoggingOutRef = useRef(false);
+
   // Realtime listener: detect when our session is deleted remotely
   const activeSessionRef = useRef(activeSession);
   activeSessionRef.current = activeSession;
@@ -165,11 +169,15 @@ export function UnitProvider({ children }: { children: ReactNode }) {
           if (currentSession && payload.old && (payload.old as any).id === currentSession.id) {
             setActiveSession(null);
             setSelectedUnit(null);
-            toast({
-              title: 'Sessão encerrada',
-              description: 'Sua sessão foi encerrada por questões de segurança. Caso ainda esteja no plantão na UTI selecionada, conecte-se novamente.',
-              variant: 'destructive',
-            });
+            // Only show security toast if logout was NOT voluntary
+            if (!isLoggingOutRef.current) {
+              toast({
+                title: 'Sessão encerrada',
+                description: 'Sua sessão foi encerrada por questões de segurança. Caso ainda esteja no plantão na UTI selecionada, conecte-se novamente.',
+                variant: 'destructive',
+              });
+            }
+            isLoggingOutRef.current = false;
           }
         }
       )
@@ -426,6 +434,19 @@ export function UnitProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Cleanup session before voluntary logout (prevents security toast)
+  const cleanupSession = async () => {
+    isLoggingOutRef.current = true;
+    if (activeSession) {
+      await supabase
+        .from('active_sessions')
+        .delete()
+        .eq('id', activeSession.id);
+      setActiveSession(null);
+      setSelectedUnit(null);
+    }
+  };
+
   // Select unit (for privileged users who can switch)
   const selectUnit = (unit: Unit) => {
     if (canSwitchUnits) {
@@ -470,7 +491,8 @@ export function UnitProvider({ children }: { children: ReactNode }) {
       startHandoverMode,
       endHandoverMode,
       joinAsHandoverReceiver,
-      assumeShift
+      assumeShift,
+      cleanupSession
     }}>
       {children}
     </UnitContext.Provider>
