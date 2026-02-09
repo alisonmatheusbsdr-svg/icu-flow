@@ -290,10 +290,9 @@ export function MobileNav({
                 Equipe
               </Button>
             )}
-          </div>
 
-          {/* Logout */}
-          <div className="p-4 border-t mt-auto">
+            <Separator className="my-3" />
+
             <Button 
               variant="ghost" 
               className="w-full justify-start gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
