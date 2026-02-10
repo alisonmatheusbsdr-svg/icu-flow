@@ -4,10 +4,11 @@ import { useUnit } from '@/hooks/useUnit';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { ArrowLeftRight, ClipboardList, Edit, Loader2, LogOut, MoreHorizontal, PenLine, Printer } from 'lucide-react';
+import { ArrowLeftRight, ClipboardList, Edit, Loader2, LogOut, MoreHorizontal, PenLine, Printer, Save } from 'lucide-react';
 import { TherapeuticPlan } from './TherapeuticPlan';
 import { PatientClinicalData } from './PatientClinicalData';
 import { PatientEvolutions } from './PatientEvolutions';
@@ -37,6 +38,8 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
   const [isExamsDialogOpen, setIsExamsDialogOpen] = useState(false);
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
   const [currentUnitId, setCurrentUnitId] = useState<string | null>(null);
+  const [unsavedDraft, setUnsavedDraft] = useState('');
+  const [showDraftAlert, setShowDraftAlert] = useState(false);
   const { isPreparing, printData, showPreview, preparePrint, closePreview } = usePrintPatient();
   const { canEdit, selectedUnit } = useUnit();
   const { hasRole } = useAuth();
@@ -287,8 +290,32 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
     </div>
   );
 
+  const handleClose = () => {
+    if (unsavedDraft.trim().length > 0) {
+      setShowDraftAlert(true);
+      return;
+    }
+    onClose();
+  };
+
+  const handleSaveDraftAndClose = () => {
+    if (patientId) {
+      localStorage.setItem(`evolution_draft_${patientId}`, unsavedDraft);
+    }
+    setShowDraftAlert(false);
+    setUnsavedDraft('');
+    onClose();
+  };
+
+  const handleDiscardAndClose = () => {
+    setShowDraftAlert(false);
+    setUnsavedDraft('');
+    onClose();
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
       <DialogContent className="max-w-6xl w-[95vw] h-[90vh] p-0 overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-card border-b px-4 md:px-6 py-3 md:py-4 flex-shrink-0 space-y-2 md:space-y-3">
@@ -363,7 +390,8 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
               <PatientEvolutions 
                 patient={patient} 
                 authorProfiles={authorProfiles} 
-                onUpdate={() => fetchPatient(true)} 
+                onUpdate={() => fetchPatient(true)}
+                onDraftChange={setUnsavedDraft}
               />
             </div>
             
@@ -446,5 +474,27 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
         )}
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={showDraftAlert} onOpenChange={setShowDraftAlert}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Evolução não salva</AlertDialogTitle>
+          <AlertDialogDescription>
+            Você tem uma evolução não salva. Deseja salvar como rascunho antes de sair?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+          <AlertDialogCancel onClick={() => setShowDraftAlert(false)}>Cancelar</AlertDialogCancel>
+          <Button variant="destructive" onClick={handleDiscardAndClose}>
+            Sair sem Salvar
+          </Button>
+          <Button onClick={handleSaveDraftAndClose} className="gap-2">
+            <Save className="h-4 w-4" />
+            Salvar Rascunho e Sair
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
