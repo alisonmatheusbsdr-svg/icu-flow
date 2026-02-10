@@ -12,6 +12,17 @@ import { toast } from 'sonner';
 import { ProfileDialog } from '@/components/profile/ProfileDialog';
 import { MobileNav } from './MobileNav';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { getUnsavedDraftsForUnit, type UnsavedDraft } from '@/lib/draft-utils';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '@/components/ui/alert-dialog';
 
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -61,6 +72,8 @@ export function DashboardHeader() {
   const [timeRemaining, setTimeRemaining] = useState<{ text: string; isUrgent: boolean } | null>(null);
   const [isHandoverLoading, setIsHandoverLoading] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [showDraftAlert, setShowDraftAlert] = useState(false);
+  const [pendingDrafts, setPendingDrafts] = useState<UnsavedDraft[]>([]);
   
   const canViewAllUnits = hasRole('coordenador') || hasRole('diarista') || hasRole('admin');
   const isOnAdmin = location.pathname === '/admin';
@@ -90,10 +103,22 @@ export function DashboardHeader() {
     return () => clearInterval(interval);
   }, [activeSession?.last_activity]);
 
-  const handleLogout = async () => {
+  const executeLogout = async () => {
     await cleanupSession();
     await signOut();
     navigate('/auth');
+  };
+
+  const handleLogout = async () => {
+    if (selectedUnit) {
+      const drafts = await getUnsavedDraftsForUnit(selectedUnit.id);
+      if (drafts.length > 0) {
+        setPendingDrafts(drafts);
+        setShowDraftAlert(true);
+        return;
+      }
+    }
+    await executeLogout();
   };
 
   const handleStartHandover = async () => {
@@ -335,6 +360,29 @@ export function DashboardHeader() {
       </div>
 
       <ProfileDialog open={isProfileOpen} onOpenChange={setIsProfileOpen} />
+
+      <AlertDialog open={showDraftAlert} onOpenChange={setShowDraftAlert}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Evoluções não validadas</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você possui rascunhos de evolução em {pendingDrafts.length} paciente(s) que não foram validados ({pendingDrafts.map(d => d.initials).join(', ')}). Se sair, esses rascunhos serão perdidos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                setShowDraftAlert(false);
+                await executeLogout();
+              }}
+            >
+              Sair mesmo assim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </header>
   );
 }
