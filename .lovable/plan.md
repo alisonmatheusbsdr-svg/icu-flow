@@ -1,55 +1,47 @@
 
-# Alerta ao fechar modal do paciente com texto de evolucao nao salvo
+
+# Corrigir alerta de rascunho: comparar com texto ja salvo
 
 ## Problema
 
-O usuario pode digitar uma evolucao no campo de texto dentro do modal do paciente e fechar o modal sem salvar o rascunho nem validar a evolucao. O texto digitado e perdido sem aviso.
+O alerta de "evolucao nao salva" aparece mesmo quando o texto no campo e identico ao rascunho ja salvo no localStorage. Alem disso, se o usuario carrega um rascunho salvo, acrescenta texto e tenta fechar, o alerta aparece corretamente — mas o cenario inverso (texto carregado sem alteracao) tambem dispara o alerta desnecessariamente.
 
 ## Solucao
 
-Interceptar o fechamento do `PatientModal` quando houver texto no campo de evolucao. Exibir um `AlertDialog` com tres opcoes: salvar rascunho e sair, sair sem salvar, ou cancelar.
+Comparar o texto atual do campo de evolucao com o que esta salvo no localStorage. O alerta so deve aparecer quando houver diferenca entre os dois.
 
 ## Detalhamento tecnico
 
-### 1. `PatientEvolutions.tsx` - Expor o texto atual
+### `PatientModal.tsx` — Comparar draft atual com o salvo
 
-- Adicionar prop `onDraftChange?: (draft: string) => void`
-- Usar `useEffect` para chamar `onDraftChange(newEvolution)` sempre que `newEvolution` mudar
-- Isso permite que o `PatientModal` saiba se ha texto nao salvo
+Modificar a funcao `handleOpenChange` (linha 298-303):
 
-### 2. `PatientModal.tsx` - Interceptar fechamento
-
-- Adicionar estado `currentDraft` (string) atualizado pelo callback `onDraftChange`
-- Adicionar estado `showDraftAlert` (boolean)
-- Modificar a linha 291 (`onOpenChange`): se `currentDraft.trim().length > 0`, mostrar o AlertDialog em vez de fechar
-- Adicionar `AlertDialog` com:
-  - **Titulo**: "Evolucao nao salva"
-  - **Descricao**: "Voce tem texto na evolucao que nao foi salvo. Deseja salvar como rascunho antes de sair?"
-  - **Salvar Rascunho e Sair**: grava `currentDraft` no `localStorage` com chave `evolution_draft_{patientId}`, mostra toast de confirmacao e fecha o modal
-  - **Sair sem Salvar**: fecha o modal sem salvar
-  - **Cancelar**: fecha o alerta e volta ao modal
-
-### Fluxo
-
+**Antes:**
 ```text
-Usuario clica em fechar modal (X ou overlay)
-        |
-   Tem texto no campo de evolucao?
-   /              \
- Nao              Sim
-  |                |
-Fecha modal    Mostra AlertDialog
-               /       |        \
-        Salvar      Sair sem    Cancelar
-        Rascunho    Salvar        |
-           |           |       Volta ao
-        Salva no    Fecha       modal
-        localStorage modal
-        + toast
-        e fecha
+if (!open && currentDraft.trim().length > 0) {
+  setShowDraftAlert(true);
+  return;
+}
 ```
+
+**Depois:**
+```text
+if (!open && currentDraft.trim().length > 0) {
+  const savedDraft = localStorage.getItem(`evolution_draft_${patientId}`) || '';
+  if (currentDraft.trim() !== savedDraft.trim()) {
+    setShowDraftAlert(true);
+    return;
+  }
+}
+```
+
+Isso garante que:
+- Se o texto e identico ao rascunho salvo, o modal fecha normalmente
+- Se o usuario acrescentou ou modificou texto alem do rascunho salvo, o alerta aparece
+- Se nao ha rascunho salvo e o campo esta vazio, o modal fecha normalmente
+- Se nao ha rascunho salvo mas o usuario digitou algo novo, o alerta aparece
 
 ### Arquivos alterados
 
-- `src/components/patient/PatientEvolutions.tsx` — adicionar prop `onDraftChange`
-- `src/components/patient/PatientModal.tsx` — interceptar fechamento + AlertDialog
+- `src/components/patient/PatientModal.tsx` — ajuste na condicao de `handleOpenChange` (apenas 1 linha adicionada + 1 modificada)
+
