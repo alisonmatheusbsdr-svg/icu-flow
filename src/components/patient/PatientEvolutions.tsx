@@ -25,10 +25,9 @@ interface PatientEvolutionsProps {
   patient: PatientWithDetails;
   authorProfiles: Record<string, Profile>;
   onUpdate: () => void;
-  onDraftChange?: (draft: string) => void;
 }
 
-export function PatientEvolutions({ patient, authorProfiles, onUpdate, onDraftChange }: PatientEvolutionsProps) {
+export function PatientEvolutions({ patient, authorProfiles, onUpdate }: PatientEvolutionsProps) {
   const { user } = useAuth();
   const { canEdit } = useUnit();
   const [newEvolution, setNewEvolution] = useState('');
@@ -45,11 +44,6 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate, onDraftCh
       setNewEvolution(savedDraft);
     }
   }, [draftKey]);
-
-  // Notify parent of draft changes
-  useEffect(() => {
-    onDraftChange?.(newEvolution);
-  }, [newEvolution, onDraftChange]);
 
   // Scroll to bottom of history container only (not the whole page)
   useEffect(() => {
