@@ -1,67 +1,55 @@
 
+# Alerta ao fechar modal do paciente com texto de evolucao nao salvo
 
-# Alerta de rascunhos nao validados ao fazer logout (segregado por UTI)
+## Problema
 
-## Resumo
+O usuario pode digitar uma evolucao no campo de texto dentro do modal do paciente e fechar o modal sem salvar o rascunho nem validar a evolucao. O texto digitado e perdido sem aviso.
 
-Ao clicar em "Sair", o sistema verifica se existem rascunhos de evolucao nao validados **apenas para pacientes da UTI em que o usuario esta logado**. Rascunhos de outras UTIs sao ignorados.
+## Solucao
 
-## Como funciona
-
-```text
-Usuario clica em "Sair"
-        |
-   Busca pacientes da UTI atual (beds -> patients)
-        |
-   Algum desses pacientes tem rascunho no localStorage?
-   /              \
- Nao              Sim
-  |                |
-Logout          Mostra AlertDialog
-normal          "X paciente(s) com evolucao nao validada"
-                /              \
-          Voltar            Sair mesmo assim
-            |                    |
-         Fecha alert          Executa logout
-```
+Interceptar o fechamento do `PatientModal` quando houver texto no campo de evolucao. Exibir um `AlertDialog` com tres opcoes: salvar rascunho e sair, sair sem salvar, ou cancelar.
 
 ## Detalhamento tecnico
 
-### 1. Novo arquivo: `src/lib/draft-utils.ts`
+### 1. `PatientEvolutions.tsx` - Expor o texto atual
 
-Criar funcao `getUnsavedDraftsForUnit(unitId: string)`:
+- Adicionar prop `onDraftChange?: (draft: string) => void`
+- Usar `useEffect` para chamar `onDraftChange(newEvolution)` sempre que `newEvolution` mudar
+- Isso permite que o `PatientModal` saiba se ha texto nao salvo
 
-- Consulta o banco: busca todos os `patient.id` onde `patient.bed_id` pertence a um `bed` com `unit_id` igual ao informado e `patient.is_active = true`
-- Para cada patient ID retornado, verifica se existe `localStorage.getItem('evolution_draft_{patientId}')` com conteudo nao vazio
-- Retorna array de objetos `{ patientId, initials, draft }` para exibir no alerta
-- Funcao assincrona (por causa da consulta ao banco)
+### 2. `PatientModal.tsx` - Interceptar fechamento
 
-### 2. Editar: `src/components/dashboard/DashboardHeader.tsx`
-
-- Importar `getUnsavedDraftsForUnit` e componentes do `AlertDialog`
-- Adicionar estados: `showDraftAlert` (boolean), `pendingDrafts` (array de rascunhos encontrados)
-- Modificar `handleLogout`:
-  - Obter o `selectedUnit?.id` do contexto (ja disponivel via `useUnit`)
-  - Se houver unidade selecionada, chamar `getUnsavedDraftsForUnit(selectedUnit.id)`
-  - Se retornar rascunhos, salvar em `pendingDrafts` e mostrar o AlertDialog
-  - Se nao houver rascunhos (ou nao houver unidade selecionada), prosseguir com logout normal
+- Adicionar estado `currentDraft` (string) atualizado pelo callback `onDraftChange`
+- Adicionar estado `showDraftAlert` (boolean)
+- Modificar a linha 291 (`onOpenChange`): se `currentDraft.trim().length > 0`, mostrar o AlertDialog em vez de fechar
 - Adicionar `AlertDialog` com:
-  - Titulo: "Evolucoes nao validadas"
-  - Descricao: "Voce possui rascunhos de evolucao em X paciente(s) que nao foram validados. Se sair, esses rascunhos serao perdidos."
-  - Botao "Voltar" — fecha o alerta
-  - Botao "Sair mesmo assim" (destructive) — executa o logout
+  - **Titulo**: "Evolucao nao salva"
+  - **Descricao**: "Voce tem texto na evolucao que nao foi salvo. Deseja salvar como rascunho antes de sair?"
+  - **Salvar Rascunho e Sair**: grava `currentDraft` no `localStorage` com chave `evolution_draft_{patientId}`, mostra toast de confirmacao e fecha o modal
+  - **Sair sem Salvar**: fecha o modal sem salvar
+  - **Cancelar**: fecha o alerta e volta ao modal
 
-### 3. Editar: `src/components/dashboard/MobileNav.tsx`
+### Fluxo
 
-- Aplicar a mesma logica de interceptacao no botao "Sair"
-- Como o `MobileNav` recebe `onLogout` como prop, a abordagem sera:
-  - Adicionar prop `selectedUnitId?: string` para saber qual UTI esta ativa
-  - No clique em "Sair", chamar `getUnsavedDraftsForUnit` antes de chamar `onLogout`
-  - Exibir o mesmo AlertDialog internamente se houver rascunhos pendentes
-- Alternativa mais simples: mover a logica de interceptacao para o `DashboardHeader` (que ja controla o `handleLogout` passado ao MobileNav). Assim, o `MobileNav` continua chamando `onLogout` normalmente e a interceptacao acontece no `DashboardHeader` para ambos os casos (desktop e mobile).
+```text
+Usuario clica em fechar modal (X ou overlay)
+        |
+   Tem texto no campo de evolucao?
+   /              \
+ Nao              Sim
+  |                |
+Fecha modal    Mostra AlertDialog
+               /       |        \
+        Salvar      Sair sem    Cancelar
+        Rascunho    Salvar        |
+           |           |       Volta ao
+        Salva no    Fecha       modal
+        localStorage modal
+        + toast
+        e fecha
+```
 
-### Arquivos afetados
+### Arquivos alterados
 
-- **Novo:** `src/lib/draft-utils.ts`
-- **Editado:** `src/components/dashboard/DashboardHeader.tsx`
-- **Possivelmente editado:** `src/components/dashboard/MobileNav.tsx` (dependendo da abordagem escolhida)
+- `src/components/patient/PatientEvolutions.tsx` — adicionar prop `onDraftChange`
+- `src/components/patient/PatientModal.tsx` — interceptar fechamento + AlertDialog
