@@ -327,7 +327,7 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
         {/* Header */}
         <div className="bg-card border-b px-4 md:px-6 py-3 md:py-4 flex-shrink-0 space-y-2 md:space-y-3">
           {/* Título e informações demográficas */}
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start justify-between gap-2 pr-10 md:pr-0">
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg md:text-xl font-bold text-foreground">
