@@ -297,8 +297,11 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
 
   const handleOpenChange = (open: boolean) => {
     if (!open && currentDraft.trim().length > 0) {
-      setShowDraftAlert(true);
-      return;
+      const savedDraft = localStorage.getItem(`evolution_draft_${patientId}`) || '';
+      if (currentDraft.trim() !== savedDraft.trim()) {
+        setShowDraftAlert(true);
+        return;
+      }
     }
     if (!open) onClose();
   };
