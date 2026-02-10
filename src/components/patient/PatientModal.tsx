@@ -1,13 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useUnit } from '@/hooks/useUnit';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { ArrowLeftRight, ClipboardList, Edit, Loader2, LogOut, MoreHorizontal, PenLine, Printer } from 'lucide-react';
+import { ArrowLeftRight, ClipboardList, Edit, Loader2, LogOut, MoreHorizontal, PenLine, Printer, Save } from 'lucide-react';
+import { toast } from 'sonner';
 import { TherapeuticPlan } from './TherapeuticPlan';
 import { PatientClinicalData } from './PatientClinicalData';
 import { PatientEvolutions } from './PatientEvolutions';
@@ -37,6 +39,8 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
   const [isExamsDialogOpen, setIsExamsDialogOpen] = useState(false);
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
   const [currentUnitId, setCurrentUnitId] = useState<string | null>(null);
+  const [currentDraft, setCurrentDraft] = useState('');
+  const [showDraftAlert, setShowDraftAlert] = useState(false);
   const { isPreparing, printData, showPreview, preparePrint, closePreview } = usePrintPatient();
   const { canEdit, selectedUnit } = useUnit();
   const { hasRole } = useAuth();
@@ -287,8 +291,35 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
     </div>
   );
 
+  const handleDraftChange = useCallback((draft: string) => {
+    setCurrentDraft(draft);
+  }, []);
+
+  const handleOpenChange = (open: boolean) => {
+    if (!open && currentDraft.trim().length > 0) {
+      setShowDraftAlert(true);
+      return;
+    }
+    if (!open) onClose();
+  };
+
+  const handleSaveDraftAndClose = () => {
+    if (patientId && currentDraft.trim()) {
+      localStorage.setItem(`evolution_draft_${patientId}`, currentDraft);
+      toast.success('Rascunho salvo!');
+    }
+    setShowDraftAlert(false);
+    onClose();
+  };
+
+  const handleDiscardAndClose = () => {
+    setShowDraftAlert(false);
+    onClose();
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-6xl w-[95vw] h-[90vh] p-0 overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-card border-b px-4 md:px-6 py-3 md:py-4 flex-shrink-0 space-y-2 md:space-y-3">
@@ -363,7 +394,8 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
               <PatientEvolutions 
                 patient={patient} 
                 authorProfiles={authorProfiles} 
-                onUpdate={() => fetchPatient(true)} 
+                onUpdate={() => fetchPatient(true)}
+                onDraftChange={handleDraftChange}
               />
             </div>
             
@@ -446,5 +478,33 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
         )}
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={showDraftAlert} onOpenChange={setShowDraftAlert}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Evolução não salva</AlertDialogTitle>
+          <AlertDialogDescription>
+            Você tem texto na evolução que não foi salvo. Deseja salvar como rascunho antes de sair?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+          <AlertDialogCancel onClick={() => setShowDraftAlert(false)}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleDiscardAndClose}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            Sair sem Salvar
+          </AlertDialogAction>
+          <AlertDialogAction
+            onClick={handleSaveDraftAndClose}
+            className="gap-2"
+          >
+            <Save className="h-4 w-4" />
+            Salvar Rascunho e Sair
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
