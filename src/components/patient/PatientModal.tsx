@@ -78,7 +78,21 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
       return;
     }
 
-    const [devicesRes, drugsRes, antibioticsRes, plansRes, evolutionsRes, prophylaxisRes, venousAccessRes, respiratorySupportRes, tasksRes, precautionsRes, examsRes, regulationRes, bedRes] = await Promise.all([
+    // Calculate current 12h shift start
+    const now = new Date();
+    const currentHour = now.getHours();
+    const isShiftA = currentHour >= 7 && currentHour < 19;
+    const shiftStart = new Date(now);
+    if (isShiftA) {
+      shiftStart.setHours(7, 0, 0, 0);
+    } else {
+      if (currentHour < 7) {
+        shiftStart.setDate(shiftStart.getDate() - 1);
+      }
+      shiftStart.setHours(19, 0, 0, 0);
+    }
+
+    const [devicesRes, drugsRes, antibioticsRes, plansRes, evolutionsRes, prophylaxisRes, venousAccessRes, respiratorySupportRes, tasksRes, precautionsRes, examsRes, regulationRes, bedRes, fluidBalanceRes] = await Promise.all([
       supabase.from('invasive_devices').select('*').eq('patient_id', patientId).eq('is_active', true),
       supabase.from('vasoactive_drugs').select('*').eq('patient_id', patientId).eq('is_active', true),
       supabase.from('antibiotics').select('*').eq('patient_id', patientId).eq('is_active', true),
@@ -91,7 +105,8 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
       supabase.from('patient_precautions').select('*').eq('patient_id', patientId).eq('is_active', true),
       supabase.from('patient_exams').select('*').eq('patient_id', patientId).order('exam_date', { ascending: false }),
       supabase.from('patient_regulation').select('*').eq('patient_id', patientId).eq('is_active', true).order('requested_at', { ascending: false }),
-      patientData.bed_id ? supabase.from('beds').select('unit_id').eq('id', patientData.bed_id).maybeSingle() : null
+      patientData.bed_id ? supabase.from('beds').select('unit_id').eq('id', patientData.bed_id).maybeSingle() : null,
+      supabase.from('fluid_balance').select('*').eq('patient_id', patientId).eq('shift_start', shiftStart.toISOString()).maybeSingle()
     ]);
 
     // Armazenar unit_id para transferência
@@ -120,7 +135,8 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
       patient_regulation: (regulationRes.data || []).map(r => ({
         ...r,
         status: r.status as RegulationStatus
-      }))
+      })),
+      fluid_balance: fluidBalanceRes.data || null
     };
 
     setPatient(patientWithDetails);

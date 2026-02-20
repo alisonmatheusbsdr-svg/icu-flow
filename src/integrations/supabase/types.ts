@@ -172,6 +172,50 @@ export type Database = {
           },
         ]
       }
+      fluid_balance: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          intake_ml: number
+          output_ml: number
+          patient_id: string
+          shift_start: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          intake_ml?: number
+          output_ml?: number
+          patient_id: string
+          shift_start: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          intake_ml?: number
+          output_ml?: number
+          patient_id?: string
+          shift_start?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fluid_balance_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invasive_devices: {
         Row: {
           created_at: string
