@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { Plus, Trash2, AlertCircle, Syringe, Activity, Pill, X, ChevronDown, Shield, Utensils, AlertTriangle, CheckCircle, Link2, TestTube } from 'lucide-react';
+import { Plus, Trash2, AlertCircle, Syringe, Activity, Pill, X, ChevronDown, Shield, Utensils, AlertTriangle, CheckCircle, Link2, TestTube, Droplets } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -310,6 +310,9 @@ export function PatientClinicalData({ patient, onUpdate, canEdit = true }: Patie
   const [showCustomDeviceInput, setShowCustomDeviceInput] = useState(false);
   const [showAtbInput, setShowAtbInput] = useState(false);
   const [isExamsDialogOpen, setIsExamsDialogOpen] = useState(false);
+  const [intakeInput, setIntakeInput] = useState('');
+  const [outputInput, setOutputInput] = useState('');
+  const [isFluidLoading, setIsFluidLoading] = useState(false);
 
   // Calculate days for a device
   const getDeviceDays = (insertionDate: string) => {
@@ -630,6 +633,65 @@ export function PatientClinicalData({ patient, onUpdate, canEdit = true }: Patie
       onUpdate();
     }
     setIsLoading(false);
+  };
+
+  // Fluid Balance helpers
+  const getCurrentShiftStart = (): Date => {
+    const now = new Date();
+    const currentHour = now.getHours();
+    const isShiftA = currentHour >= 7 && currentHour < 19;
+    const shiftStart = new Date(now);
+    if (isShiftA) {
+      shiftStart.setHours(7, 0, 0, 0);
+    } else {
+      if (currentHour < 7) {
+        shiftStart.setDate(shiftStart.getDate() - 1);
+      }
+      shiftStart.setHours(19, 0, 0, 0);
+    }
+    return shiftStart;
+  };
+
+  const handleAddFluid = async (type: 'intake' | 'output') => {
+    const rawValue = type === 'intake' ? intakeInput : outputInput;
+    const value = parseInt(rawValue, 10);
+    if (!value || value <= 0) {
+      toast.error('Informe um valor positivo em mL');
+      return;
+    }
+    setIsFluidLoading(true);
+    const shiftStart = getCurrentShiftStart();
+    const existing = patient.fluid_balance;
+
+    if (existing) {
+      // Additive update
+      const updatedValue = type === 'intake'
+        ? { intake_ml: existing.intake_ml + value }
+        : { output_ml: existing.output_ml + value };
+      const { error } = await supabase
+        .from('fluid_balance')
+        .update(updatedValue)
+        .eq('id', existing.id);
+      if (error) toast.error('Erro ao atualizar balanço hídrico');
+      else toast.success(`+${value} mL registrado`);
+    } else {
+      // Create new record for this shift
+      const insertData = {
+        patient_id: patient.id,
+        shift_start: shiftStart.toISOString(),
+        intake_ml: type === 'intake' ? value : 0,
+        output_ml: type === 'output' ? value : 0,
+        created_by: (await supabase.auth.getUser()).data.user?.id || ''
+      };
+      const { error } = await supabase.from('fluid_balance').insert(insertData);
+      if (error) toast.error('Erro ao registrar balanço hídrico');
+      else toast.success(`+${value} mL registrado`);
+    }
+
+    if (type === 'intake') setIntakeInput('');
+    else setOutputInput('');
+    setIsFluidLoading(false);
+    onUpdate();
   };
 
   // Get active prophylaxis types
@@ -1357,6 +1419,108 @@ export function PatientClinicalData({ patient, onUpdate, canEdit = true }: Patie
             <span className="text-sm text-muted-foreground">Nenhuma dieta definida</span>
           )}
         </div>
+      </div>
+
+      {/* Fluid Balance */}
+      <div className="section-card">
+        <div className="section-title justify-between">
+          <div className="flex items-center gap-2">
+            <Droplets className="h-4 w-4 text-blue-500" />
+            Balanço Hídrico (plantão 12h)
+          </div>
+          {(() => {
+            const fb = patient.fluid_balance;
+            const currentHour = new Date().getHours();
+            const isShiftA = currentHour >= 7 && currentHour < 19;
+            const shiftLabel = isShiftA ? 'Turno A (07–19h)' : 'Turno B (19–07h)';
+            return (
+              <span className="text-xs text-muted-foreground">{shiftLabel}</span>
+            );
+          })()}
+        </div>
+
+        {/* Balance display */}
+        {(() => {
+          const fb = patient.fluid_balance;
+          const intake = fb?.intake_ml ?? 0;
+          const output = fb?.output_ml ?? 0;
+          const balance = intake - output;
+          const isPositive = balance >= 0;
+
+          return (
+            <div className="mt-3 space-y-3">
+              {/* Saldo */}
+              <div className={cn(
+                "flex items-center justify-center rounded-lg py-2 px-4 text-center",
+                isPositive
+                  ? "bg-blue-500/10 border border-blue-500/30 text-blue-600 dark:text-blue-400"
+                  : "bg-destructive/10 border border-destructive/30 text-destructive"
+              )}>
+                <span className="text-sm font-medium">Saldo: </span>
+                <span className="ml-1 text-lg font-bold">
+                  {isPositive ? '+' : ''}{balance} mL
+                </span>
+              </div>
+
+              {/* Totals */}
+              <div className="flex justify-between text-xs text-muted-foreground px-1">
+                <span>💧 Entradas: <strong className="text-foreground">{intake} mL</strong></span>
+                <span>🔴 Saídas: <strong className="text-foreground">{output} mL</strong></span>
+              </div>
+
+              {/* Input fields - only for canEdit */}
+              {canEdit && (
+                <div className="space-y-2">
+                  {/* Intake row */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground w-20 shrink-0">Entradas:</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      placeholder="mL"
+                      value={intakeInput}
+                      onChange={e => setIntakeInput(e.target.value)}
+                      className="h-8 text-sm"
+                      onKeyDown={e => { if (e.key === 'Enter') handleAddFluid('intake'); }}
+                    />
+                    <Button
+                      size="sm"
+                      className="h-8 px-3 shrink-0"
+                      disabled={isFluidLoading || !intakeInput}
+                      onClick={() => handleAddFluid('intake')}
+                    >
+                      <Plus className="h-3.5 w-3.5 mr-1" />
+                      Add
+                    </Button>
+                  </div>
+                  {/* Output row */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground w-20 shrink-0">Saídas:</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      placeholder="mL"
+                      value={outputInput}
+                      onChange={e => setOutputInput(e.target.value)}
+                      className="h-8 text-sm"
+                      onKeyDown={e => { if (e.key === 'Enter') handleAddFluid('output'); }}
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 px-3 shrink-0"
+                      disabled={isFluidLoading || !outputInput}
+                      onClick={() => handleAddFluid('output')}
+                    >
+                      <Plus className="h-3.5 w-3.5 mr-1" />
+                      Add
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Precautions Section */}

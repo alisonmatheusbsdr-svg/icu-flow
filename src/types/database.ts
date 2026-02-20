@@ -235,6 +235,18 @@ export interface PatientRegulation {
   updated_by: string | null;
 }
 
+export interface FluidBalance {
+  id: string;
+  patient_id: string;
+  shift_start: string;
+  intake_ml: number;
+  output_ml: number;
+  created_by: string;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Extended types with relations
 export interface BedWithPatient extends Bed {
   patient?: PatientWithDetails | null;
@@ -253,6 +265,7 @@ export interface PatientWithDetails extends Patient {
   patient_tasks?: PatientTask[];
   patient_precautions?: PatientPrecaution[];
   patient_regulation?: PatientRegulation[];
+  fluid_balance?: FluidBalance | null;
 }
 
 export interface ActiveSession {
