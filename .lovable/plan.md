@@ -1,90 +1,48 @@
 
-# Nova Seção: Balanço Hídrico (Últimas 12h de Plantão)
+# Incluir Balanço Hídrico na Impressão do Paciente
 
-## Objetivo
+## Abordagem
 
-Adicionar uma seção de Balanço Hídrico no modal do paciente, permitindo registrar entradas e saídas de volume das últimas 12 horas de plantão, com cálculo automático do saldo.
+Adicionar o balanço hídrico como uma **4a coluna** na segunda linha do grid de impressão (que hoje tem Antibióticos, Profilaxias e Dieta). Isso mantém o layout compacto sem adicionar novas linhas.
 
----
+## Mudancas
 
-## Experiência do Usuário
+### 1. `src/components/print/PrintPatientSheet.tsx`
 
-- Uma nova seção "Balanço Hídrico" aparece na coluna esquerda do modal (dentro de `PatientClinicalData`), junto com as demais seções clínicas
-- Exibe o saldo atual (Entradas − Saídas) com destaque visual: verde se positivo, vermelho se negativo
-- Usuários com permissão de edição (`canEdit`) podem lançar valores de entrada e saída com dois campos numéricos simples (em mL)
-- O registro é cumulativo dentro do mesmo turno de 12h — cada clique em "+" adiciona ao total
+Adicionar uma nova coluna "Balanço Hídrico" dentro do `print-secondary-grid`, após a seção de Dieta:
 
----
-
-## Arquitetura da Solução
-
-Como o balanço hídrico muda a cada plantão (12h), o dado precisa ser **persistido no banco**, e não apenas em estado local. Isso garante que todos os membros da equipe vejam o mesmo valor em tempo real.
-
-### 1. Banco de Dados — Nova Tabela `fluid_balance`
-
-```text
-fluid_balance
-├── id (uuid, PK)
-├── patient_id (uuid, FK → patients)
-├── shift_start (timestamptz) — início do turno de 12h
-├── intake_ml (integer, default 0) — total de entradas
-├── output_ml (integer, default 0) — total de saídas
-├── created_by (uuid)
-├── updated_by (uuid)
-├── created_at (timestamptz)
-└── updated_at (timestamptz)
+```tsx
+{/* Balanço Hídrico */}
+<div className="print-clinical-section">
+  <div className="print-section-title">Balanço Hídrico</div>
+  <div className="print-section-content">
+    {patient.fluid_balance ? (
+      <div>
+        <div>E: {patient.fluid_balance.intake_ml} mL | S: {patient.fluid_balance.output_ml} mL</div>
+        <div style={{ fontWeight: 'bold', color: net >= 0 ? '#16a34a' : '#dc2626' }}>
+          Saldo: {net > 0 ? '+' : ''}{net} mL
+        </div>
+      </div>
+    ) : (
+      <span className="print-no-data">Sem registro</span>
+    )}
+  </div>
+</div>
 ```
 
-RLS: usuários autenticados podem ler e editar registros da sua unidade.
+### 2. `src/components/print/print-styles.css`
 
-### 2. Lógica de Turno
+Alterar o grid da segunda linha de 3 para 4 colunas em **dois lugares** (impressao e preview):
 
-O turno de 12h é calculado automaticamente no frontend:
-- Turno A: 07:00–19:00
-- Turno B: 19:00–07:00
-
-O registro ativo é sempre o do turno corrente. Se não existir, cria-se automaticamente ao primeiro lançamento.
-
-### 3. Interface — Nova Seção em `PatientClinicalData`
-
-Ícone: `Droplets` (lucide-react)
-
-Layout:
-```text
-┌─────────────────────────────────────┐
-│ 💧 Balanço Hídrico (plantão 12h)   │
-├─────────────────────────────────────┤
-│ Saldo: +450 mL  (destaque colorido) │
-│                                     │
-│ Entradas: [____] mL  [+ Adicionar]  │
-│ Saídas:   [____] mL  [+ Adicionar]  │
-│                                     │
-│ Entradas: 1200 mL  |  Saídas: 750 mL│
-└─────────────────────────────────────┘
+```css
+/* De: grid-template-columns: 2fr 1fr 1fr; */
+/* Para: */
+grid-template-columns: 2fr 1fr 1fr 1fr;
 ```
 
-### 4. Dados no `PatientWithDetails`
+### Arquivos alterados
 
-Será necessário buscar o balanço hídrico do turno atual junto com os outros dados do paciente na função `fetchPatient` do `PatientModal.tsx`.
-
----
-
-## Arquivos a Modificar/Criar
-
-| Arquivo | Ação |
+| Arquivo | Alteracao |
 |---|---|
-| `supabase/migrations/...sql` | Criar tabela `fluid_balance` com RLS |
-| `src/types/database.ts` | Adicionar interface `FluidBalance` e incluir em `PatientWithDetails` |
-| `src/components/patient/PatientClinicalData.tsx` | Adicionar seção de Balanço Hídrico com lógica de turno e CRUD |
-| `src/components/patient/PatientModal.tsx` | Buscar `fluid_balance` no `fetchPatient` e passar para `PatientClinicalData` |
-
----
-
-## Comportamento de Negócio
-
-- O saldo é **zerado automaticamente** a cada novo turno (novo registro criado)
-- Lançamentos são **aditivos**: somar ao valor já existente (não substituir)
-- Campo de entrada aceita apenas números inteiros positivos (mL)
-- Saldo positivo = balanço hídrico positivo (mais entradas que saídas) — exibido em azul/verde
-- Saldo negativo — exibido em laranja/vermelho
-- Somente `canEdit` pode lançar valores; todos podem visualizar
+| `src/components/print/PrintPatientSheet.tsx` | Adicionar coluna de balanco hidrico |
+| `src/components/print/print-styles.css` | Ajustar grid de 3 para 4 colunas (2 locais) |
