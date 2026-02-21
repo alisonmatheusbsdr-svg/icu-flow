@@ -148,7 +148,7 @@
   /* Second row - 3 columns */
   .print-secondary-grid {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
     gap: 8px;
     margin: 6px 0;
   }
@@ -475,7 +475,7 @@
 
   .print-preview-container .print-secondary-grid {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
     gap: 8px;
     margin: 6px 0;
   }

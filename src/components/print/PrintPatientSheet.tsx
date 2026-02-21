@@ -233,6 +233,26 @@ export function PrintPatientSheet({
             )}
           </div>
         </div>
+
+        {/* Balanço Hídrico */}
+        <div className="print-clinical-section">
+          <div className="print-section-title">Balanço Hídrico</div>
+          <div className="print-section-content">
+            {patient.fluid_balance ? (() => {
+              const net = patient.fluid_balance.intake_ml - patient.fluid_balance.output_ml;
+              return (
+                <div>
+                  <div>E: {patient.fluid_balance.intake_ml} mL | S: {patient.fluid_balance.output_ml} mL</div>
+                  <div style={{ fontWeight: 'bold', color: net >= 0 ? '#16a34a' : '#dc2626' }}>
+                    Saldo: {net > 0 ? '+' : ''}{net} mL
+                  </div>
+                </div>
+              );
+            })() : (
+              <span className="print-no-data">Sem registro</span>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Precautions */}
