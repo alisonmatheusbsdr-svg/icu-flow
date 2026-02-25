@@ -19,15 +19,15 @@ const COMMON_COMORBIDITIES = ['HAS', 'DM', 'DAC', 'DPOC', 'ASMA', 'IRC', 'IRC-HD
 const SPECIALTY_TEAMS = ['Ortopedia', 'Clínica Médica', 'Urologia', 'Cirurgia Geral'];
 
 const parseExistingComorbidities = (comorbidities: string | null) => {
-  if (!comorbidities) return { selected: [] as string[], others: '' };
+  if (!comorbidities) return { selected: [] as string[], others: [] as string[] };
   
   const parts = comorbidities.split(/[,;]/).map(c => c.trim());
   const selected = parts.filter(c => 
     COMMON_COMORBIDITIES.includes(c.toUpperCase())
   ).map(c => c.toUpperCase());
   const others = parts.filter(c => 
-    !COMMON_COMORBIDITIES.includes(c.toUpperCase())
-  ).join(', ');
+    !COMMON_COMORBIDITIES.includes(c.toUpperCase()) && c.length > 0
+  );
   
   return { selected, others };
 };
@@ -52,7 +52,8 @@ export function EditPatientDialog({
   const [mainDiagnosis, setMainDiagnosis] = useState(patient.main_diagnosis || "");
   const { selected, others } = parseExistingComorbidities(patient.comorbidities);
   const [selectedComorbidities, setSelectedComorbidities] = useState<string[]>(selected);
-  const [otherComorbidities, setOtherComorbidities] = useState(others);
+  const [otherComorbidities, setOtherComorbidities] = useState<string[]>(others);
+  const [newComorbidity, setNewComorbidity] = useState('');
   const [isPalliative, setIsPalliative] = useState(patient.is_palliative);
   const [specialtyTeam, setSpecialtyTeam] = useState<string | null>(patient.specialty_team || null);
 
@@ -82,7 +83,7 @@ export function EditPatientDialog({
           age: parseInt(age),
           weight: weight ? parseFloat(weight) : null,
           main_diagnosis: mainDiagnosis.trim() || null,
-          comorbidities: [...selectedComorbidities, otherComorbidities.trim()].filter(Boolean).join(', ') || null,
+          comorbidities: [...selectedComorbidities, ...otherComorbidities].filter(Boolean).join(', ') || null,
           is_palliative: isPalliative,
           specialty_team: specialtyTeam,
         })
@@ -191,11 +192,40 @@ export function EditPatientDialog({
                 </Button>
               ))}
             </div>
-            <Input
-              placeholder="Outras: Obesidade, Hipotireoidismo..."
-              value={otherComorbidities}
-              onChange={(e) => setOtherComorbidities(e.target.value)}
-            />
+            {otherComorbidities.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {otherComorbidities.map((c) => (
+                  <span key={c} className="inline-flex items-center gap-1 rounded-full bg-secondary text-secondary-foreground px-2.5 py-0.5 text-xs font-semibold">
+                    {c}
+                    <button type="button" onClick={() => setOtherComorbidities(prev => prev.filter(x => x !== c))} className="ml-0.5 hover:text-destructive">✕</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Input
+                placeholder="Ex: Obesidade"
+                value={newComorbidity}
+                onChange={(e) => setNewComorbidity(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const val = newComorbidity.trim();
+                    if (val && !otherComorbidities.includes(val) && !selectedComorbidities.includes(val.toUpperCase())) {
+                      setOtherComorbidities(prev => [...prev, val]);
+                      setNewComorbidity('');
+                    }
+                  }
+                }}
+              />
+              <Button type="button" variant="outline" size="sm" onClick={() => {
+                const val = newComorbidity.trim();
+                if (val && !otherComorbidities.includes(val) && !selectedComorbidities.includes(val.toUpperCase())) {
+                  setOtherComorbidities(prev => [...prev, val]);
+                  setNewComorbidity('');
+                }
+              }}>+ Adicionar</Button>
+            </div>
           </div>
 
           <div className="flex items-center justify-between rounded-lg border p-3">

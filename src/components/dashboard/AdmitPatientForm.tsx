@@ -23,7 +23,8 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
   const [weight, setWeight] = useState('');
   const [mainDiagnosis, setMainDiagnosis] = useState('');
   const [selectedComorbidities, setSelectedComorbidities] = useState<string[]>([]);
-  const [otherComorbidities, setOtherComorbidities] = useState('');
+  const [otherComorbidities, setOtherComorbidities] = useState<string[]>([]);
+  const [newComorbidity, setNewComorbidity] = useState('');
   const [isPalliative, setIsPalliative] = useState(false);
   const [specialtyTeam, setSpecialtyTeam] = useState<string | null>(null);
 
@@ -50,7 +51,7 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
       age: parseInt(age),
       weight: weight ? parseFloat(weight) : null,
       main_diagnosis: mainDiagnosis || null,
-      comorbidities: [...selectedComorbidities, otherComorbidities.trim()].filter(Boolean).join(', ') || null,
+      comorbidities: [...selectedComorbidities, ...otherComorbidities].filter(Boolean).join(', ') || null,
       is_palliative: isPalliative,
       specialty_team: specialtyTeam
     }).select('id').single();
@@ -122,11 +123,40 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
             </Button>
           ))}
         </div>
-        <Input
-          placeholder="Outras: Obesidade, Hipotireoidismo..."
-          value={otherComorbidities}
-          onChange={(e) => setOtherComorbidities(e.target.value)}
-        />
+        {otherComorbidities.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {otherComorbidities.map((c) => (
+              <span key={c} className="inline-flex items-center gap-1 rounded-full bg-secondary text-secondary-foreground px-2.5 py-0.5 text-xs font-semibold">
+                {c}
+                <button type="button" onClick={() => setOtherComorbidities(prev => prev.filter(x => x !== c))} className="ml-0.5 hover:text-destructive">✕</button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <Input
+            placeholder="Ex: Obesidade"
+            value={newComorbidity}
+            onChange={(e) => setNewComorbidity(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                const val = newComorbidity.trim();
+                if (val && !otherComorbidities.includes(val) && !selectedComorbidities.includes(val.toUpperCase())) {
+                  setOtherComorbidities(prev => [...prev, val]);
+                  setNewComorbidity('');
+                }
+              }
+            }}
+          />
+          <Button type="button" variant="outline" size="sm" onClick={() => {
+            const val = newComorbidity.trim();
+            if (val && !otherComorbidities.includes(val) && !selectedComorbidities.includes(val.toUpperCase())) {
+              setOtherComorbidities(prev => [...prev, val]);
+              setNewComorbidity('');
+            }
+          }}>+ Adicionar</Button>
+        </div>
       </div>
 
       <div className="flex items-center gap-2">
