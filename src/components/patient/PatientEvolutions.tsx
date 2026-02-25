@@ -242,14 +242,18 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate, onDraftCh
     return !hasLaterEvolutionByOther;
   };
 
-  const handleCancelEvolution = async () => {
+  const handleCancelEvolution = async (copyText: boolean) => {
     if (!evolutionToCancel) return;
-    try { await navigator.clipboard.writeText(evolutionToCancel.content); } catch { /* silent */ }
+    if (copyText) {
+      try { await navigator.clipboard.writeText(evolutionToCancel.content); } catch { /* silent */ }
+    }
     const { error } = await supabase.from('evolutions').delete().eq('id', evolutionToCancel.id);
     if (error) {
       toast.error('Erro ao cancelar evolução');
     } else {
-      toast.success('Evolução cancelada. Texto copiado para a área de transferência.');
+      toast.success(copyText 
+        ? 'Evolução cancelada. Texto copiado para a área de transferência.' 
+        : 'Evolução cancelada.');
       onUpdate();
     }
     setEvolutionToCancel(null);
@@ -459,13 +463,16 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate, onDraftCh
           <AlertDialogHeader>
             <AlertDialogTitle>Cancelar evolução?</AlertDialogTitle>
             <AlertDialogDescription>
-              A evolução será removida e o texto será copiado para a área de transferência para facilitar a correção.
+              A evolução será removida. Você pode copiar o texto antes de cancelar.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
             <AlertDialogCancel>Manter</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCancelEvolution} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Cancelar Evolução
+            <AlertDialogAction onClick={() => handleCancelEvolution(true)} className="border border-destructive/30 bg-transparent text-destructive hover:bg-destructive/10">
+              Copiar e Cancelar
+            </AlertDialogAction>
+            <AlertDialogAction onClick={() => handleCancelEvolution(false)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Apenas Cancelar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
