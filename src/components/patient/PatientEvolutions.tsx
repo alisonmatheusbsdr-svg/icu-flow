@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { CharacterCounter } from '@/components/ui/character-counter';
 import { toast } from 'sonner';
-import { Check, Clock, Save, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Check, Clock, Save, TrendingUp, TrendingDown, Minus, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { PatientTasks } from './PatientTasks';
 import type { PatientWithDetails, Profile } from '@/types/database';
 
@@ -34,6 +35,7 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate, onDraftCh
   const [newEvolution, setNewEvolution] = useState('');
   const [clinicalStatus, setClinicalStatus] = useState<ClinicalStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [evolutionToCancel, setEvolutionToCancel] = useState<{ id: string; content: string } | null>(null);
   const historyContainerRef = useRef<HTMLDivElement>(null);
 
   const draftKey = `evolution_draft_${patient.id}`;
@@ -90,6 +92,21 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate, onDraftCh
     toast.success('Rascunho salvo!');
   };
 
+  const handleCancelEvolution = async () => {
+    if (!evolutionToCancel) return;
+    try {
+      await navigator.clipboard.writeText(evolutionToCancel.content);
+    } catch { /* clipboard may fail silently */ }
+    const { error } = await supabase.from('evolutions').delete().eq('id', evolutionToCancel.id);
+    if (error) {
+      toast.error('Erro ao cancelar evolução');
+    } else {
+      toast.success('Evolução cancelada. Texto copiado para a área de transferência.');
+      onUpdate();
+    }
+    setEvolutionToCancel(null);
+  };
+
   return (
     <div className="space-y-4">
       {/* Evolution History */}
@@ -119,6 +136,16 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate, onDraftCh
                       minute: '2-digit'
                     })}
                   </span>
+                  {canEdit && evo.created_by === user?.id && (
+                    <button
+                      type="button"
+                      onClick={() => setEvolutionToCancel({ id: evo.id, content: evo.content })}
+                      className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                      title="Cancelar evolução"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -190,6 +217,23 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate, onDraftCh
         authorProfiles={authorProfiles} 
         onUpdate={onUpdate} 
       />
+      {/* Cancel Evolution Confirmation Dialog */}
+      <AlertDialog open={!!evolutionToCancel} onOpenChange={(open) => !open && setEvolutionToCancel(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar evolução?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A evolução será removida e o texto será copiado para a área de transferência para facilitar a correção.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Manter</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCancelEvolution} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Cancelar Evolução
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
