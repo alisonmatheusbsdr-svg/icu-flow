@@ -1,72 +1,98 @@
 
 
-# Limite de 500 Caracteres na História de Admissão com Sugestão de IA
+# Voz → Texto + Melhorar Texto + Aviso de Limite na Evolução
 
 ## O que muda para o usuário
 
-- Um contador de caracteres (ex: `320/500`) aparece abaixo do textarea da história de admissão
-- Ao atingir 80% (400 caracteres), o contador fica amarelo como aviso
-- Ao atingir ou ultrapassar 500 caracteres, o contador fica vermelho e uma mensagem aparece sugerindo usar o "Melhorar Texto" por IA para condensar
-- O texto **não é bloqueado** — o usuário pode digitar além de 500, mas recebe o aviso visual e a sugestão
-- O botão "Melhorar Texto" ganha destaque visual (variant muda para `default` em vez de `outline`) quando o limite é excedido, chamando atenção para a funcionalidade de IA
+- Na seção "SUA EVOLUÇÃO", três novos botões aparecem abaixo do textarea: **Gravar por Voz**, **Melhorar Texto** e **Salvar Rascunho**
+- O usuário pode ditar a evolução por voz usando o mesmo sistema de transcrição em tempo real (ElevenLabs Scribe) já usado na admissão
+- O texto parcial aparece diretamente no textarea enquanto o usuário fala, com feedback visual (borda vermelha pulsante)
+- Após digitar ou ditar, pode usar "Melhorar Texto" para refinar com IA — o texto melhorado aparece para aceitar ou rejeitar
+- Quando o texto excede 420 caracteres, uma mensagem sugere usar "Melhorar Texto" para condensar, e o botão de IA ganha destaque visual
+- O CharacterCounter já existente continua funcionando normalmente
 
 ## Arquivo a modificar
 
 | Arquivo | Alteração |
 |---|---|
-| `src/components/dashboard/AdmitPatientForm.tsx` | Adicionar `CharacterCounter`, destaque no botão de IA quando excede limite |
+| `src/components/patient/PatientEvolutions.tsx` | Adicionar gravação por voz, melhora de texto por IA, e aviso de limite |
 
 ## Detalhes Técnicos
 
-### 1. Importar o componente existente `CharacterCounter`
+### 1. Novos estados e refs
 
-O projeto já tem `src/components/ui/character-counter.tsx` pronto. Basta importá-lo e usá-lo.
+Adicionar os mesmos estados usados no `AdmitPatientForm`:
+- `isRecording`, `isProcessing`, `partialTranscript` — para controle da gravação
+- `isImproving`, `improvedText` — para controle da melhora por IA
+- Refs: `wsRef`, `textareaRef`, `audioContextRef`, `processorRef`, `sourceRef`, `streamRef`
 
-### 2. Adicionar contador abaixo do textarea
+### 2. Gravação por voz (padrão idêntico ao AdmitPatientForm)
 
-Após o bloco `</div>` que fecha o textarea (linha ~431), inserir:
+Reutilizar a mesma lógica de `startRecording` / `stopRecording`:
+1. Pedir permissão de microfone
+2. Obter token via `supabase.functions.invoke('elevenlabs-scribe-token')`
+3. Conectar WebSocket ao ElevenLabs Scribe com VAD
+4. Enviar áudio PCM16 em tempo real
+5. `partial_transcript` → atualizar `partialTranscript`
+6. `committed_transcript` → concatenar em `newEvolution`
 
-```tsx
-<CharacterCounter current={admissionHistory.length} max={500} />
-```
+### 3. Melhora de texto por IA
 
-### 3. Destaque no botão "Melhorar Texto" quando excede limite
+Reutilizar a edge function `improve-admission-text` existente (o prompt é genérico o suficiente para evoluções clínicas):
+- `handleImproveText`: invoca a function com o texto atual
+- Exibe o resultado em um bloco de comparação com botões Aceitar/Rejeitar
+- Ao aceitar, substitui o conteúdo de `newEvolution`
 
-Alterar o `variant` do botão de melhorar texto de `"outline"` fixo para dinâmico:
+### 4. Aviso de limite de caracteres
 
-```tsx
-variant={admissionHistory.length > 500 ? "default" : "outline"}
-```
+Quando `newEvolution.length > EVOLUTION_CHAR_LIMIT (420)`:
+- Exibir mensagem com ícone Sparkles: "Texto longo — use 'Melhorar Texto' para condensar com IA"
+- Botão "Melhorar Texto" muda de `variant="outline"` para `variant="default"`
 
-### 4. Mensagem contextual quando excede
+### 5. Alterações no textarea
 
-Quando `admissionHistory.length > 500`, exibir uma dica abaixo do contador sugerindo usar a IA:
+- Adicionar `ref={textareaRef}` ao textarea existente
+- Quando gravando, exibir `newEvolution + partialTranscript` como valor
+- Desabilitar textarea durante gravação/processamento
+- Adicionar classes visuais de gravação (borda vermelha pulsante) e processamento
 
-```tsx
-{admissionHistory.length > 500 && !isRecording && !isProcessing && (
-  <p className="text-xs text-amber-600 flex items-center gap-1">
-    <Sparkles className="h-3 w-3" />
-    Texto longo — use "Melhorar Texto" para condensar com IA
-  </p>
-)}
-```
+### 6. Layout dos botões
+
+Reorganizar a área de botões em duas linhas:
+- **Linha 1**: Gravar por Voz | Melhorar Texto
+- **Linha 2**: Salvar Rascunho | Validar Evolução
+
+### 7. Bloco de texto melhorado
+
+Quando `improvedText` existe, exibir entre o textarea e os botões:
+- Texto melhorado em bloco destacado com borda primary
+- Botões "Rejeitar" e "Aceitar"
+
+### Nenhuma edge function nova necessária
+
+A edge function `improve-admission-text` já existe e será reutilizada. A edge function `elevenlabs-scribe-token` também já está configurada.
 
 ### Fluxo visual
 
 ```text
-┌──────────────────────────────────────────┐
-│ História de admissão...                  │
-│                                          │
-│                                          │
-└──────────────────────────────────────────┘
-                                    320/500   ← verde (normal)
-
-                                    450/500   ← amarelo (aviso)
-
-                                    530/500   ← vermelho
-                              Excede limite para impressão
-  ✨ Texto longo — use "Melhorar Texto" para condensar com IA
-
-  [🎤 Gravar por Voz]  [✨ Melhorar Texto]  ← botão fica destacado
+┌─────────────────────────────────────────────┐
+│ SUA EVOLUÇÃO                                │
+│                                             │
+│  [Melhor] [Pior] [Inalterado]               │
+│                                             │
+│  ┌─────────────────────────────────────────┐│
+│  │ Texto da evolução...          🎤 Gravando││
+│  │                                         ││
+│  └─────────────────────────────────────────┘│
+│                                      380/420│
+│                                             │
+│  ┌ Texto Melhorado ────────────────────────┐│
+│  │ Versão melhorada pela IA...             ││
+│  │                    [Rejeitar] [Aceitar]  ││
+│  └─────────────────────────────────────────┘│
+│                                             │
+│  [🎤 Gravar por Voz]  [✨ Melhorar Texto]   │
+│  [💾 Salvar Rascunho] [✅ Validar Evolução] │
+└─────────────────────────────────────────────┘
 ```
 
