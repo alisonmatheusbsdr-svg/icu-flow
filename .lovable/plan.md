@@ -1,65 +1,40 @@
 
 
-# Correção da Transcrição e Melhoria de Feedback Visual
+# Unificar Texto Parcial Dentro do Textarea
 
-## Diagnóstico
+## Problema Atual
 
-Identifiquei 3 problemas distintos:
+O texto parcial (partial transcript) aparece **fora** do textarea, em um `<p>` separado abaixo dele. O usuário quer que, ao falar, o texto já vá aparecendo **dentro** da própria caixa de texto, unificando tudo em um único local.
 
-### 1. Texto transcrito nunca aparece (bug funcional)
-O `ws.onmessage` handler verifica `data.type === 'committed_transcript'`, mas a API ElevenLabs WebSocket usa o campo `message_type`, não `type`. Por isso, nenhuma transcrição finalizada e nenhum texto parcial jamais é capturado.
+## Solução
 
-### 2. Feedback visual insuficiente durante gravação
-O único indicador visual é um pequeno ponto pulsante de 8px no botão. Falta:
-- Indicação proeminente no textarea de que o sistema está ouvindo
-- Exibição do texto parcial em tempo real (partial transcript)
-
-### 3. Sem estado de "processamento" após parar gravação
-Ao parar, o `stopRecording` fecha tudo imediatamente. O usuário não tem feedback de que o sistema está finalizando a transcrição dos últimos chunks de áudio pendentes.
+Mostrar o valor do textarea como `admissionHistory + partialTranscript` durante a gravação, de forma que o texto sendo construído em tempo real apareça diretamente no campo. O `partialTranscript` será exibido visualmente diferenciado (não será possível estilizar dentro de um `<textarea>` nativo, mas o texto aparecerá concatenado naturalmente).
 
 ## Arquivo a Modificar
 
 | Arquivo | Alteração |
 |---|---|
-| `src/components/dashboard/AdmitPatientForm.tsx` | Corrigir campo do evento, adicionar partial transcript, melhorar feedback visual, adicionar estado de processamento |
+| `src/components/dashboard/AdmitPatientForm.tsx` | Unificar partial transcript dentro do textarea e remover exibição separada |
 
 ## Detalhes Técnicos
 
-### Correção do campo de evento (bug principal)
+### 1. Valor do Textarea durante gravação
+Alterar o `value` do textarea para incluir o partial transcript em tempo real:
+
 ```typescript
-// ANTES (incorreto):
-if (data.type === 'committed_transcript' && data.text)
-
-// DEPOIS (correto):
-if (data.message_type === 'committed_transcript' && data.text)
-// + adicionar handler para partial_transcript
-if (data.message_type === 'partial_transcript' && data.text)
+value={isRecording && partialTranscript
+  ? admissionHistory.trim() + (admissionHistory.trim() ? ' ' : '') + partialTranscript
+  : admissionHistory}
 ```
 
-### Novo estado: `partialTranscript`
-- Armazenar texto parcial em estado separado
-- Exibir abaixo do textarea durante gravação com estilo diferenciado (texto itálico, cor suave)
-- Limpar ao receber `committed_transcript`
+### 2. Remover exibição separada do partial transcript
+Remover o bloco `<p>` que exibe o `partialTranscript` abaixo do textarea (linhas 421-425), pois o texto já estará dentro da caixa.
 
-### Novo estado: `isProcessing`
-- Ao chamar `stopRecording`, setar `isProcessing = true`
-- Aguardar um breve delay (1-2s) para que os últimos commits cheguem via WebSocket
-- Setar `isProcessing = false` quando o WebSocket fechar (`onclose`)
-- Exibir "Processando transcrição..." no botão durante este estado
+### 3. Manter scroll automático
+Não há necessidade de scroll automático especial — o textarea com `value` controlado já mantém o cursor no final naturalmente.
 
-### Feedback visual durante gravação
-- Borda vermelha pulsante ao redor do textarea (`ring-2 ring-red-500 animate-pulse`)
-- Placeholder do textarea muda para "Ouvindo... fale agora"
-- Exibir texto parcial em tempo real abaixo do textarea
-- Botão de gravação com animação mais proeminente
-
-### Fluxo completo corrigido
-```text
-[Clique Gravar] → microfone + token → WebSocket abre
-  → textarea com borda pulsante + "Ouvindo..."
-  → partial_transcript → exibe texto em tempo real (itálico)
-  → committed_transcript → append ao textarea
-[Clique Parar] → isProcessing=true → "Processando..."
-  → WebSocket fecha → isProcessing=false → texto final no textarea
-```
+### Resultado
+- Enquanto grava, o texto confirmado + texto parcial aparecem juntos dentro do textarea
+- Ao receber `committed_transcript`, o texto é adicionado ao `admissionHistory` e o partial é limpo
+- O ciclo se repete: o usuário vê o texto crescer continuamente dentro da mesma caixa
 
