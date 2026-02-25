@@ -92,6 +92,15 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate, onDraftCh
     toast.success('Rascunho salvo!');
   };
 
+  const canCancelEvolution = (evo: { created_at: string; created_by: string }): boolean => {
+    const hoursSinceCreation = (Date.now() - new Date(evo.created_at).getTime()) / (1000 * 60 * 60);
+    if (hoursSinceCreation >= 24) return false;
+    const hasLaterEvolutionByOther = patient.evolutions?.some(
+      other => other.created_by !== evo.created_by && new Date(other.created_at) > new Date(evo.created_at)
+    );
+    return !hasLaterEvolutionByOther;
+  };
+
   const handleCancelEvolution = async () => {
     if (!evolutionToCancel) return;
     try {
@@ -136,7 +145,7 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate, onDraftCh
                       minute: '2-digit'
                     })}
                   </span>
-                  {canEdit && evo.created_by === user?.id && (
+                  {canEdit && evo.created_by === user?.id && canCancelEvolution(evo) && (
                     <button
                       type="button"
                       onClick={() => setEvolutionToCancel({ id: evo.id, content: evo.content })}
