@@ -1,69 +1,72 @@
 
 
-# Limite de Tempo e Sequência para Cancelamento de Evoluções
+# Limite de 500 Caracteres na História de Admissão com Sugestão de IA
 
-## Regras de negócio
+## O que muda para o usuário
 
-O botão de cancelar uma evolução só deve aparecer quando **ambas** as condições forem verdadeiras:
-
-1. A evolução foi criada **há menos de 24 horas**
-2. **Nenhum outro usuário** inseriu uma evolução para o mesmo paciente **depois** desta
+- Um contador de caracteres (ex: `320/500`) aparece abaixo do textarea da história de admissão
+- Ao atingir 80% (400 caracteres), o contador fica amarelo como aviso
+- Ao atingir ou ultrapassar 500 caracteres, o contador fica vermelho e uma mensagem aparece sugerindo usar o "Melhorar Texto" por IA para condensar
+- O texto **não é bloqueado** — o usuário pode digitar além de 500, mas recebe o aviso visual e a sugestão
+- O botão "Melhorar Texto" ganha destaque visual (variant muda para `default` em vez de `outline`) quando o limite é excedido, chamando atenção para a funcionalidade de IA
 
 ## Arquivo a modificar
 
 | Arquivo | Alteração |
 |---|---|
-| `src/components/patient/PatientEvolutions.tsx` | Adicionar função de verificação das duas condições antes de exibir o botão de cancelar |
+| `src/components/dashboard/AdmitPatientForm.tsx` | Adicionar `CharacterCounter`, destaque no botão de IA quando excede limite |
 
 ## Detalhes Técnicos
 
-### Função `canCancelEvolution`
+### 1. Importar o componente existente `CharacterCounter`
 
-Criar uma função auxiliar que recebe a evolução e a lista completa de evoluções do paciente:
+O projeto já tem `src/components/ui/character-counter.tsx` pronto. Basta importá-lo e usá-lo.
 
-```typescript
-const canCancelEvolution = (evo: Evolution): boolean => {
-  // Condição 1: criada há menos de 24h
-  const hoursSinceCreation = (Date.now() - new Date(evo.created_at).getTime()) / (1000 * 60 * 60);
-  if (hoursSinceCreation >= 24) return false;
+### 2. Adicionar contador abaixo do textarea
 
-  // Condição 2: nenhum OUTRO usuário inseriu evolução depois desta
-  const hasLaterEvolutionByOther = patient.evolutions?.some(
-    other => other.created_by !== evo.created_by 
-          && new Date(other.created_at) > new Date(evo.created_at)
-  );
-  if (hasLaterEvolutionByOther) return false;
+Após o bloco `</div>` que fecha o textarea (linha ~431), inserir:
 
-  return true;
-};
+```tsx
+<CharacterCounter current={admissionHistory.length} max={500} />
 ```
 
-### Alteração na renderização
+### 3. Destaque no botão "Melhorar Texto" quando excede limite
 
-A condição atual do botão de cancelar:
-```typescript
-canEdit && evo.created_by === user?.id
+Alterar o `variant` do botão de melhorar texto de `"outline"` fixo para dinâmico:
+
+```tsx
+variant={admissionHistory.length > 500 ? "default" : "outline"}
 ```
 
-Passa a ser:
-```typescript
-canEdit && evo.created_by === user?.id && canCancelEvolution(evo)
+### 4. Mensagem contextual quando excede
+
+Quando `admissionHistory.length > 500`, exibir uma dica abaixo do contador sugerindo usar a IA:
+
+```tsx
+{admissionHistory.length > 500 && !isRecording && !isProcessing && (
+  <p className="text-xs text-amber-600 flex items-center gap-1">
+    <Sparkles className="h-3 w-3" />
+    Texto longo — use "Melhorar Texto" para condensar com IA
+  </p>
+)}
 ```
-
-### Sem alterações no banco de dados
-
-A política RLS de DELETE já existe e restringe ao autor. As novas regras são validações de UI — o banco já protege contra deleções não autorizadas. Opcionalmente, poderíamos adicionar uma validação no banco via trigger, mas como o botão simplesmente não aparece quando as condições não são atendidas, e a RLS já garante que só o autor pode deletar, a proteção é suficiente.
 
 ### Fluxo visual
 
 ```text
-Evolução criada há < 24h, sem evolução posterior de outro usuário:
-  [🗑] aparece → pode cancelar
+┌──────────────────────────────────────────┐
+│ História de admissão...                  │
+│                                          │
+│                                          │
+└──────────────────────────────────────────┘
+                                    320/500   ← verde (normal)
 
-Evolução criada há > 24h:
-  [🗑] não aparece
+                                    450/500   ← amarelo (aviso)
 
-Evolução criada há < 24h, MAS outro usuário já evoluiu depois:
-  [🗑] não aparece
+                                    530/500   ← vermelho
+                              Excede limite para impressão
+  ✨ Texto longo — use "Melhorar Texto" para condensar com IA
+
+  [🎤 Gravar por Voz]  [✨ Melhorar Texto]  ← botão fica destacado
 ```
 
