@@ -1,116 +1,60 @@
 
 
-# Admissão em 2 Etapas com Transcrição por Voz (ElevenLabs STT)
+# Admissão em 2 Etapas com Transcrição por Voz
 
 ## Resumo
 
-Transformar o formulário de admissão em um fluxo de 2 passos:
-- **Passo 1**: Formulário atual (iniciais, idade, peso, HD, equipe, comorbidades, paliativo)
-- **Passo 2**: História de admissão com campo de texto livre + gravação por voz via ElevenLabs STT + melhoramento de texto via Lovable AI + botão de aprovação
-
-Ao finalizar, o paciente é criado e a história de admissão é inserida automaticamente como a **primeira evolução** do paciente.
-
-## Pré-requisitos
-
-### 1. Conectar ElevenLabs
-O workspace já tem uma conexão ElevenLabs disponível (`std_01kgad697eesa952q0mh2fzpy4`), mas ela ainda não está vinculada ao projeto. Precisaremos vinculá-la para que o `ELEVENLABS_API_KEY` fique disponível nas edge functions.
+O conector ElevenLabs já foi vinculado ao projeto com sucesso — a `ELEVENLABS_API_KEY` está disponível nas funções backend. Agora implementaremos o fluxo completo.
 
 ## Arquivos a Criar
 
 | Arquivo | Finalidade |
 |---|---|
-| `supabase/functions/elevenlabs-scribe-token/index.ts` | Edge function para gerar token de transcrição em tempo real via ElevenLabs STT |
-| `supabase/functions/improve-admission-text/index.ts` | Edge function que usa Lovable AI para melhorar/estruturar o texto transcrito |
+| `supabase/functions/elevenlabs-scribe-token/index.ts` | Gera token de uso único para transcrição em tempo real via ElevenLabs Scribe |
+| `supabase/functions/improve-admission-text/index.ts` | Usa Lovable AI (Gemini) para melhorar/estruturar texto clínico |
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---|---|
-| `src/components/dashboard/AdmitPatientForm.tsx` | Transformar em formulário de 2 etapas com navegação entre passos |
+| `src/components/dashboard/AdmitPatientForm.tsx` | Transformar em stepper de 2 etapas com gravação por voz e melhoramento de texto |
+| `supabase/config.toml` | Adicionar `verify_jwt = false` para as duas novas edge functions |
 
 ## Detalhes Técnicos
 
 ### Edge Function: `elevenlabs-scribe-token`
-- Gera um token de uso único para transcrição em tempo real
-- Chama `POST https://api.elevenlabs.io/v1/single-use-token/realtime_scribe` com o `ELEVENLABS_API_KEY`
-- Retorna o token ao frontend
+- Valida JWT do usuário via `getClaims()`
+- Chama `POST https://api.elevenlabs.io/v1/single-use-token/realtime_scribe` com a `ELEVENLABS_API_KEY`
+- Retorna o token ao frontend para conexão WebSocket
 
 ### Edge Function: `improve-admission-text`
-- Recebe o texto bruto (digitado ou transcrito por voz)
-- Usa Lovable AI (`google/gemini-3-flash-preview`) para melhorar a redação clínica: corrigir gramática, estruturar em linguagem médica, manter o conteúdo fiel
-- Retorna o texto melhorado para aprovação do médico
+- Valida JWT do usuário
+- Recebe `{ text }` no body
+- Envia ao Lovable AI (`google/gemini-3-flash-preview`) com prompt de melhoramento clínico
+- Trata erros 429 (rate limit) e 402 (créditos)
+- Retorna `{ improved_text }`
 
-### AdmitPatientForm - Fluxo de 2 Etapas
+### AdmitPatientForm — Fluxo de 2 Etapas
 
-```text
-┌─────────────────────────────────────────────┐
-│  Admitir Paciente - Leito X                 │
-│                                             │
-│  ● Passo 1        ○ Passo 2                │
-│  ─────────────────────────────              │
-│                                             │
-│  [Formulário atual - sem alterações]        │
-│                                             │
-│             [Próximo →]                     │
-└─────────────────────────────────────────────┘
+**Passo 1** (formulário atual, inalterado):
+- Iniciais, idade, peso, HD, equipe, comorbidades, paliativo
+- Botão "Próximo →" com validação de campos obrigatórios
 
-                    ↓
+**Passo 2** (novo):
+- Textarea para história de admissão (opcional, sem limite de caracteres)
+- Botão "Gravar por Voz": conecta WebSocket ao ElevenLabs Scribe (`scribe_v2_realtime`, `language_code=por`), captura áudio via `AudioContext` + `ScriptProcessor` em PCM 16kHz, envia chunks base64, recebe `partial_transcript` e `committed_transcript` em tempo real
+- Botão "Melhorar Texto": envia texto para `improve-admission-text`, exibe preview com botões Aceitar/Rejeitar
+- Botão "Voltar" e "Admitir Paciente"
+- Ao admitir: cria paciente → marca leito ocupado → se houver texto, insere como primeira evolução (`evolutions` com `clinical_status: 'inalterado'`, `created_by: user.id`)
 
-┌─────────────────────────────────────────────┐
-│  Admitir Paciente - Leito X                 │
-│                                             │
-│  ○ Passo 1        ● Passo 2                │
-│  ─────────────────────────────              │
-│                                             │
-│  História de Admissão                       │
-│  ┌─────────────────────────────────────┐    │
-│  │ Texto livre da história...          │    │
-│  │                                     │    │
-│  └─────────────────────────────────────┘    │
-│                                             │
-│  [🎤 Gravar por Voz]  [✨ Melhorar Texto]  │
-│                                             │
-│  [← Voltar]              [Admitir Paciente] │
-└─────────────────────────────────────────────┘
-```
-
-**Passo 1:**
-- Todo o formulário atual permanece inalterado
-- O botão "Admitir Paciente" é substituído por "Próximo →"
-- Validação de campos obrigatórios (iniciais, idade) ao avançar
-
-**Passo 2:**
-- Textarea grande para história de admissão (texto livre, sem limite de caracteres rígido)
-- Botão "Gravar por Voz" que usa `@elevenlabs/react` (`useScribe` hook) para transcrição em tempo real via WebSocket
-  - Ao clicar, solicita permissão de microfone e inicia gravação
-  - Transcrição parcial aparece em tempo real no textarea
-  - Ao parar, o texto transcrito é inserido/concatenado ao textarea
-- Botão "Melhorar Texto" que envia o texto para a edge function `improve-admission-text`
-  - Exibe o texto melhorado para o médico revisar
-  - O médico pode aceitar ou rejeitar a sugestão
-- Botão "Voltar" para retornar ao Passo 1
-- Botão "Admitir Paciente" que:
-  1. Cria o paciente no banco (insert em `patients`)
-  2. Marca o leito como ocupado (update em `beds`)
-  3. Se houver texto na história de admissão, insere como primeira evolução (insert em `evolutions` com `clinical_status: 'inalterado'`)
-  4. Chama `onSuccess(patientId)`
-- A história de admissão é **opcional** — o médico pode pular e admitir sem ela
-
-### Dependência: `@elevenlabs/react`
-Será necessário instalar o pacote `@elevenlabs/react` para usar o hook `useScribe` de transcrição em tempo real.
-
-### Fluxo de Dados da Evolução de Admissão
+### Indicador de Etapa
 
 ```text
-Texto (digitado/transcrito) 
-  → [Melhorar Texto] → Lovable AI → Texto melhorado
-  → [Admitir Paciente] → INSERT patients → INSERT evolutions (primeira evolução)
-  → onSuccess → Abre PatientModal com evolução já registrada
+  ● 1 Dados do Paciente ─────── ○ 2 História de Admissão
 ```
 
-A evolução de admissão será inserida com:
-- `patient_id`: ID do paciente recém-criado
-- `content`: texto da história de admissão
-- `created_by`: ID do usuário logado
-- `clinical_status`: `'inalterado'` (status padrão para admissão)
+Navegação bidirecional entre os passos. O step indicator é clicável.
+
+### Dependências
+- Nenhum pacote npm adicional necessário — a transcrição usa WebSocket nativo + AudioContext ao invés de `@elevenlabs/react`, evitando dependência extra
 
