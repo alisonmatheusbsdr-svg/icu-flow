@@ -398,7 +398,9 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
             <div className="relative">
               <Textarea
                 placeholder={isRecording ? "🎤 Ouvindo... fale agora" : "Descreva a história clínica de admissão do paciente..."}
-                value={admissionHistory}
+                value={isRecording && partialTranscript
+                  ? admissionHistory.trim() + (admissionHistory.trim() ? ' ' : '') + partialTranscript
+                  : admissionHistory}
                 onChange={(e) => setAdmissionHistory(e.target.value)}
                 className={`min-h-[160px] resize-y transition-all ${
                   isRecording ? 'ring-2 ring-destructive/70 animate-pulse border-destructive/50' : ''
@@ -418,11 +420,6 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
                 </div>
               )}
             </div>
-            {(isRecording || isProcessing) && partialTranscript && (
-              <p className="text-sm italic text-muted-foreground px-1 animate-pulse">
-                {partialTranscript}
-              </p>
-            )}
           </div>
 
           {improvedText && (
