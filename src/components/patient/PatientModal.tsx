@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useUnit } from '@/hooks/useUnit';
 import { useAuth } from '@/hooks/useAuth';
@@ -8,7 +8,7 @@ import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, A
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { ArrowLeftRight, ClipboardList, Copy, Edit, Loader2, LogOut, MoreHorizontal, PenLine, Printer, Save, Sparkles } from 'lucide-react';
+import { ArrowLeftRight, ClipboardList, Copy, Edit, Loader2, LogOut, MoreHorizontal, PenLine, Printer, Save, Sparkles, Volume2, Square } from 'lucide-react';
 import { toast } from 'sonner';
 import { TherapeuticPlan } from './TherapeuticPlan';
 import { PatientClinicalData } from './PatientClinicalData';
@@ -45,6 +45,10 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [clinicalSummary, setClinicalSummary] = useState<string | null>(null);
   const [showSummaryDialog, setShowSummaryDialog] = useState(false);
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
   const { isPreparing, printData, showPreview, preparePrint, closePreview } = usePrintPatient();
   const { canEdit, selectedUnit } = useUnit();
   const { hasRole } = useAuth();
@@ -398,6 +402,68 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
     }
   };
 
+  const stopAudio = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
+    }
+    setIsPlayingAudio(false);
+  }, []);
+
+  const handlePlaySummary = async () => {
+    if (isPlayingAudio) {
+      stopAudio();
+      return;
+    }
+
+    if (!clinicalSummary) return;
+
+    setIsLoadingAudio(true);
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ text: clinicalSummary, voiceId: "Xb7hH8MSUJpSbSDYk0k2" }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error || "Erro ao gerar áudio");
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      audioUrlRef.current = audioUrl;
+
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+
+      audio.onended = () => {
+        stopAudio();
+      };
+
+      await audio.play();
+      setIsPlayingAudio(true);
+    } catch (err: any) {
+      console.error("Error playing audio:", err);
+      toast.error(err.message || "Erro ao reproduzir áudio");
+    } finally {
+      setIsLoadingAudio(false);
+    }
+  };
+
   const handleOpenChange = (open: boolean) => {
     if (!open && currentDraft.trim().length > 0) {
       const savedDraft = localStorage.getItem(`evolution_draft_${patientId}`) || '';
@@ -623,7 +689,10 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
     </AlertDialog>
 
     {/* Clinical Summary Dialog */}
-    <Dialog open={showSummaryDialog} onOpenChange={setShowSummaryDialog}>
+    <Dialog open={showSummaryDialog} onOpenChange={(open) => {
+      if (!open) stopAudio();
+      setShowSummaryDialog(open);
+    }}>
       <DialogContent className="max-w-lg">
         <div className="space-y-4">
           <div className="flex items-center gap-2">
@@ -639,6 +708,30 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
             <Button
               variant="outline"
               size="sm"
+              onClick={handlePlaySummary}
+              disabled={isLoadingAudio}
+              className="gap-2"
+            >
+              {isLoadingAudio ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Carregando...
+                </>
+              ) : isPlayingAudio ? (
+                <>
+                  <Square className="h-4 w-4" />
+                  Parar
+                </>
+              ) : (
+                <>
+                  <Volume2 className="h-4 w-4" />
+                  Ouvir
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => {
                 if (clinicalSummary) {
                   navigator.clipboard.writeText(clinicalSummary);
@@ -650,7 +743,10 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
               <Copy className="h-4 w-4" />
               Copiar
             </Button>
-            <Button size="sm" onClick={() => setShowSummaryDialog(false)}>
+            <Button size="sm" onClick={() => {
+              stopAudio();
+              setShowSummaryDialog(false);
+            }}>
               Fechar
             </Button>
           </div>
