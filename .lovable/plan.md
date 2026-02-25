@@ -1,67 +1,69 @@
 
 
-# Cancelamento de Evoluções com Cópia do Texto
+# Limite de Tempo e Sequência para Cancelamento de Evoluções
 
-## Contexto
+## Regras de negócio
 
-Atualmente, evoluções validadas são permanentes — não há como cancelar ou desfazer. O usuário precisa poder cancelar uma evolução já registrada, com o texto sendo copiado automaticamente para a área de transferência para facilitar a reescrita.
+O botão de cancelar uma evolução só deve aparecer quando **ambas** as condições forem verdadeiras:
 
-## O que muda para o usuário
+1. A evolução foi criada **há menos de 24 horas**
+2. **Nenhum outro usuário** inseriu uma evolução para o mesmo paciente **depois** desta
 
-- Cada evolução no histórico que foi criada **pelo próprio usuário** terá um botão discreto de cancelamento (ícone X ou lixeira)
-- Ao clicar, um diálogo de confirmação aparece explicando que a evolução será removida e o texto será copiado
-- Ao confirmar, o texto é copiado para a área de transferência e a evolução é deletada do banco
-- Um toast confirma: "Evolução cancelada. Texto copiado para a área de transferência."
+## Arquivo a modificar
 
-## Alterações necessárias
+| Arquivo | Alteração |
+|---|---|
+| `src/components/patient/PatientEvolutions.tsx` | Adicionar função de verificação das duas condições antes de exibir o botão de cancelar |
 
-### 1. Banco de dados — nova política RLS
+## Detalhes Técnicos
 
-A tabela `evolutions` não tem política de DELETE. Será criada uma política permitindo que o autor da evolução possa deletá-la:
+### Função `canCancelEvolution`
 
-```sql
-CREATE POLICY "Users can delete own evolutions"
-  ON evolutions FOR DELETE
-  USING (auth.uid() = created_by);
+Criar uma função auxiliar que recebe a evolução e a lista completa de evoluções do paciente:
+
+```typescript
+const canCancelEvolution = (evo: Evolution): boolean => {
+  // Condição 1: criada há menos de 24h
+  const hoursSinceCreation = (Date.now() - new Date(evo.created_at).getTime()) / (1000 * 60 * 60);
+  if (hoursSinceCreation >= 24) return false;
+
+  // Condição 2: nenhum OUTRO usuário inseriu evolução depois desta
+  const hasLaterEvolutionByOther = patient.evolutions?.some(
+    other => other.created_by !== evo.created_by 
+          && new Date(other.created_at) > new Date(evo.created_at)
+  );
+  if (hasLaterEvolutionByOther) return false;
+
+  return true;
+};
 ```
 
-### 2. `src/components/patient/PatientEvolutions.tsx`
+### Alteração na renderização
 
-- Importar `AlertDialog` do Radix e ícone `Trash2` ou `X` do Lucide
-- Adicionar estado para controlar o diálogo de confirmação (`evolutionToCancel`)
-- Para cada evolução no histórico onde `evo.created_by === user?.id` e `canEdit`, exibir um botão pequeno de cancelamento
-- No handler de confirmação:
-  1. Copiar `evo.content` para o clipboard via `navigator.clipboard.writeText()`
-  2. Executar `supabase.from('evolutions').delete().eq('id', evo.id)`
-  3. Exibir toast de sucesso com instrução de colar
-  4. Chamar `onUpdate()` para atualizar a lista
-- O diálogo terá título "Cancelar evolução?" e texto explicando que o conteúdo será copiado
+A condição atual do botão de cancelar:
+```typescript
+canEdit && evo.created_by === user?.id
+```
+
+Passa a ser:
+```typescript
+canEdit && evo.created_by === user?.id && canCancelEvolution(evo)
+```
+
+### Sem alterações no banco de dados
+
+A política RLS de DELETE já existe e restringe ao autor. As novas regras são validações de UI — o banco já protege contra deleções não autorizadas. Opcionalmente, poderíamos adicionar uma validação no banco via trigger, mas como o botão simplesmente não aparece quando as condições não são atendidas, e a RLS já garante que só o autor pode deletar, a proteção é suficiente.
 
 ### Fluxo visual
 
 ```text
-Histórico de evoluções:
-┌─────────────────────────────────────────┐
-│ Texto da evolução...                    │
-│                    Dr. Silva - 25/02 14h │ [🗑]  ← só aparece para o autor
-└─────────────────────────────────────────┘
+Evolução criada há < 24h, sem evolução posterior de outro usuário:
+  [🗑] aparece → pode cancelar
 
-Ao clicar [🗑]:
-┌─────────────────────────────────┐
-│  Cancelar evolução?             │
-│                                 │
-│  A evolução será removida e o   │
-│  texto será copiado para a      │
-│  área de transferência para     │
-│  facilitar a correção.          │
-│                                 │
-│  [Manter]     [Cancelar Evolução]│
-└─────────────────────────────────┘
+Evolução criada há > 24h:
+  [🗑] não aparece
+
+Evolução criada há < 24h, MAS outro usuário já evoluiu depois:
+  [🗑] não aparece
 ```
-
-## Segurança
-
-- A política RLS garante que apenas o autor pode deletar sua própria evolução
-- O botão de cancelar só aparece na UI para o autor logado
-- Confirmação obrigatória via diálogo antes da exclusão
 
