@@ -372,16 +372,19 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
           {patient && (
             <div className="flex gap-2 items-start overflow-x-auto pb-1 -mx-4 px-4 md:mx-0 md:px-0 md:flex-wrap md:overflow-visible">
               {patient.main_diagnosis && (
-                <Badge className="bg-destructive text-destructive-foreground whitespace-nowrap flex-shrink-0">
-                  HD: {patient.main_diagnosis}
-                </Badge>
+                <div className="flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 py-1 flex-shrink-0">
+                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium whitespace-nowrap">HD</span>
+                  <Badge className="bg-destructive text-destructive-foreground whitespace-nowrap">
+                    {patient.main_diagnosis}
+                  </Badge>
+                </div>
               )}
               {comorbidityList.length > 0 && (
-                <div className="flex items-center gap-1.5 rounded-md border border-border/60 bg-muted/20 px-2 py-1 flex-shrink-0">
+                <div className="flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 py-1 flex-shrink-0">
                   <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium whitespace-nowrap">Comorbidades</span>
                   <div className="flex flex-wrap gap-1">
                     {comorbidityList.map((c, i) => (
-                      <Badge key={i} variant="secondary" className="bg-muted text-muted-foreground whitespace-nowrap">
+                      <Badge key={i} variant="secondary" className="bg-secondary text-secondary-foreground whitespace-nowrap">
                         {c}
                       </Badge>
                     ))}
