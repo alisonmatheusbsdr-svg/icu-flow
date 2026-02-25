@@ -1,136 +1,78 @@
 
 
-# Evolução Cancelada com Tachado + Collapsible + Timestamp
+# Resumo Clínico por IA — Botão ao lado de "Imprimir"
 
 ## O que muda para o usuário
 
-- Ao cancelar uma evolução, ela **não é mais deletada** do banco. Em vez disso, recebe um "soft delete": fica marcada como `cancelled_at` com timestamp
-- No histórico, a evolução cancelada aparece com **texto tachado** (strikethrough) e um badge "Cancelada" com a hora do cancelamento
-- Quando uma **nova evolução é adicionada depois** da cancelada, o texto cancelado é **minimizado dentro de um Collapsible** (dropdown), mantendo o fluxo de leitura limpo
-- Enquanto não houver evolução posterior, o texto cancelado fica visível (tachado) normalmente
-- O diálogo de cancelamento continua com as 3 opções (Manter / Copiar e Cancelar / Apenas Cancelar), mas agora faz UPDATE em vez de DELETE
+- Um novo botão **"Resumo IA"** aparece ao lado do botão "Imprimir" (desktop) e como item no dropdown "Ações" (mobile)
+- Ao clicar, a IA recebe todo o contexto clínico do paciente e gera um resumo textual integrado
+- O resultado aparece em um Dialog com opção de copiar o texto
 
-## Arquivos a modificar
+## Arquivos a criar/modificar
 
 | Arquivo | Alteração |
 |---|---|
-| **Migração SQL** | Adicionar coluna `cancelled_at` (timestamp nullable) na tabela `evolutions`; adicionar policy de UPDATE |
-| `src/types/database.ts` | Adicionar `cancelled_at` ao tipo `Evolution` |
-| `src/components/patient/PatientEvolutions.tsx` | Trocar DELETE por UPDATE, renderizar tachado e collapsible |
+| `supabase/functions/summarize-patient/index.ts` | Nova edge function com prompt dedicado ao resumo clínico completo |
+| `supabase/config.toml` | Entrada `[functions.summarize-patient]` com `verify_jwt = false` |
+| `src/components/patient/PatientModal.tsx` | Botão "Resumo IA" + estados + Dialog de resultado |
 
 ## Detalhes Técnicos
 
-### 1. Migração SQL
+### 1. Edge Function `summarize-patient`
 
-```sql
-ALTER TABLE public.evolutions 
-  ADD COLUMN cancelled_at timestamptz DEFAULT NULL;
-
--- Permitir que o autor atualize (para marcar cancelled_at)
-CREATE POLICY "Users can cancel own evolutions"
-  ON public.evolutions
-  FOR UPDATE
-  USING (auth.uid() = created_by)
-  WITH CHECK (auth.uid() = created_by);
-```
-
-A coluna `cancelled_at` sendo `NULL` significa evolução ativa. Com valor preenchido, significa cancelada naquele momento.
-
-### 2. Tipo `Evolution` atualizado
+Recebe um body com todos os dados clínicos do paciente (já disponíveis no estado do PatientModal):
 
 ```typescript
-export interface Evolution {
-  id: string;
-  patient_id: string;
-  content: string;
-  created_by: string;
-  created_at: string;
-  cancelled_at?: string | null;
+{
+  initials, age, weight, admission_date, main_diagnosis, comorbidities,
+  diet_type, is_palliative, specialty_team,
+  evolutions: [{ content, created_at, clinical_status }],  // só não-canceladas
+  devices: ["TOT", "CVC subclávio D"],
+  venous_access: ["CVC - Subclávio D - Duplo lúmen"],
+  vasoactive_drugs: [{ drug_name, dose_ml_h }],
+  antibiotics: ["Meropenem", "Vancomicina"],
+  respiratory: { modality, ventilator_mode, fio2, peep, ... },
+  precautions: ["Contato", "Aerossol"],
+  prophylaxis: ["TVP", "Úlcera de estresse"],
+  therapeutic_plan: "texto do plano"
 }
 ```
 
-### 3. Lógica de cancelamento (UPDATE em vez de DELETE)
+Prompt: médico intensivista que integra todas as informações num resumo textual corrido de 8-15 linhas, linguagem médica formal, português brasileiro. Usa `google/gemini-3-flash-preview`.
+
+Autenticação e rate limit handling seguem o mesmo padrão das outras functions (getClaims + is_approved + tratamento de 429/402).
+
+### 2. PatientModal — novos estados
 
 ```typescript
-const handleCancelEvolution = async (copyText: boolean) => {
-  if (!evolutionToCancel) return;
-  if (copyText) {
-    try { await navigator.clipboard.writeText(evolutionToCancel.content); } catch {}
-  }
-  const { error } = await supabase
-    .from('evolutions')
-    .update({ cancelled_at: new Date().toISOString() } as any)
-    .eq('id', evolutionToCancel.id);
-  // toast + onUpdate...
-};
+const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+const [clinicalSummary, setClinicalSummary] = useState<string | null>(null);
+const [showSummaryDialog, setShowSummaryDialog] = useState(false);
 ```
 
-### 4. Renderização no histórico
+### 3. Função `handleGenerateSummary`
 
-Para cada evolução no `.map()`, verificar se está cancelada e se existe uma evolução posterior:
+Coleta os dados do `patient` (já carregado), filtra evoluções canceladas, e invoca a edge function. Ao receber resposta, abre o Dialog.
 
-```typescript
-const isCancelled = !!(evo as any).cancelled_at;
-const hasLaterEvolution = patient.evolutions?.some(
-  other => !(other as any).cancelled_at 
-    && new Date(other.created_at) > new Date(evo.created_at)
-);
-```
+### 4. Botão no Desktop e Mobile
 
-**Se cancelada + tem evolução posterior → Collapsible minimizado:**
-```tsx
-<Collapsible>
-  <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground">
-    <ChevronRight className="h-3 w-3" />
-    Evolução cancelada em DD/MM HH:MM
-  </CollapsibleTrigger>
-  <CollapsibleContent>
-    <p className="line-through text-muted-foreground">{evo.content}</p>
-  </CollapsibleContent>
-</Collapsible>
-```
+**Desktop (DesktopActions):** Novo botão `variant="outline"` com ícone `Sparkles` inserido imediatamente antes do botão "Imprimir".
 
-**Se cancelada + sem evolução posterior → Tachado visível:**
-```tsx
-<p className="line-through text-muted-foreground">{evo.content}</p>
-<Badge>Cancelada às HH:MM</Badge>
-```
+**Mobile (MobileActions):** Novo `DropdownMenuItem` antes do item "Imprimir".
 
-**Se não cancelada → Renderização normal (como está hoje)**
-
-### 5. Regra `canCancelEvolution` permanece igual
-
-A lógica de 24h e verificação de evolução posterior de outro autor continua a mesma — só muda que agora considera apenas evoluções **não canceladas** como "posteriores":
-
-```typescript
-const hasLaterEvolutionByOther = patient.evolutions?.some(
-  other => !(other as any).cancelled_at 
-    && other.created_by !== evo.created_by 
-    && new Date(other.created_at) > new Date(evo.created_at)
-);
-```
-
-### 6. Impressão e resumo de IA
-
-Os locais que buscam evoluções (print, summarize) continuarão funcionando normalmente — as evoluções canceladas serão incluídas nos dados mas podem ser filtradas no frontend. Nenhuma alteração necessária nesses componentes por ora (evoluções canceladas são ignoradas visualmente no print pelo tachado).
-
-### Fluxo visual
+### 5. Dialog de resultado
 
 ```text
-Histórico de Evoluções:
-
-  ┌──────────────────────────────────────────┐
-  │ Paciente estável, sem queixas...         │  ← normal
-  │          Dr. Silva - 24/02 08:30  Melhor │
-  ├──────────────────────────────────────────┤
-  │ ▶ Evolução cancelada em 24/02 14:15     │  ← collapsible (minimizado)
-  ├──────────────────────────────────────────┤
-  │ Melhora clínica significativa...         │  ← normal (adicionada depois)
-  │          Dr. Silva - 24/02 14:20  Melhor │
-  ├──────────────────────────────────────────┤
-  │ ̶P̶a̶c̶i̶e̶n̶t̶e̶ ̶c̶o̶m̶ ̶p̶i̶o̶r̶a̶.̶.̶.̶             │  ← tachado visível (sem evo posterior)
-  │   Cancelada 24/02 18:00                  │
-  │          Dr. Silva - 24/02 16:00  Pior   │
-  └──────────────────────────────────────────┘
+┌────────────────────────────────────────┐
+│  Resumo Clínico - IA          [X]     │
+│                                        │
+│  Paciente JPS, 67 anos, internado há   │
+│  12 dias por SDRA secundária a pneu-   │
+│  monia comunitária grave...            │
+│                                        │
+│              [📋 Copiar]  [Fechar]     │
+└────────────────────────────────────────┘
 ```
+
+Usa `Dialog` + `DialogContent` com ScrollArea. Botão "Copiar" usa `navigator.clipboard.writeText`.
 
