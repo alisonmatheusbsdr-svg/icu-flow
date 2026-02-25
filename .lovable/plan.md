@@ -1,40 +1,67 @@
 
 
-# Unificar Texto Parcial Dentro do Textarea
+# Cancelamento de Evoluções com Cópia do Texto
 
-## Problema Atual
+## Contexto
 
-O texto parcial (partial transcript) aparece **fora** do textarea, em um `<p>` separado abaixo dele. O usuário quer que, ao falar, o texto já vá aparecendo **dentro** da própria caixa de texto, unificando tudo em um único local.
+Atualmente, evoluções validadas são permanentes — não há como cancelar ou desfazer. O usuário precisa poder cancelar uma evolução já registrada, com o texto sendo copiado automaticamente para a área de transferência para facilitar a reescrita.
 
-## Solução
+## O que muda para o usuário
 
-Mostrar o valor do textarea como `admissionHistory + partialTranscript` durante a gravação, de forma que o texto sendo construído em tempo real apareça diretamente no campo. O `partialTranscript` será exibido visualmente diferenciado (não será possível estilizar dentro de um `<textarea>` nativo, mas o texto aparecerá concatenado naturalmente).
+- Cada evolução no histórico que foi criada **pelo próprio usuário** terá um botão discreto de cancelamento (ícone X ou lixeira)
+- Ao clicar, um diálogo de confirmação aparece explicando que a evolução será removida e o texto será copiado
+- Ao confirmar, o texto é copiado para a área de transferência e a evolução é deletada do banco
+- Um toast confirma: "Evolução cancelada. Texto copiado para a área de transferência."
 
-## Arquivo a Modificar
+## Alterações necessárias
 
-| Arquivo | Alteração |
-|---|---|
-| `src/components/dashboard/AdmitPatientForm.tsx` | Unificar partial transcript dentro do textarea e remover exibição separada |
+### 1. Banco de dados — nova política RLS
 
-## Detalhes Técnicos
+A tabela `evolutions` não tem política de DELETE. Será criada uma política permitindo que o autor da evolução possa deletá-la:
 
-### 1. Valor do Textarea durante gravação
-Alterar o `value` do textarea para incluir o partial transcript em tempo real:
-
-```typescript
-value={isRecording && partialTranscript
-  ? admissionHistory.trim() + (admissionHistory.trim() ? ' ' : '') + partialTranscript
-  : admissionHistory}
+```sql
+CREATE POLICY "Users can delete own evolutions"
+  ON evolutions FOR DELETE
+  USING (auth.uid() = created_by);
 ```
 
-### 2. Remover exibição separada do partial transcript
-Remover o bloco `<p>` que exibe o `partialTranscript` abaixo do textarea (linhas 421-425), pois o texto já estará dentro da caixa.
+### 2. `src/components/patient/PatientEvolutions.tsx`
 
-### 3. Manter scroll automático
-Não há necessidade de scroll automático especial — o textarea com `value` controlado já mantém o cursor no final naturalmente.
+- Importar `AlertDialog` do Radix e ícone `Trash2` ou `X` do Lucide
+- Adicionar estado para controlar o diálogo de confirmação (`evolutionToCancel`)
+- Para cada evolução no histórico onde `evo.created_by === user?.id` e `canEdit`, exibir um botão pequeno de cancelamento
+- No handler de confirmação:
+  1. Copiar `evo.content` para o clipboard via `navigator.clipboard.writeText()`
+  2. Executar `supabase.from('evolutions').delete().eq('id', evo.id)`
+  3. Exibir toast de sucesso com instrução de colar
+  4. Chamar `onUpdate()` para atualizar a lista
+- O diálogo terá título "Cancelar evolução?" e texto explicando que o conteúdo será copiado
 
-### Resultado
-- Enquanto grava, o texto confirmado + texto parcial aparecem juntos dentro do textarea
-- Ao receber `committed_transcript`, o texto é adicionado ao `admissionHistory` e o partial é limpo
-- O ciclo se repete: o usuário vê o texto crescer continuamente dentro da mesma caixa
+### Fluxo visual
+
+```text
+Histórico de evoluções:
+┌─────────────────────────────────────────┐
+│ Texto da evolução...                    │
+│                    Dr. Silva - 25/02 14h │ [🗑]  ← só aparece para o autor
+└─────────────────────────────────────────┘
+
+Ao clicar [🗑]:
+┌─────────────────────────────────┐
+│  Cancelar evolução?             │
+│                                 │
+│  A evolução será removida e o   │
+│  texto será copiado para a      │
+│  área de transferência para     │
+│  facilitar a correção.          │
+│                                 │
+│  [Manter]     [Cancelar Evolução]│
+└─────────────────────────────────┘
+```
+
+## Segurança
+
+- A política RLS garante que apenas o autor pode deletar sua própria evolução
+- O botão de cancelar só aparece na UI para o autor logado
+- Confirmação obrigatória via diálogo antes da exclusão
 
