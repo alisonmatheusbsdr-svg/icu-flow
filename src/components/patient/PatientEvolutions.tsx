@@ -7,9 +7,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { CharacterCounter } from '@/components/ui/character-counter';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Check, Clock, Save, TrendingUp, TrendingDown, Minus, Trash2, Mic, MicOff, Sparkles, X } from 'lucide-react';
+import { Check, Clock, Save, TrendingUp, TrendingDown, Minus, Trash2, Mic, MicOff, Sparkles, X, ChevronRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { PatientTasks } from './PatientTasks';
 import type { PatientWithDetails, Profile } from '@/types/database';
 
@@ -233,11 +234,12 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate, onDraftCh
     toast.success('Rascunho salvo!');
   };
 
-  const canCancelEvolution = (evo: { created_at: string; created_by: string }): boolean => {
+  const canCancelEvolution = (evo: { created_at: string; created_by: string; cancelled_at?: string | null }): boolean => {
+    if (evo.cancelled_at) return false;
     const hoursSinceCreation = (Date.now() - new Date(evo.created_at).getTime()) / (1000 * 60 * 60);
     if (hoursSinceCreation >= 24) return false;
     const hasLaterEvolutionByOther = patient.evolutions?.some(
-      other => other.created_by !== evo.created_by && new Date(other.created_at) > new Date(evo.created_at)
+      other => !(other as any).cancelled_at && other.created_by !== evo.created_by && new Date(other.created_at) > new Date(evo.created_at)
     );
     return !hasLaterEvolutionByOther;
   };
@@ -247,7 +249,7 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate, onDraftCh
     if (copyText) {
       try { await navigator.clipboard.writeText(evolutionToCancel.content); } catch { /* silent */ }
     }
-    const { error } = await supabase.from('evolutions').delete().eq('id', evolutionToCancel.id);
+    const { error } = await supabase.from('evolutions').update({ cancelled_at: new Date().toISOString() } as any).eq('id', evolutionToCancel.id);
     if (error) {
       toast.error('Erro ao cancelar evolução');
     } else {
@@ -272,37 +274,81 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate, onDraftCh
         
         {patient.evolutions && patient.evolutions.length > 0 ? (
           <div ref={historyContainerRef} className="space-y-0 max-h-80 overflow-y-auto">
-            {[...patient.evolutions].reverse().map((evo) => (
-              <div key={evo.id} className="evolution-item">
-                <p className="text-sm whitespace-pre-wrap text-foreground">{evo.content}</p>
-                <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground mt-1">
-                  {(evo as any).clinical_status && STATUS_CONFIG[(evo as any).clinical_status as ClinicalStatus] && (
-                    <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${STATUS_CONFIG[(evo as any).clinical_status as ClinicalStatus].badgeClass}`}>
-                      {STATUS_CONFIG[(evo as any).clinical_status as ClinicalStatus].label}
-                    </Badge>
-                  )}
-                  <span>
-                    Dr. {authorProfiles[evo.created_by]?.nome || 'Desconhecido'} - {' '}
-                    {new Date(evo.created_at).toLocaleString('pt-BR', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </span>
-                  {canEdit && evo.created_by === user?.id && canCancelEvolution(evo) && (
-                    <button
-                      type="button"
-                      onClick={() => setEvolutionToCancel({ id: evo.id, content: evo.content })}
-                      className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                      title="Cancelar evolução"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  )}
+            {[...patient.evolutions].reverse().map((evo) => {
+              const isCancelled = !!(evo as any).cancelled_at;
+              const hasLaterActiveEvolution = isCancelled && patient.evolutions?.some(
+                other => !(other as any).cancelled_at && new Date(other.created_at) > new Date(evo.created_at)
+              );
+
+              // Cancelled + has later active evolution → minimized collapsible
+              if (isCancelled && hasLaterActiveEvolution) {
+                return (
+                  <div key={evo.id} className="evolution-item py-1">
+                    <Collapsible>
+                      <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-full">
+                        <ChevronRight className="h-3 w-3 transition-transform [[data-state=open]>&]:rotate-90" />
+                        Evolução cancelada em {new Date((evo as any).cancelled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <p className="text-sm whitespace-pre-wrap line-through text-muted-foreground mt-1">{evo.content}</p>
+                        <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground mt-1">
+                          <span>
+                            Dr. {authorProfiles[evo.created_by]?.nome || 'Desconhecido'} - {' '}
+                            {new Date(evo.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </div>
+                );
+              }
+
+              // Cancelled + no later evolution → visible with strikethrough
+              if (isCancelled) {
+                return (
+                  <div key={evo.id} className="evolution-item">
+                    <p className="text-sm whitespace-pre-wrap line-through text-muted-foreground">{evo.content}</p>
+                    <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground mt-1">
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-destructive/30 text-destructive">
+                        Cancelada às {new Date((evo as any).cancelled_at).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      </Badge>
+                      <span>
+                        Dr. {authorProfiles[evo.created_by]?.nome || 'Desconhecido'} - {' '}
+                        {new Date(evo.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Normal evolution
+              return (
+                <div key={evo.id} className="evolution-item">
+                  <p className="text-sm whitespace-pre-wrap text-foreground">{evo.content}</p>
+                  <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground mt-1">
+                    {(evo as any).clinical_status && STATUS_CONFIG[(evo as any).clinical_status as ClinicalStatus] && (
+                      <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${STATUS_CONFIG[(evo as any).clinical_status as ClinicalStatus].badgeClass}`}>
+                        {STATUS_CONFIG[(evo as any).clinical_status as ClinicalStatus].label}
+                      </Badge>
+                    )}
+                    <span>
+                      Dr. {authorProfiles[evo.created_by]?.nome || 'Desconhecido'} - {' '}
+                      {new Date(evo.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    {canEdit && evo.created_by === user?.id && canCancelEvolution(evo) && (
+                      <button
+                        type="button"
+                        onClick={() => setEvolutionToCancel({ id: evo.id, content: evo.content })}
+                        className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                        title="Cancelar evolução"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">Nenhuma evolução registrada</p>
@@ -463,7 +509,7 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate, onDraftCh
           <AlertDialogHeader>
             <AlertDialogTitle>Cancelar evolução?</AlertDialogTitle>
             <AlertDialogDescription>
-              A evolução será removida. Você pode copiar o texto antes de cancelar.
+              A evolução será marcada como cancelada (tachada) no histórico. Você pode copiar o texto antes de cancelar.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col sm:flex-row gap-2">
