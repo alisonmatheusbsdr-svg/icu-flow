@@ -37,6 +37,8 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
   // Step 2 state
   const [admissionHistory, setAdmissionHistory] = useState('');
   const [isRecording, setIsRecording] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [partialTranscript, setPartialTranscript] = useState('');
   const [isImproving, setIsImproving] = useState(false);
   const [improvedText, setImprovedText] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -124,11 +126,15 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.type === 'committed_transcript' && data.text) {
+          if (data.message_type === 'partial_transcript' && data.text) {
+            setPartialTranscript(data.text);
+          }
+          if (data.message_type === 'committed_transcript' && data.text) {
             setAdmissionHistory(prev => {
               const separator = prev.trim() ? ' ' : '';
               return prev.trim() + separator + data.text;
             });
+            setPartialTranscript('');
           }
         } catch {
           // ignore parse errors
@@ -139,8 +145,9 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
         toast.error('Erro na conexão de voz');
       };
 
-      ws.onclose = (event) => {
-        console.log('WebSocket closed:', event.code, event.reason);
+      ws.onclose = () => {
+        setIsProcessing(false);
+        setPartialTranscript('');
       };
 
       wsRef.current = ws;
@@ -159,8 +166,8 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
   }, []);
 
   const stopRecording = useCallback(() => {
-    wsRef.current?.close();
-    wsRef.current = null;
+    setIsRecording(false);
+    setIsProcessing(true);
     processorRef.current?.disconnect();
     sourceRef.current?.disconnect();
     audioContextRef.current?.close();
@@ -169,7 +176,11 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
     sourceRef.current = null;
     audioContextRef.current = null;
     streamRef.current = null;
-    setIsRecording(false);
+    // Close WebSocket after a brief delay to allow final commits
+    setTimeout(() => {
+      wsRef.current?.close();
+      wsRef.current = null;
+    }, 1500);
   }, []);
 
   const handleImproveText = async () => {
@@ -384,13 +395,34 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
         <div className="space-y-4">
           <div className="space-y-2">
             <Label>História de Admissão <span className="text-muted-foreground text-xs font-normal">(opcional)</span></Label>
-            <Textarea
-              placeholder="Descreva a história clínica de admissão do paciente..."
-              value={admissionHistory}
-              onChange={(e) => setAdmissionHistory(e.target.value)}
-              className="min-h-[160px] resize-y"
-              disabled={isRecording}
-            />
+            <div className="relative">
+              <Textarea
+                placeholder={isRecording ? "🎤 Ouvindo... fale agora" : "Descreva a história clínica de admissão do paciente..."}
+                value={admissionHistory}
+                onChange={(e) => setAdmissionHistory(e.target.value)}
+                className={`min-h-[160px] resize-y transition-all ${
+                  isRecording ? 'ring-2 ring-destructive/70 animate-pulse border-destructive/50' : ''
+                } ${isProcessing ? 'ring-2 ring-primary/50 border-primary/50' : ''}`}
+                disabled={isRecording || isProcessing}
+              />
+              {isRecording && (
+                <div className="absolute top-2 right-2 flex items-center gap-1.5 bg-destructive/10 text-destructive rounded-full px-2.5 py-1 text-xs font-medium">
+                  <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
+                  Gravando
+                </div>
+              )}
+              {isProcessing && (
+                <div className="absolute top-2 right-2 flex items-center gap-1.5 bg-primary/10 text-primary rounded-full px-2.5 py-1 text-xs font-medium">
+                  <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                  Processando...
+                </div>
+              )}
+            </div>
+            {(isRecording || isProcessing) && partialTranscript && (
+              <p className="text-sm italic text-muted-foreground px-1 animate-pulse">
+                {partialTranscript}
+              </p>
+            )}
           </div>
 
           {improvedText && (
@@ -415,16 +447,22 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
           <div className="flex gap-2">
             <Button
               type="button"
-              variant={isRecording ? "destructive" : "outline"}
+              variant={isRecording ? "destructive" : isProcessing ? "secondary" : "outline"}
               size="sm"
               onClick={isRecording ? stopRecording : startRecording}
+              disabled={isProcessing}
               className="flex-1"
             >
-              {isRecording ? (
+              {isProcessing ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  Processando transcrição...
+                </>
+              ) : isRecording ? (
                 <>
                   <MicOff className="h-4 w-4 mr-1.5" />
                   Parar Gravação
-                  <span className="ml-1.5 w-2 h-2 rounded-full bg-destructive-foreground/70 animate-pulse" />
+                  <span className="ml-1.5 w-2.5 h-2.5 rounded-full bg-destructive-foreground/70 animate-pulse" />
                 </>
               ) : (
                 <>
@@ -438,7 +476,7 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
               variant="outline"
               size="sm"
               onClick={handleImproveText}
-              disabled={isImproving || !admissionHistory.trim() || isRecording}
+              disabled={isImproving || !admissionHistory.trim() || isRecording || isProcessing}
               className="flex-1"
             >
               <Sparkles className="h-4 w-4 mr-1.5" />
@@ -453,7 +491,7 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
             <Button
               type="button"
               onClick={handleSubmit}
-              disabled={isLoading || isRecording}
+              disabled={isLoading || isRecording || isProcessing}
               className="flex-1"
             >
               {isLoading ? 'Admitindo...' : 'Admitir Paciente'}
