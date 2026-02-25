@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,10 +42,18 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
   const [isImproving, setIsImproving] = useState(false);
   const [improvedText, setImprovedText] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // Auto-scroll textarea during recording
+  useEffect(() => {
+    if (isRecording && textareaRef.current) {
+      textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
+    }
+  }, [partialTranscript, admissionHistory, isRecording]);
 
   const toggleComorbidity = (comorbidity: string) => {
     setSelectedComorbidities(prev =>
@@ -397,6 +405,7 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
             <Label>História de Admissão <span className="text-muted-foreground text-xs font-normal">(opcional)</span></Label>
             <div className="relative">
               <Textarea
+                ref={textareaRef}
                 placeholder={isRecording ? "🎤 Ouvindo... fale agora" : "Descreva a história clínica de admissão do paciente..."}
                 value={isRecording && partialTranscript
                   ? admissionHistory.trim() + (admissionHistory.trim() ? ' ' : '') + partialTranscript
