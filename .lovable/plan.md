@@ -1,78 +1,54 @@
 
 
-# Resumo Clínico por IA — Botão ao lado de "Imprimir"
+# Audiodescrição do Resumo Clínico
 
 ## O que muda para o usuário
 
-- Um novo botão **"Resumo IA"** aparece ao lado do botão "Imprimir" (desktop) e como item no dropdown "Ações" (mobile)
-- Ao clicar, a IA recebe todo o contexto clínico do paciente e gera um resumo textual integrado
-- O resultado aparece em um Dialog com opção de copiar o texto
+- Um novo botão **"Ouvir"** (com ícone de alto-falante) aparece no Dialog do resumo clínico, ao lado do botão "Copiar"
+- Ao clicar, o texto do resumo é enviado para a ElevenLabs TTS e reproduzido como áudio
+- Durante a reprodução, o botão muda para **"Parar"** com ícone diferente, permitindo interromper
+- O projeto já tem o conector ElevenLabs configurado (`ELEVENLABS_API_KEY` disponível)
 
 ## Arquivos a criar/modificar
 
 | Arquivo | Alteração |
 |---|---|
-| `supabase/functions/summarize-patient/index.ts` | Nova edge function com prompt dedicado ao resumo clínico completo |
-| `supabase/config.toml` | Entrada `[functions.summarize-patient]` com `verify_jwt = false` |
-| `src/components/patient/PatientModal.tsx` | Botão "Resumo IA" + estados + Dialog de resultado |
+| `supabase/functions/elevenlabs-tts/index.ts` | Nova edge function para converter texto em áudio via ElevenLabs |
+| `supabase/config.toml` | Entrada para a nova function |
+| `src/components/patient/PatientModal.tsx` | Botão "Ouvir" no Dialog do resumo + estados de áudio |
 
 ## Detalhes Técnicos
 
-### 1. Edge Function `summarize-patient`
+### 1. Edge Function `elevenlabs-tts`
 
-Recebe um body com todos os dados clínicos do paciente (já disponíveis no estado do PatientModal):
+Recebe `{ text, voiceId }`, chama a API ElevenLabs TTS e retorna o áudio MP3 como binary. Usa autenticação via `getClaims` + `is_approved` (mesmo padrão das outras functions).
 
-```typescript
-{
-  initials, age, weight, admission_date, main_diagnosis, comorbidities,
-  diet_type, is_palliative, specialty_team,
-  evolutions: [{ content, created_at, clinical_status }],  // só não-canceladas
-  devices: ["TOT", "CVC subclávio D"],
-  venous_access: ["CVC - Subclávio D - Duplo lúmen"],
-  vasoactive_drugs: [{ drug_name, dose_ml_h }],
-  antibiotics: ["Meropenem", "Vancomicina"],
-  respiratory: { modality, ventilator_mode, fio2, peep, ... },
-  precautions: ["Contato", "Aerossol"],
-  prophylaxis: ["TVP", "Úlcera de estresse"],
-  therapeutic_plan: "texto do plano"
-}
-```
+Voz padrão: **Alice** (`Xb7hH8MSUJpSbSDYk0k2`) — voz feminina clara, bom para leitura médica em português.
 
-Prompt: médico intensivista que integra todas as informações num resumo textual corrido de 8-15 linhas, linguagem médica formal, português brasileiro. Usa `google/gemini-3-flash-preview`.
-
-Autenticação e rate limit handling seguem o mesmo padrão das outras functions (getClaims + is_approved + tratamento de 429/402).
+Modelo: `eleven_multilingual_v2` (suporte a português).
 
 ### 2. PatientModal — novos estados
 
 ```typescript
-const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-const [clinicalSummary, setClinicalSummary] = useState<string | null>(null);
-const [showSummaryDialog, setShowSummaryDialog] = useState(false);
+const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+const [isLoadingAudio, setIsLoadingAudio] = useState(false);
+const audioRef = useRef<HTMLAudio | null>(null);
 ```
 
-### 3. Função `handleGenerateSummary`
+### 3. Função `handlePlaySummary`
 
-Coleta os dados do `patient` (já carregado), filtra evoluções canceladas, e invoca a edge function. Ao receber resposta, abre o Dialog.
+Usa `fetch()` direto (não `supabase.functions.invoke()`) para receber o áudio binário como blob, cria um `URL.createObjectURL` e reproduz com `new Audio()`. Ao terminar ou ao clicar "Parar", para a reprodução e limpa a URL.
 
-### 4. Botão no Desktop e Mobile
+### 4. Botão no Dialog
 
-**Desktop (DesktopActions):** Novo botão `variant="outline"` com ícone `Sparkles` inserido imediatamente antes do botão "Imprimir".
-
-**Mobile (MobileActions):** Novo `DropdownMenuItem` antes do item "Imprimir".
-
-### 5. Dialog de resultado
+Inserido ao lado do "Copiar":
 
 ```text
-┌────────────────────────────────────────┐
-│  Resumo Clínico - IA          [X]     │
-│                                        │
-│  Paciente JPS, 67 anos, internado há   │
-│  12 dias por SDRA secundária a pneu-   │
-│  monia comunitária grave...            │
-│                                        │
-│              [📋 Copiar]  [Fechar]     │
-└────────────────────────────────────────┘
+[🔊 Ouvir]  [📋 Copiar]  [Fechar]
 ```
 
-Usa `Dialog` + `DialogContent` com ScrollArea. Botão "Copiar" usa `navigator.clipboard.writeText`.
+Durante carregamento: `[⏳ Carregando...]`
+Durante reprodução: `[⏹ Parar]`
+
+Quando o Dialog fecha, o áudio para automaticamente.
 
