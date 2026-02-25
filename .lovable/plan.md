@@ -1,48 +1,48 @@
 
-# Incluir Balanço Hídrico na Impressão do Paciente
 
-## Abordagem
+# Melhorar Adição de Comorbidades: Input + Botão Adicionar
 
-Adicionar o balanço hídrico como uma **4a coluna** na segunda linha do grid de impressão (que hoje tem Antibióticos, Profilaxias e Dieta). Isso mantém o layout compacto sem adicionar novas linhas.
+## Problema
 
-## Mudancas
+Hoje o campo "Outras comorbidades" é um texto livre onde o usuário precisa separar por vírgulas manualmente. Isso gera erros e dificuldade.
 
-### 1. `src/components/print/PrintPatientSheet.tsx`
+## Solução
 
-Adicionar uma nova coluna "Balanço Hídrico" dentro do `print-secondary-grid`, após a seção de Dieta:
+Substituir o campo de texto livre por um sistema de **input + botão "Adicionar"**. Cada comorbidade adicionada aparece como um badge removível (com X), igual aos botões de comorbidades comuns já existentes.
 
-```tsx
-{/* Balanço Hídrico */}
-<div className="print-clinical-section">
-  <div className="print-section-title">Balanço Hídrico</div>
-  <div className="print-section-content">
-    {patient.fluid_balance ? (
-      <div>
-        <div>E: {patient.fluid_balance.intake_ml} mL | S: {patient.fluid_balance.output_ml} mL</div>
-        <div style={{ fontWeight: 'bold', color: net >= 0 ? '#16a34a' : '#dc2626' }}>
-          Saldo: {net > 0 ? '+' : ''}{net} mL
-        </div>
-      </div>
-    ) : (
-      <span className="print-no-data">Sem registro</span>
-    )}
-  </div>
-</div>
+## Experiência do Usuário
+
+```text
+┌─────────────────────────────────────────┐
+│ Comorbidades                            │
+│                                         │
+│ [HAS] [DM] [DAC] [DPOC] [ASMA] ...     │  ← botões toggle (já existem)
+│                                         │
+│ [Obesidade ×] [Hipotireoidismo ×]       │  ← badges removíveis (novo)
+│                                         │
+│ [___________________] [+ Adicionar]     │  ← input + botão (novo)
+└─────────────────────────────────────────┘
 ```
 
-### 2. `src/components/print/print-styles.css`
+- Usuário digita a comorbidade no campo e clica "Adicionar" (ou pressiona Enter)
+- A comorbidade aparece como badge removível acima do campo
+- Clicar no X do badge remove a comorbidade
+- Na submissão, tudo é unido em string separada por vírgula (compatível com o banco atual)
 
-Alterar o grid da segunda linha de 3 para 4 colunas em **dois lugares** (impressao e preview):
+## Arquivos a Modificar
 
-```css
-/* De: grid-template-columns: 2fr 1fr 1fr; */
-/* Para: */
-grid-template-columns: 2fr 1fr 1fr 1fr;
-```
-
-### Arquivos alterados
-
-| Arquivo | Alteracao |
+| Arquivo | Alteração |
 |---|---|
-| `src/components/print/PrintPatientSheet.tsx` | Adicionar coluna de balanco hidrico |
-| `src/components/print/print-styles.css` | Ajustar grid de 3 para 4 colunas (2 locais) |
+| `src/components/dashboard/AdmitPatientForm.tsx` | Substituir input de texto livre por input + botão + badges removíveis |
+| `src/components/patient/EditPatientDialog.tsx` | Mesma alteração; ajustar parse de comorbidades existentes para popular array de "outras" |
+
+## Detalhes Técnicos
+
+- `otherComorbidities` muda de `string` para `string[]` (array)
+- Novo estado `newComorbidity` (string) para o campo de input
+- Função `addComorbidity`: push no array se não vazio e não duplicado
+- Função `removeComorbidity`: filter do array
+- Na submissão: `[...selectedComorbidities, ...otherComorbidities].filter(Boolean).join(', ')`
+- `parseExistingComorbidities` no EditPatientDialog já separa "others" como string; mudar para retornar array
+- Enter no input dispara `addComorbidity` (previne submit do form)
+
