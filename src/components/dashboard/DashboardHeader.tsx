@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useUnit } from '@/hooks/useUnit';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
 import { Badge } from '@/components/ui/badge';
-import { LogOut, Settings, User, Lock, Clock, Stethoscope, Building2, LayoutGrid, UserCheck, Eye, ArrowRightLeft, XCircle, Users } from 'lucide-react';
+import { LogOut, Settings, User, Clock, Stethoscope, UserCheck, Eye, ArrowRightLeft, XCircle, Users } from 'lucide-react';
 import { SinapseLogo } from '@/components/SinapseLogo';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -78,9 +78,6 @@ export function DashboardHeader() {
   const canViewAllUnits = hasRole('coordenador') || hasRole('diarista') || hasRole('admin');
   const isOnAdmin = location.pathname === '/admin';
   const isOnTeamPage = location.pathname === '/equipe';
-  
-  // Only admins can switch between units - coordinators/diaristas always see "Visão Geral"
-  const showUnitDropdown = hasRole('admin') && !isOnAdmin && !isOnTeamPage;
   
   // Show handover buttons only for plantonistas with blocking sessions
   const showHandoverControls = activeSession?.is_blocking && !canSwitchUnits;
@@ -175,55 +172,6 @@ export function DashboardHeader() {
             <span className="font-semibold text-foreground hidden sm:inline">Sinapse | UTI</span>
           </button>
 
-          {/* Unit selector logic - hide on admin/team pages and mobile */}
-          {units.length > 0 && !isOnAdmin && !isOnTeamPage && !isMobile && (
-            showUnitDropdown ? (
-              // Admin gets the full dropdown
-              <Select 
-                value={showAllUnits ? 'all' : selectedUnit?.id || ''} 
-                onValueChange={(id) => {
-                  if (id === 'all') {
-                    selectAllUnits();
-                  } else {
-                    const unit = units.find(u => u.id === id);
-                    if (unit) selectUnit(unit);
-                  }
-                }}
-              >
-                <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Selecione a UTI" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">
-                    <div className="flex items-center gap-2">
-                      <LayoutGrid className="h-4 w-4" />
-                      Visão Geral
-                    </div>
-                  </SelectItem>
-                  {units.map(unit => (
-                    <SelectItem key={unit.id} value={unit.id}>
-                      <div className="flex items-center gap-2">
-                        <Building2 className="h-4 w-4" />
-                        {unit.name}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : canViewAllUnits && !hasRole('admin') ? (
-              // Coordinators/Diaristas get a fixed "Visão Geral" badge
-              <Badge variant="secondary" className="gap-1.5 px-3 py-1.5 text-sm">
-                <LayoutGrid className="h-3 w-3" />
-                Visão Geral
-              </Badge>
-            ) : selectedUnit && (
-              // Plantonistas get their locked unit badge
-              <Badge variant="secondary" className="gap-1.5 px-3 py-1.5 text-sm">
-                <Lock className="h-3 w-3" />
-                {selectedUnit.name}
-              </Badge>
-            )
-          )}
 
           {/* Inactivity countdown indicator - desktop only */}
           {!isMobile && activeSession && timeRemaining && !isHandoverReceiver && (
