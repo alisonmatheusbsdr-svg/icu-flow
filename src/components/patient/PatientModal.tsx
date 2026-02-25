@@ -8,7 +8,7 @@ import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, A
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { ArrowLeftRight, ClipboardList, Edit, Loader2, LogOut, MoreHorizontal, PenLine, Printer, Save } from 'lucide-react';
+import { ArrowLeftRight, ClipboardList, Copy, Edit, Loader2, LogOut, MoreHorizontal, PenLine, Printer, Save, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { TherapeuticPlan } from './TherapeuticPlan';
 import { PatientClinicalData } from './PatientClinicalData';
@@ -18,6 +18,7 @@ import { EditPatientDialog } from './EditPatientDialog';
 import { PatientExamsDialog } from './PatientExamsDialog';
 import { PatientComplexityBar } from './PatientComplexityBar';
 import { PrintPreviewModal } from '@/components/print/PrintPreviewModal';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { TransferBedSelectDialog } from '@/components/nir/TransferBedSelectDialog';
 import { usePrintPatient } from '@/hooks/usePrintPatient';
 import type { PatientWithDetails, Profile, RespiratorySupport, PatientPrecaution, RegulationStatus } from '@/types/database';
@@ -41,6 +42,9 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
   const [currentUnitId, setCurrentUnitId] = useState<string | null>(null);
   const [currentDraft, setCurrentDraft] = useState('');
   const [showDraftAlert, setShowDraftAlert] = useState(false);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [clinicalSummary, setClinicalSummary] = useState<string | null>(null);
+  const [showSummaryDialog, setShowSummaryDialog] = useState(false);
   const { isPreparing, printData, showPreview, preparePrint, closePreview } = usePrintPatient();
   const { canEdit, selectedUnit } = useUnit();
   const { hasRole } = useAuth();
@@ -212,6 +216,17 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
           </DropdownMenuItem>
         )}
         <DropdownMenuItem 
+          onClick={handleGenerateSummary}
+          disabled={isGeneratingSummary}
+        >
+          {isGeneratingSummary ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <Sparkles className="h-4 w-4 mr-2" />
+          )}
+          Resumo IA
+        </DropdownMenuItem>
+        <DropdownMenuItem 
           onClick={() => patient && preparePrint(patient, bedNumber, authorProfiles)}
           disabled={isPreparing}
         >
@@ -280,6 +295,20 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
           </Button>
         )}
         <Button
+          variant="outline"
+          size="sm"
+          onClick={handleGenerateSummary}
+          disabled={isGeneratingSummary}
+          className="flex items-center gap-2"
+        >
+          {isGeneratingSummary ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Sparkles className="h-4 w-4" />
+          )}
+          Resumo IA
+        </Button>
+        <Button
         variant="outline"
         size="sm"
         onClick={() => patient && preparePrint(patient, bedNumber, authorProfiles)}
@@ -310,6 +339,64 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
   const handleDraftChange = useCallback((draft: string) => {
     setCurrentDraft(draft);
   }, []);
+
+  const handleGenerateSummary = async () => {
+    if (!patient) return;
+    setIsGeneratingSummary(true);
+    try {
+      const activeEvolutions = patient.evolutions
+        ?.filter((e: any) => !e.cancelled_at)
+        .map((e: any) => ({ content: e.content, created_at: e.created_at, clinical_status: e.clinical_status })) || [];
+
+      const payload = {
+        initials: patient.initials,
+        age: patient.age,
+        weight: patient.weight,
+        admission_date: patient.admission_date,
+        main_diagnosis: patient.main_diagnosis,
+        comorbidities: patient.comorbidities,
+        diet_type: patient.diet_type,
+        is_palliative: patient.is_palliative,
+        specialty_team: patient.specialty_team,
+        evolutions: activeEvolutions,
+        devices: patient.invasive_devices?.map((d: any) => d.device_type) || [],
+        venous_access: patient.venous_access?.map((v: any) => `${v.access_type} - ${v.insertion_site} - ${v.lumen_count}`) || [],
+        vasoactive_drugs: patient.vasoactive_drugs?.map((d: any) => ({ drug_name: d.drug_name, dose_ml_h: d.dose_ml_h })) || [],
+        antibiotics: patient.antibiotics?.map((a: any) => a.antibiotic_name) || [],
+        respiratory: patient.respiratory_support ? {
+          modality: (patient.respiratory_support as any).modality,
+          ventilator_mode: (patient.respiratory_support as any).ventilator_mode,
+          fio2: (patient.respiratory_support as any).fio2,
+          peep: (patient.respiratory_support as any).peep,
+          flow_rate: (patient.respiratory_support as any).flow_rate,
+        } : null,
+        precautions: patient.patient_precautions?.map((p: any) => p.precaution_type) || [],
+        prophylaxis: patient.prophylaxis?.map((p: any) => p.prophylaxis_type) || [],
+        therapeutic_plan: patient.therapeutic_plans?.[0]?.content || null,
+      };
+
+      const { data, error } = await supabase.functions.invoke('summarize-patient', {
+        body: payload,
+      });
+
+      if (error) throw error;
+
+      if (data?.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      if (data?.summary) {
+        setClinicalSummary(data.summary);
+        setShowSummaryDialog(true);
+      }
+    } catch (err: any) {
+      console.error('Error generating summary:', err);
+      toast.error('Erro ao gerar resumo clínico');
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
 
   const handleOpenChange = (open: boolean) => {
     if (!open && currentDraft.trim().length > 0) {
@@ -534,6 +621,42 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    {/* Clinical Summary Dialog */}
+    <Dialog open={showSummaryDialog} onOpenChange={setShowSummaryDialog}>
+      <DialogContent className="max-w-lg">
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            <h3 className="text-lg font-semibold">Resumo Clínico - IA</h3>
+          </div>
+          <ScrollArea className="max-h-[60vh]">
+            <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+              {clinicalSummary}
+            </p>
+          </ScrollArea>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (clinicalSummary) {
+                  navigator.clipboard.writeText(clinicalSummary);
+                  toast.success('Resumo copiado!');
+                }
+              }}
+              className="gap-2"
+            >
+              <Copy className="h-4 w-4" />
+              Copiar
+            </Button>
+            <Button size="sm" onClick={() => setShowSummaryDialog(false)}>
+              Fechar
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
     </>
   );
 }
