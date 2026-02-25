@@ -63,14 +63,7 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
 
   const startRecording = useCallback(async () => {
     try {
-      const { data: tokenData, error: tokenError } = await supabase.functions.invoke('elevenlabs-scribe-token');
-
-      if (tokenError || !tokenData?.token) {
-        toast.error('Erro ao iniciar gravação. Tente novamente.');
-        console.error('Token error:', tokenError);
-        return;
-      }
-
+      // 1. Request microphone FIRST to preserve user gesture context
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -81,8 +74,20 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
 
       streamRef.current = stream;
 
+      // 2. Then fetch the token
+      const { data: tokenData, error: tokenError } = await supabase.functions.invoke('elevenlabs-scribe-token');
+
+      if (tokenError || !tokenData?.token) {
+        toast.error('Erro ao iniciar gravação. Tente novamente.');
+        console.error('Token error:', tokenError);
+        stream.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+        return;
+      }
+
+      // 3. Correct WebSocket URL with VAD commit strategy
       const ws = new WebSocket(
-        `wss://api.elevenlabs.io/v1/scribe?model_id=scribe_v2_realtime&language_code=por&token=${tokenData.token}`
+        `wss://api.elevenlabs.io/v1/speech-to-text/realtime?model_id=scribe_v2_realtime&language_code=por&commit_strategy=vad&token=${tokenData.token}`
       );
 
       ws.onopen = () => {
@@ -106,7 +111,8 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
             for (let i = 0; i < uint8.length; i++) {
               binary += String.fromCharCode(uint8[i]);
             }
-            ws.send(JSON.stringify({ audio: btoa(binary) }));
+            // 4. Correct message format
+            ws.send(JSON.stringify({ message_type: "input_audio_chunk", audio_base_64: btoa(binary) }));
           }
         };
 
@@ -133,6 +139,10 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
         toast.error('Erro na conexão de voz');
       };
 
+      ws.onclose = (event) => {
+        console.log('WebSocket closed:', event.code, event.reason);
+      };
+
       wsRef.current = ws;
       setIsRecording(true);
     } catch (error) {
@@ -140,7 +150,11 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
         toast.error('Permissão de microfone negada. Habilite nas configurações do navegador.');
       } else {
         toast.error('Erro ao iniciar gravação');
+        console.error('Recording error:', error);
       }
+      // Clean up stream on failure
+      streamRef.current?.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
     }
   }, []);
 
