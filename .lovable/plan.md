@@ -1,60 +1,45 @@
 
 
-# Admissão em 2 Etapas com Transcrição por Voz
+# Correção do Erro na Conexão de Voz (ElevenLabs Scribe)
 
-## Resumo
+## Diagnóstico
 
-O conector ElevenLabs já foi vinculado ao projeto com sucesso — a `ELEVENLABS_API_KEY` está disponível nas funções backend. Agora implementaremos o fluxo completo.
+Identifiquei tres problemas no código atual que causam o erro "Erro na conexão de voz":
 
-## Arquivos a Criar
+### 1. URL do WebSocket incorreta
+O código usa `wss://api.elevenlabs.io/v1/scribe?...` mas o endpoint correto da API ElevenLabs para transcrição em tempo real é:
+```
+wss://api.elevenlabs.io/v1/speech-to-text/realtime?...
+```
 
-| Arquivo | Finalidade |
-|---|---|
-| `supabase/functions/elevenlabs-scribe-token/index.ts` | Gera token de uso único para transcrição em tempo real via ElevenLabs Scribe |
-| `supabase/functions/improve-admission-text/index.ts` | Usa Lovable AI (Gemini) para melhorar/estruturar texto clínico |
+### 2. Formato da mensagem de áudio incorreto
+O código envia:
+```json
+{ "audio": "base64..." }
+```
+Mas a API espera:
+```json
+{ "message_type": "input_audio_chunk", "audio_base_64": "base64..." }
+```
 
-## Arquivos a Modificar
+### 3. Perda do contexto de gesto do navegador
+O `getUserMedia` (permissão de microfone) é chamado **depois** do `await supabase.functions.invoke(...)`, o que pode causar falha por perda do contexto de interação do usuário. O microfone deve ser solicitado **antes** de qualquer operação assíncrona.
+
+## Arquivo a Modificar
 
 | Arquivo | Alteração |
 |---|---|
-| `src/components/dashboard/AdmitPatientForm.tsx` | Transformar em stepper de 2 etapas com gravação por voz e melhoramento de texto |
-| `supabase/config.toml` | Adicionar `verify_jwt = false` para as duas novas edge functions |
+| `src/components/dashboard/AdmitPatientForm.tsx` | Corrigir URL do WebSocket, formato da mensagem, e ordem das chamadas assíncronas |
 
-## Detalhes Técnicos
+## Detalhes da Correção
 
-### Edge Function: `elevenlabs-scribe-token`
-- Valida JWT do usuário via `getClaims()`
-- Chama `POST https://api.elevenlabs.io/v1/single-use-token/realtime_scribe` com a `ELEVENLABS_API_KEY`
-- Retorna o token ao frontend para conexão WebSocket
+Na função `startRecording`:
 
-### Edge Function: `improve-admission-text`
-- Valida JWT do usuário
-- Recebe `{ text }` no body
-- Envia ao Lovable AI (`google/gemini-3-flash-preview`) com prompt de melhoramento clínico
-- Trata erros 429 (rate limit) e 402 (créditos)
-- Retorna `{ improved_text }`
-
-### AdmitPatientForm — Fluxo de 2 Etapas
-
-**Passo 1** (formulário atual, inalterado):
-- Iniciais, idade, peso, HD, equipe, comorbidades, paliativo
-- Botão "Próximo →" com validação de campos obrigatórios
-
-**Passo 2** (novo):
-- Textarea para história de admissão (opcional, sem limite de caracteres)
-- Botão "Gravar por Voz": conecta WebSocket ao ElevenLabs Scribe (`scribe_v2_realtime`, `language_code=por`), captura áudio via `AudioContext` + `ScriptProcessor` em PCM 16kHz, envia chunks base64, recebe `partial_transcript` e `committed_transcript` em tempo real
-- Botão "Melhorar Texto": envia texto para `improve-admission-text`, exibe preview com botões Aceitar/Rejeitar
-- Botão "Voltar" e "Admitir Paciente"
-- Ao admitir: cria paciente → marca leito ocupado → se houver texto, insere como primeira evolução (`evolutions` com `clinical_status: 'inalterado'`, `created_by: user.id`)
-
-### Indicador de Etapa
-
-```text
-  ● 1 Dados do Paciente ─────── ○ 2 História de Admissão
-```
-
-Navegação bidirecional entre os passos. O step indicator é clicável.
-
-### Dependências
-- Nenhum pacote npm adicional necessário — a transcrição usa WebSocket nativo + AudioContext ao invés de `@elevenlabs/react`, evitando dependência extra
+1. Chamar `navigator.mediaDevices.getUserMedia()` **primeiro** (diretamente no handler do clique)
+2. Depois buscar o token via `supabase.functions.invoke`
+3. Corrigir a URL do WebSocket para `wss://api.elevenlabs.io/v1/speech-to-text/realtime`
+4. Adicionar `commit_strategy=vad` nos parâmetros da URL para commits automáticos por detecção de voz
+5. Corrigir o payload para `{ message_type: "input_audio_chunk", audio_base_64: ... }`
+6. Adicionar handler `ws.onclose` com logging para melhor diagnóstico de erros futuros
+7. Limpar o stream de áudio em caso de falha no token ou na conexão WebSocket
 
