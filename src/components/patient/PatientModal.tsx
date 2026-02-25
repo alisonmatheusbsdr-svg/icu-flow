@@ -370,17 +370,24 @@ export function PatientModal({ patientId, bedNumber, isOpen, onClose }: PatientM
 
           {/* Badges - with horizontal scroll on mobile */}
           {patient && (
-            <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 md:mx-0 md:px-0 md:flex-wrap md:overflow-visible">
+            <div className="flex gap-2 items-start overflow-x-auto pb-1 -mx-4 px-4 md:mx-0 md:px-0 md:flex-wrap md:overflow-visible">
               {patient.main_diagnosis && (
                 <Badge className="bg-destructive text-destructive-foreground whitespace-nowrap flex-shrink-0">
                   HD: {patient.main_diagnosis}
                 </Badge>
               )}
-              {comorbidityList.map((c, i) => (
-                <Badge key={i} variant="secondary" className="bg-muted text-muted-foreground whitespace-nowrap flex-shrink-0">
-                  {c}
-                </Badge>
-              ))}
+              {comorbidityList.length > 0 && (
+                <div className="flex items-center gap-1.5 rounded-md border border-border/60 bg-muted/20 px-2 py-1 flex-shrink-0">
+                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium whitespace-nowrap">Comorbidades</span>
+                  <div className="flex flex-wrap gap-1">
+                    {comorbidityList.map((c, i) => (
+                      <Badge key={i} variant="secondary" className="bg-muted text-muted-foreground whitespace-nowrap">
+                        {c}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
               {patient.is_palliative && (
                 <Badge className="badge-pal whitespace-nowrap flex-shrink-0">PAL</Badge>
               )}
