@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { formatInitials } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { Mic, MicOff, Sparkles, ArrowRight, ArrowLeft, Check, X } from 'lucide-react';
+import { CharacterCounter } from '@/components/ui/character-counter';
 
 const COMMON_COMORBIDITIES = ['HAS', 'DM', 'DAC', 'DPOC', 'ASMA', 'IRC', 'IRC-HD'];
 const SPECIALTY_TEAMS = ['Ortopedia', 'Clínica Médica', 'Urologia', 'Cirurgia Geral'];
@@ -430,6 +431,13 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
               )}
             </div>
           </div>
+          <CharacterCounter current={admissionHistory.length} max={500} />
+          {admissionHistory.length > 500 && !isRecording && !isProcessing && (
+            <p className="text-xs text-warning flex items-center gap-1">
+              <Sparkles className="h-3 w-3" />
+              Texto longo — use "Melhorar Texto" para condensar com IA
+            </p>
+          )}
 
           {improvedText && (
             <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
@@ -479,7 +487,7 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
             </Button>
             <Button
               type="button"
-              variant="outline"
+              variant={admissionHistory.length > 500 ? "default" : "outline"}
               size="sm"
               onClick={handleImproveText}
               disabled={isImproving || !admissionHistory.trim() || isRecording || isProcessing}
