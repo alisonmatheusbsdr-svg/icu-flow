@@ -77,7 +77,7 @@ export function UnitProvider({ children }: { children: ReactNode }) {
   const canEdit = !isHandoverReceiver && !isNIR;
 
   // Fetch units
-  const fetchUnits = useCallback(async () => {
+  const fetchUnits = useCallback(async (isInitialLoad = false) => {
     if (!user || !isApproved) {
       setUnits([]);
       setSelectedUnit(null);
@@ -85,7 +85,10 @@ export function UnitProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    setIsLoading(true);
+    // Only show loading spinner on initial load, not on background refreshes
+    if (isInitialLoad) {
+      setIsLoading(true);
+    }
     const { data, error } = await supabase
       .from('units')
       .select('*')
@@ -126,15 +129,21 @@ export function UnitProvider({ children }: { children: ReactNode }) {
     }
   }, [user, units]);
 
+  // Track if initial load has been done
+  const initialLoadDone = useRef(false);
+
   // Initial load
   useEffect(() => {
     if (user && isApproved) {
-      fetchUnits();
+      const isInitial = !initialLoadDone.current;
+      initialLoadDone.current = true;
+      fetchUnits(isInitial);
     } else {
       setUnits([]);
       setSelectedUnit(null);
       setActiveSession(null);
       setIsLoading(false);
+      initialLoadDone.current = false;
     }
   }, [user, isApproved, fetchUnits]);
 
