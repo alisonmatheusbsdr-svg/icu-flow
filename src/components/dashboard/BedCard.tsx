@@ -210,7 +210,10 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
               <span className="text-sm text-muted-foreground mt-2">Vago</span>
             </CardContent>
           </Card>
-          <DialogContent>
+          <DialogContent
+            onInteractOutside={(e) => e.preventDefault()}
+            onEscapeKeyDown={(e) => e.preventDefault()}
+          >
             <DialogHeader>
               <DialogTitle>Admitir Paciente - Leito {bed.bed_number}</DialogTitle>
             </DialogHeader>
