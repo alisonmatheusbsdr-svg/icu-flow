@@ -151,7 +151,7 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
     toast.success('Rascunho salvo');
   };
 
-  const handleDiscardAndClose = () => {
+  const canBlockBeds = hasRole('admin') || hasRole('coordenador');
     localStorage.removeItem(draftKey);
     setShowCloseAlert(false);
     setIsAdmitOpen(false);
