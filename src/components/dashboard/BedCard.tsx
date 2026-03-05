@@ -1,19 +1,22 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { AdmitPatientForm } from './AdmitPatientForm';
 import { BlockBedDialog } from './BlockBedDialog';
-import { Wind, Heart, Plus, Pill, Ban, Lock, MoreVertical, Unlock, Loader2, Truck } from 'lucide-react';
+import { Wind, Heart, Plus, Pill, Ban, Lock, MoreVertical, Unlock, Loader2, Truck, FileEdit } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { getSupportLabel } from '@/lib/regulation-config';
 import type { Bed, Patient, PatientRegulation } from '@/types/database';
+
+const DRAFT_KEY_PREFIX = 'admit-draft-';
 
 interface PatientWithModality extends Patient {
   respiratory_modality?: string;
