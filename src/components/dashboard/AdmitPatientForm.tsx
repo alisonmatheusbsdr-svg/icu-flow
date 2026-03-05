@@ -297,6 +297,7 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
         }
       }
 
+      clearDraft();
       toast.success('Paciente admitido com sucesso!');
       setIsLoading(false);
       onSuccess(patientData.id);
