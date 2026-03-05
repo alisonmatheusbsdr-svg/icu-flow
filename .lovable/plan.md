@@ -1,31 +1,19 @@
 
 
-## Plano: Remover o dropdown de seleção de UTI do cabeçalho
+## Plano: Impedir refresh automático do PWA ao alternar abas
 
-### Contexto
-O dropdown "Visão Geral" no header do dashboard (visível na imagem com a seta vermelha) é usado apenas pelo Admin para alternar entre unidades ou ver a visão geral. O usuário considera esse controle desnecessário.
+### Causa raiz
+O PWA está configurado com `registerType: "autoUpdate"` no `vite.config.ts`. Isso faz com que, ao detectar uma nova versão do Service Worker (o que pode ocorrer ao voltar para a aba), a página recarregue automaticamente — fechando qualquer diálogo aberto.
 
-### O que será removido
-O bloco inteiro do seletor de unidade no header (linhas 178-226 do `DashboardHeader.tsx`), que inclui:
-1. **Dropdown do Admin** — `<Select>` com opções "Visão Geral" e cada unidade
-2. **Badge "Visão Geral"** — para Coordenadores/Diaristas
-3. **Badge com cadeado** — para Plantonistas mostrando a unidade travada
+### Solução
+Alterar o `registerType` de `"autoUpdate"` para `"prompt"` no `vite.config.ts`. O componente `UpdatePrompt.tsx` já existe e exibe um toast pedindo que o usuário clique para atualizar — ou seja, a infraestrutura de prompt já está pronta, basta ativá-la.
 
-### O que será mantido
-- A navegação mobile (`MobileNav`) permanece inalterada, pois tem sua própria lógica
-- O logo e nome "Sinapse | UTI" continuam no header
-- Os indicadores de tempo, passagem de plantão e demais controles não são afetados
-- A lógica de roteamento e permissões continua funcionando normalmente
+### Mudança técnica
 
-### Impacto
-- Admins perderão a capacidade de trocar de unidade pelo header — continuarão sempre na "Visão Geral" ou na unidade que selecionaram via `/select-unit`
-- Coordenadores e Diaristas já viam apenas um badge estático, então não há mudança funcional
-- Plantonistas já tinham o badge travado, então também sem impacto funcional
+**`vite.config.ts`** — linha 17:
+- Trocar `registerType: "autoUpdate"` por `registerType: "prompt"`
 
-### Mudanças técnicas
+Isso garante que a atualização do Service Worker nunca force um reload automático. O usuário verá o toast "Nova versão disponível" e decidirá quando atualizar.
 
-**Arquivo:** `src/components/dashboard/DashboardHeader.tsx`
-- Remover o bloco condicional de renderização do seletor (linhas 178-226)
-- Remover imports não utilizados: `Select`, `SelectContent`, `SelectItem`, `SelectTrigger`, `SelectValue`, `Building2`, `LayoutGrid`, `Lock`
-- Remover variável `showUnitDropdown` (linha 83)
+A persistência de rascunho no localStorage (já implementada) serve como segunda camada de proteção caso o usuário escolha atualizar no meio de uma admissão.
 
