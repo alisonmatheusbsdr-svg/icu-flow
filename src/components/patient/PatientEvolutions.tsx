@@ -178,6 +178,12 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate, onDraftCh
     setTimeout(() => { wsRef.current?.close(); wsRef.current = null; }, 1500);
   }, []);
 
+  const forceCommit = useCallback(() => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ message_type: "commit" }));
+    }
+  }, []);
+
   const handleImproveText = async () => {
     if (!newEvolution.trim()) {
       toast.error('Digite ou grave um texto antes de melhorar');
@@ -395,9 +401,20 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate, onDraftCh
               disabled={isRecording || isProcessing}
             />
             {isRecording && (
-              <div className="absolute top-2 right-2 flex items-center gap-1.5 bg-destructive/10 text-destructive rounded-full px-2.5 py-1 text-xs font-medium">
-                <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
-                Gravando
+              <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={forceCommit}
+                  className="flex items-center gap-1 bg-primary/15 text-primary hover:bg-primary/25 rounded-full px-2.5 py-1 text-xs font-medium transition-colors"
+                  title="Finalizar trecho atual"
+                >
+                  <Check className="h-3 w-3" />
+                  Finalizar trecho
+                </button>
+                <div className="flex items-center gap-1.5 bg-destructive/10 text-destructive rounded-full px-2.5 py-1 text-xs font-medium">
+                  <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
+                  Gravando
+                </div>
               </div>
             )}
             {isProcessing && (
