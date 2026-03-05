@@ -19,6 +19,8 @@ interface AdmitPatientFormProps {
   onSuccess: (patientId: string) => void;
 }
 
+const DRAFT_KEY_PREFIX = 'admit-draft-';
+
 export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
   const { user } = useAuth();
   const [step, setStep] = useState(1);
@@ -37,6 +39,42 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
 
   // Step 2 state
   const [admissionHistory, setAdmissionHistory] = useState('');
+
+  // Restore draft from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem(`${DRAFT_KEY_PREFIX}${bedId}`);
+    if (saved) {
+      try {
+        const draft = JSON.parse(saved);
+        if (draft.initials) setInitials(draft.initials);
+        if (draft.age) setAge(draft.age);
+        if (draft.weight) setWeight(draft.weight);
+        if (draft.mainDiagnosis) setMainDiagnosis(draft.mainDiagnosis);
+        if (draft.selectedComorbidities) setSelectedComorbidities(draft.selectedComorbidities);
+        if (draft.otherComorbidities) setOtherComorbidities(draft.otherComorbidities);
+        if (draft.isPalliative) setIsPalliative(draft.isPalliative);
+        if (draft.specialtyTeam) setSpecialtyTeam(draft.specialtyTeam);
+        if (draft.admissionHistory) setAdmissionHistory(draft.admissionHistory);
+        if (draft.step) setStep(draft.step);
+      } catch {
+        // ignore corrupted draft
+      }
+    }
+  }, [bedId]);
+
+  // Save draft to localStorage on changes
+  useEffect(() => {
+    const hasData = initials || age || weight || mainDiagnosis || selectedComorbidities.length > 0 || otherComorbidities.length > 0 || isPalliative || specialtyTeam || admissionHistory;
+    if (hasData) {
+      localStorage.setItem(`${DRAFT_KEY_PREFIX}${bedId}`, JSON.stringify({
+        step, initials, age, weight, mainDiagnosis, selectedComorbidities, otherComorbidities, isPalliative, specialtyTeam, admissionHistory
+      }));
+    }
+  }, [step, initials, age, weight, mainDiagnosis, selectedComorbidities, otherComorbidities, isPalliative, specialtyTeam, admissionHistory, bedId]);
+
+  const clearDraft = () => {
+    localStorage.removeItem(`${DRAFT_KEY_PREFIX}${bedId}`);
+  };
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [partialTranscript, setPartialTranscript] = useState('');
@@ -259,6 +297,7 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
         }
       }
 
+      clearDraft();
       toast.success('Paciente admitido com sucesso!');
       setIsLoading(false);
       onSuccess(patientData.id);
