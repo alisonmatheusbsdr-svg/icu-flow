@@ -1,31 +1,24 @@
 
 
-## Plano: Remover o dropdown de seleção de UTI do cabeçalho
+## Plano: Botão manual para finalizar transcrição em ambientes barulhosos
 
-### Contexto
-O dropdown "Visão Geral" no header do dashboard (visível na imagem com a seta vermelha) é usado apenas pelo Admin para alternar entre unidades ou ver a visão geral. O usuário considera esse controle desnecessário.
+### Problema
+O `commit_strategy=vad` depende de silêncio para finalizar segmentos. Em ambientes ruidosos, o silêncio nunca é detectado e o texto parcial fica "preso" sem ser commitado.
 
-### O que será removido
-O bloco inteiro do seletor de unidade no header (linhas 178-226 do `DashboardHeader.tsx`), que inclui:
-1. **Dropdown do Admin** — `<Select>` com opções "Visão Geral" e cada unidade
-2. **Badge "Visão Geral"** — para Coordenadores/Diaristas
-3. **Badge com cadeado** — para Plantonistas mostrando a unidade travada
+### Solução
+Adicionar um botão visível durante a gravação que envia um comando `commit` manual ao WebSocket, forçando a finalização do trecho parcial atual. A estratégia VAD continua funcionando normalmente — o botão serve como fallback.
 
-### O que será mantido
-- A navegação mobile (`MobileNav`) permanece inalterada, pois tem sua própria lógica
-- O logo e nome "Sinapse | UTI" continuam no header
-- Os indicadores de tempo, passagem de plantão e demais controles não são afetados
-- A lógica de roteamento e permissões continua funcionando normalmente
+### Mudanças
 
-### Impacto
-- Admins perderão a capacidade de trocar de unidade pelo header — continuarão sempre na "Visão Geral" ou na unidade que selecionaram via `/select-unit`
-- Coordenadores e Diaristas já viam apenas um badge estático, então não há mudança funcional
-- Plantonistas já tinham o badge travado, então também sem impacto funcional
+**`src/components/patient/PatientEvolutions.tsx`** e **`src/components/dashboard/AdmitPatientForm.tsx`** (mesma lógica nos dois):
 
-### Mudanças técnicas
+1. Adicionar função `forceCommit` que envia `{ message_type: "commit" }` pelo WebSocket (`wsRef.current`)
+2. Adicionar um botão "Finalizar trecho" (ícone `Check` ou `CornerDownLeft`) que aparece **apenas durante a gravação**, ao lado do indicador "Gravando"
+3. O botão chama `forceCommit`, que transfere o `partialTranscript` atual para o texto commitado
+4. Estilo: botão compacto, posicionado próximo ao indicador de gravação no canto superior do textarea
 
-**Arquivo:** `src/components/dashboard/DashboardHeader.tsx`
-- Remover o bloco condicional de renderização do seletor (linhas 178-226)
-- Remover imports não utilizados: `Select`, `SelectContent`, `SelectItem`, `SelectTrigger`, `SelectValue`, `Building2`, `LayoutGrid`, `Lock`
-- Remover variável `showUnitDropdown` (linha 83)
+### UX
+- O botão só aparece quando `isRecording === true`
+- Ao clicar, o trecho parcial é finalizado imediatamente
+- O VAD continua funcionando em paralelo para ambientes silenciosos
 
