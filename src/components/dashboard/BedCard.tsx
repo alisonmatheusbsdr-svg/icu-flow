@@ -104,10 +104,60 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
   const [isAdmitOpen, setIsAdmitOpen] = useState(false);
   const [isBlockDialogOpen, setIsBlockDialogOpen] = useState(false);
   const [isUnblocking, setIsUnblocking] = useState(false);
+  const [showCloseAlert, setShowCloseAlert] = useState(false);
+  const [hasDraft, setHasDraft] = useState(false);
   const { hasRole } = useAuth();
-  
 
-  const canBlockBeds = hasRole('admin') || hasRole('coordenador');
+  const draftKey = `${DRAFT_KEY_PREFIX}${bed.id}`;
+
+  // Check for draft in localStorage
+  const checkDraft = useCallback(() => {
+    const draft = localStorage.getItem(draftKey);
+    setHasDraft(!!draft && draft.trim().length > 0);
+  }, [draftKey]);
+
+  useEffect(() => {
+    checkDraft();
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === draftKey || e.key === null) checkDraft();
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [draftKey, checkDraft]);
+
+  // Re-check draft when dialog closes
+  useEffect(() => {
+    if (!isAdmitOpen) checkDraft();
+  }, [isAdmitOpen, checkDraft]);
+
+  const handleDialogClose = (open: boolean) => {
+    if (open) {
+      setIsAdmitOpen(true);
+      return;
+    }
+    // Check if there's a draft
+    const draft = localStorage.getItem(draftKey);
+    if (draft && draft.trim().length > 0) {
+      setShowCloseAlert(true);
+    } else {
+      setIsAdmitOpen(false);
+    }
+  };
+
+  const handleSaveDraftAndClose = () => {
+    // Draft is already in localStorage, just close
+    setShowCloseAlert(false);
+    setIsAdmitOpen(false);
+    toast.success('Rascunho salvo');
+  };
+
+  const handleDiscardAndClose = () => {
+    localStorage.removeItem(draftKey);
+    setShowCloseAlert(false);
+    setIsAdmitOpen(false);
+    setHasDraft(false);
+    toast.info('Rascunho descartado');
+  };
 
   const daysInternado = patient 
     ? Math.ceil((new Date().getTime() - new Date(patient.admission_date).getTime()) / (1000 * 60 * 60 * 24))
