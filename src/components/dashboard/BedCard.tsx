@@ -229,7 +229,7 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
   if (!patient) {
     return (
       <>
-        <Dialog open={isAdmitOpen} onOpenChange={setIsAdmitOpen}>
+        <Dialog open={isAdmitOpen} onOpenChange={handleDialogClose}>
           <Card className="bed-empty cursor-pointer hover:border-success/50 transition-colors relative">
             <CardContent className="p-4 flex flex-col items-center justify-center min-h-[140px]">
               <div className="text-lg font-semibold text-muted-foreground mb-2">Leito {bed.bed_number}</div>
@@ -260,13 +260,16 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
                   <Plus className="h-5 w-5 text-success" />
                 </div>
               </DialogTrigger>
-              <span className="text-sm text-muted-foreground mt-2">Vago</span>
+              {hasDraft ? (
+                <Badge className="mt-2 gap-1 bg-amber-500/20 text-amber-600 border-amber-500/30 text-xs">
+                  <FileEdit className="h-3 w-3" />Rascunho
+                </Badge>
+              ) : (
+                <span className="text-sm text-muted-foreground mt-2">Vago</span>
+              )}
             </CardContent>
           </Card>
-          <DialogContent
-            onInteractOutside={(e) => e.preventDefault()}
-            onEscapeKeyDown={(e) => e.preventDefault()}
-          >
+          <DialogContent>
             <DialogHeader>
               <DialogTitle>Admitir Paciente - Leito {bed.bed_number}</DialogTitle>
             </DialogHeader>
@@ -274,6 +277,26 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
           </DialogContent>
         </Dialog>
         
+        <AlertDialog open={showCloseAlert} onOpenChange={setShowCloseAlert}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Rascunho de admissão</AlertDialogTitle>
+              <AlertDialogDescription>
+                Há dados preenchidos no formulário. O que deseja fazer?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+              <AlertDialogCancel>Voltar ao formulário</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDiscardAndClose} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Descartar
+              </AlertDialogAction>
+              <AlertDialogAction onClick={handleSaveDraftAndClose}>
+                Salvar Rascunho
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         <BlockBedDialog
           bedId={bed.id}
           bedNumber={bed.bed_number}
