@@ -1,31 +1,35 @@
 
 
-## Plano: Remover o dropdown de seleção de UTI do cabeçalho
+## Plano: Corrigir parada de gravação e garantir commit do texto parcial
 
-### Contexto
-O dropdown "Visão Geral" no header do dashboard (visível na imagem com a seta vermelha) é usado apenas pelo Admin para alternar entre unidades ou ver a visão geral. O usuário considera esse controle desnecessário.
+### Problemas identificados
 
-### O que será removido
-O bloco inteiro do seletor de unidade no header (linhas 178-226 do `DashboardHeader.tsx`), que inclui:
-1. **Dropdown do Admin** — `<Select>` com opções "Visão Geral" e cada unidade
-2. **Badge "Visão Geral"** — para Coordenadores/Diaristas
-3. **Badge com cadeado** — para Plantonistas mostrando a unidade travada
+1. **Gravação continua após clicar "Parar"**: O `stopRecording` desconecta o áudio e fecha o WebSocket com delay de 1.5s, mas não envia um `commit` antes de fechar. O processador de áudio pode ainda estar enviando dados antes de ser desconectado.
 
-### O que será mantido
-- A navegação mobile (`MobileNav`) permanece inalterada, pois tem sua própria lógica
-- O logo e nome "Sinapse | UTI" continuam no header
-- Os indicadores de tempo, passagem de plantão e demais controles não são afetados
-- A lógica de roteamento e permissões continua funcionando normalmente
+2. **Texto parcial se perde**: Se o usuário fala e clica "Parar" logo em seguida, o VAD não teve tempo de detectar silêncio, então o texto parcial nunca é commitado. O WebSocket fecha e o texto parcial é limpo no `onclose`.
 
-### Impacto
-- Admins perderão a capacidade de trocar de unidade pelo header — continuarão sempre na "Visão Geral" ou na unidade que selecionaram via `/select-unit`
-- Coordenadores e Diaristas já viam apenas um badge estático, então não há mudança funcional
-- Plantonistas já tinham o badge travado, então também sem impacto funcional
+### Solução
 
-### Mudanças técnicas
+Alterar `stopRecording` nos dois arquivos (`AdmitPatientForm.tsx` e `PatientEvolutions.tsx`):
 
-**Arquivo:** `src/components/dashboard/DashboardHeader.tsx`
-- Remover o bloco condicional de renderização do seletor (linhas 178-226)
-- Remover imports não utilizados: `Select`, `SelectContent`, `SelectItem`, `SelectTrigger`, `SelectValue`, `Building2`, `LayoutGrid`, `Lock`
-- Remover variável `showUnitDropdown` (linha 83)
+1. **Enviar `commit` forçado** antes de fechar o WebSocket — isso garante que qualquer texto parcial pendente seja finalizado
+2. **Capturar o texto parcial manualmente** como fallback: se após o delay o `partialTranscript` ainda tiver conteúdo (commit não retornou a tempo), incorporá-lo diretamente no texto final
+3. **Parar o áudio imediatamente** mas manter o WebSocket aberto por mais tempo (aumentar delay de 1.5s para 3s) para dar tempo ao servidor processar o commit
+4. **Limpar `partialTranscript` corretamente** — mover o texto parcial remanescente para o texto principal antes de limpar
+
+### Mudanças em ambos os arquivos
+
+**`stopRecording` reescrito:**
+- Primeiro: enviar `{ message_type: "commit" }` pelo WebSocket
+- Segundo: parar microfone e processador de áudio (para de enviar dados)
+- Terceiro: aguardar ~3s para o servidor processar o commit pendente
+- Quarto: se ainda houver `partialTranscript` não commitado, incorporá-lo manualmente ao texto
+- Quinto: fechar o WebSocket
+
+**`ws.onclose` ajustado:**
+- Antes de limpar `partialTranscript`, mover qualquer texto parcial restante para o campo principal (fallback de segurança)
+
+### Arquivos alterados
+- `src/components/dashboard/AdmitPatientForm.tsx`
+- `src/components/patient/PatientEvolutions.tsx`
 
