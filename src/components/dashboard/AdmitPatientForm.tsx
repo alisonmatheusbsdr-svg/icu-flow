@@ -107,6 +107,14 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
       toast.error('Preencha os campos obrigatórios (Iniciais e Idade)');
       return;
     }
+    if (!mainDiagnosis.trim()) {
+      toast.error('Preencha a Hipótese Diagnóstica');
+      return;
+    }
+    if (!specialtyTeam) {
+      toast.error('Selecione a Equipe Assistente');
+      return;
+    }
     setStep(2);
   };
 
@@ -263,6 +271,10 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
   };
 
   const handleSubmit = async () => {
+    if (!admissionHistory.trim()) {
+      toast.error('Preencha a História de Admissão');
+      return;
+    }
     setIsLoading(true);
     try {
       const { data: patientData, error: patientError } = await supabase.from('patients').insert({
@@ -356,12 +368,12 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="diagnosis">Hipótese Diagnóstica</Label>
+            <Label htmlFor="diagnosis">Hipótese Diagnóstica *</Label>
             <Input id="diagnosis" placeholder="Ex: Sepse de foco pulmonar" value={mainDiagnosis} onChange={(e) => setMainDiagnosis(e.target.value)} />
           </div>
 
           <div className="space-y-2">
-            <Label>Equipe Assistente</Label>
+            <Label>Equipe Assistente *</Label>
             <div className="flex flex-wrap gap-2">
               {SPECIALTY_TEAMS.map((team) => (
                 <Button
@@ -442,7 +454,7 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
       {step === 2 && (
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>História de Admissão <span className="text-muted-foreground text-xs font-normal">(opcional)</span></Label>
+            <Label>História de Admissão *</Label>
             <div className="relative">
               <Textarea
                 ref={textareaRef}
