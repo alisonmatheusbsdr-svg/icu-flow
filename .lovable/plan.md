@@ -1,31 +1,31 @@
 
 
-## Plano: Corrigir refresh ao alternar abas (Alt+Tab)
+## Plano: Remover o dropdown de seleção de UTI do cabeçalho
 
-### Causa raiz identificada
+### Contexto
+O dropdown "Visão Geral" no header do dashboard (visível na imagem com a seta vermelha) é usado apenas pelo Admin para alternar entre unidades ou ver a visão geral. O usuário considera esse controle desnecessário.
 
-O problema **não é um reload real da página**. É um re-render completo causado pela cadeia:
+### O que será removido
+O bloco inteiro do seletor de unidade no header (linhas 178-226 do `DashboardHeader.tsx`), que inclui:
+1. **Dropdown do Admin** — `<Select>` com opções "Visão Geral" e cada unidade
+2. **Badge "Visão Geral"** — para Coordenadores/Diaristas
+3. **Badge com cadeado** — para Plantonistas mostrando a unidade travada
 
-1. Ao voltar à aba, o Supabase Auth detecta o evento `visibilitychange` e tenta renovar o token
-2. Isso dispara `onAuthStateChange` no `useAuth.tsx`
-3. O callback chama `fetchRoles()`, que faz `setRolesLoaded(false)` na linha 55
-4. No `useUnit.tsx`, `isLoading` depende de `rolesLoaded`: `isLoading: isLoading || !rolesLoaded`
-5. O Dashboard vê `isLoading = true` → mostra "Carregando..." → desmonta toda a árvore de componentes incluindo o diálogo de admissão
-6. Quando `rolesLoaded` volta a `true`, o Dashboard remonta tudo — mas o diálogo já foi destruído
+### O que será mantido
+- A navegação mobile (`MobileNav`) permanece inalterada, pois tem sua própria lógica
+- O logo e nome "Sinapse | UTI" continuam no header
+- Os indicadores de tempo, passagem de plantão e demais controles não são afetados
+- A lógica de roteamento e permissões continua funcionando normalmente
 
-### Solução
+### Impacto
+- Admins perderão a capacidade de trocar de unidade pelo header — continuarão sempre na "Visão Geral" ou na unidade que selecionaram via `/select-unit`
+- Coordenadores e Diaristas já viam apenas um badge estático, então não há mudança funcional
+- Plantonistas já tinham o badge travado, então também sem impacto funcional
 
-**`src/hooks/useAuth.tsx`** — Modificar `fetchRoles` para não resetar `rolesLoaded` quando já temos roles carregadas (ou seja, em refreshes subsequentes). Assim, o token refresh do Supabase não causa o flash de loading:
+### Mudanças técnicas
 
-- Mudar `fetchRoles` para só fazer `setRolesLoaded(false)` na primeira carga, não em refreshes
-- No `onAuthStateChange`, verificar se é um evento de `TOKEN_REFRESHED` e, nesse caso, não refazer o fetch de profile/roles (os dados não mudam com refresh de token)
-- Alternativamente, simplesmente remover o `setRolesLoaded(false)` de dentro de `fetchRoles` e controlá-lo apenas no fluxo inicial
-
-### Mudança específica
-
-**`src/hooks/useAuth.tsx`**:
-- Na função `fetchRoles`: remover `setRolesLoaded(false)` — manter o estado anterior enquanto recarrega
-- No `onAuthStateChange`: filtrar eventos `TOKEN_REFRESHED` para não re-buscar profile e roles desnecessariamente, já que esses dados não mudam com renovação de token
-
-Isso elimina o flash de "Carregando..." ao alternar abas, mantendo o diálogo aberto e os dados intactos.
+**Arquivo:** `src/components/dashboard/DashboardHeader.tsx`
+- Remover o bloco condicional de renderização do seletor (linhas 178-226)
+- Remover imports não utilizados: `Select`, `SelectContent`, `SelectItem`, `SelectTrigger`, `SelectValue`, `Building2`, `LayoutGrid`, `Lock`
+- Remover variável `showUnitDropdown` (linha 83)
 
