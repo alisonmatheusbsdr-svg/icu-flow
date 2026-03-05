@@ -151,13 +151,15 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
     toast.success('Rascunho salvo');
   };
 
-  const canBlockBeds = hasRole('admin') || hasRole('coordenador');
+  const handleDiscardAndClose = () => {
     localStorage.removeItem(draftKey);
     setShowCloseAlert(false);
     setIsAdmitOpen(false);
     setHasDraft(false);
     toast.info('Rascunho descartado');
   };
+
+  const canBlockBeds = hasRole('admin') || hasRole('coordenador');
 
   const daysInternado = patient 
     ? Math.ceil((new Date().getTime() - new Date(patient.admission_date).getTime()) / (1000 * 60 * 60 * 24))
