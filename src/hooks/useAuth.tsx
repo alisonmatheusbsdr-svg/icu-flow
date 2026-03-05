@@ -69,6 +69,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Track current user ID to avoid redundant refetches
+  const currentUserIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -81,12 +84,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
+        // Skip if it's the same user we already loaded (e.g. SIGNED_IN on tab focus)
+        if (session?.user && session.user.id === currentUserIdRef.current && rolesLoaded) {
+          return;
+        }
+
         if (session?.user) {
+          currentUserIdRef.current = session.user.id;
           setTimeout(() => {
             fetchProfile(session.user.id);
             fetchRoles(session.user.id);
           }, 0);
         } else {
+          currentUserIdRef.current = null;
           setProfile(null);
           setRoles([]);
           setRolesLoaded(true);
