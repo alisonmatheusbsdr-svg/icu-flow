@@ -1,31 +1,25 @@
 
 
-## Plano: Remover o dropdown de seleção de UTI do cabeçalho
+## Plano: Manter o diálogo de admissão aberto e persistir rascunho
 
-### Contexto
-O dropdown "Visão Geral" no header do dashboard (visível na imagem com a seta vermelha) é usado apenas pelo Admin para alternar entre unidades ou ver a visão geral. O usuário considera esse controle desnecessário.
+### Problema
+O diálogo de admissão fecha ao clicar fora dele ou ao pressionar ESC, perdendo os dados preenchidos. Se o usuário navegar para outra página, o componente desmonta e os dados são perdidos.
 
-### O que será removido
-O bloco inteiro do seletor de unidade no header (linhas 178-226 do `DashboardHeader.tsx`), que inclui:
-1. **Dropdown do Admin** — `<Select>` com opções "Visão Geral" e cada unidade
-2. **Badge "Visão Geral"** — para Coordenadores/Diaristas
-3. **Badge com cadeado** — para Plantonistas mostrando a unidade travada
+### Solução em duas partes
 
-### O que será mantido
-- A navegação mobile (`MobileNav`) permanece inalterada, pois tem sua própria lógica
-- O logo e nome "Sinapse | UTI" continuam no header
-- Os indicadores de tempo, passagem de plantão e demais controles não são afetados
-- A lógica de roteamento e permissões continua funcionando normalmente
+**1. Impedir fechamento acidental do diálogo** (`BedCard.tsx`)
+- Adicionar `onInteractOutside={(e) => e.preventDefault()}` e `onEscapeKeyDown={(e) => e.preventDefault()}` no `DialogContent` para impedir que cliques fora ou ESC fechem o diálogo
+- O diálogo só fechará pelo botão X ou após a admissão ser concluída
 
-### Impacto
-- Admins perderão a capacidade de trocar de unidade pelo header — continuarão sempre na "Visão Geral" ou na unidade que selecionaram via `/select-unit`
-- Coordenadores e Diaristas já viam apenas um badge estático, então não há mudança funcional
-- Plantonistas já tinham o badge travado, então também sem impacto funcional
+**2. Persistir rascunho no localStorage** (`AdmitPatientForm.tsx`)
+- Salvar automaticamente o estado do formulário no `localStorage` com chave `admit-draft-{bedId}` a cada alteração
+- Restaurar os dados ao reabrir o formulário do mesmo leito
+- Limpar o rascunho após admissão bem-sucedida
+- Assim, mesmo que o usuário navegue para outra página (desmontando o componente), ao voltar os dados estarão lá
 
-### Mudanças técnicas
-
-**Arquivo:** `src/components/dashboard/DashboardHeader.tsx`
-- Remover o bloco condicional de renderização do seletor (linhas 178-226)
-- Remover imports não utilizados: `Select`, `SelectContent`, `SelectItem`, `SelectTrigger`, `SelectValue`, `Building2`, `LayoutGrid`, `Lock`
-- Remover variável `showUnitDropdown` (linha 83)
+### Resultado esperado
+- Clicar fora do diálogo → diálogo permanece aberto
+- ESC → diálogo permanece aberto
+- Navegar para outra página e voltar → dados restaurados automaticamente
+- Admissão concluída → rascunho limpo
 
