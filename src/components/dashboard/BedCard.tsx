@@ -1,19 +1,22 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { AdmitPatientForm } from './AdmitPatientForm';
 import { BlockBedDialog } from './BlockBedDialog';
-import { Wind, Heart, Plus, Pill, Ban, Lock, MoreVertical, Unlock, Loader2, Truck } from 'lucide-react';
+import { Wind, Heart, Plus, Pill, Ban, Lock, MoreVertical, Unlock, Loader2, Truck, FileEdit } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { getSupportLabel } from '@/lib/regulation-config';
 import type { Bed, Patient, PatientRegulation } from '@/types/database';
+
+const DRAFT_KEY_PREFIX = 'admit-draft-';
 
 interface PatientWithModality extends Patient {
   respiratory_modality?: string;
@@ -101,8 +104,60 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
   const [isAdmitOpen, setIsAdmitOpen] = useState(false);
   const [isBlockDialogOpen, setIsBlockDialogOpen] = useState(false);
   const [isUnblocking, setIsUnblocking] = useState(false);
+  const [showCloseAlert, setShowCloseAlert] = useState(false);
+  const [hasDraft, setHasDraft] = useState(false);
   const { hasRole } = useAuth();
-  
+
+  const draftKey = `${DRAFT_KEY_PREFIX}${bed.id}`;
+
+  // Check for draft in localStorage
+  const checkDraft = useCallback(() => {
+    const draft = localStorage.getItem(draftKey);
+    setHasDraft(!!draft && draft.trim().length > 0);
+  }, [draftKey]);
+
+  useEffect(() => {
+    checkDraft();
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === draftKey || e.key === null) checkDraft();
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [draftKey, checkDraft]);
+
+  // Re-check draft when dialog closes
+  useEffect(() => {
+    if (!isAdmitOpen) checkDraft();
+  }, [isAdmitOpen, checkDraft]);
+
+  const handleDialogClose = (open: boolean) => {
+    if (open) {
+      setIsAdmitOpen(true);
+      return;
+    }
+    // Check if there's a draft
+    const draft = localStorage.getItem(draftKey);
+    if (draft && draft.trim().length > 0) {
+      setShowCloseAlert(true);
+    } else {
+      setIsAdmitOpen(false);
+    }
+  };
+
+  const handleSaveDraftAndClose = () => {
+    // Draft is already in localStorage, just close
+    setShowCloseAlert(false);
+    setIsAdmitOpen(false);
+    toast.success('Rascunho salvo');
+  };
+
+  const handleDiscardAndClose = () => {
+    localStorage.removeItem(draftKey);
+    setShowCloseAlert(false);
+    setIsAdmitOpen(false);
+    setHasDraft(false);
+    toast.info('Rascunho descartado');
+  };
 
   const canBlockBeds = hasRole('admin') || hasRole('coordenador');
 
@@ -176,7 +231,7 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
   if (!patient) {
     return (
       <>
-        <Dialog open={isAdmitOpen} onOpenChange={setIsAdmitOpen}>
+        <Dialog open={isAdmitOpen} onOpenChange={handleDialogClose}>
           <Card className="bed-empty cursor-pointer hover:border-success/50 transition-colors relative">
             <CardContent className="p-4 flex flex-col items-center justify-center min-h-[140px]">
               <div className="text-lg font-semibold text-muted-foreground mb-2">Leito {bed.bed_number}</div>
@@ -207,13 +262,16 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
                   <Plus className="h-5 w-5 text-success" />
                 </div>
               </DialogTrigger>
-              <span className="text-sm text-muted-foreground mt-2">Vago</span>
+              {hasDraft ? (
+                <Badge className="mt-2 gap-1 bg-amber-500/20 text-amber-600 border-amber-500/30 text-xs">
+                  <FileEdit className="h-3 w-3" />Rascunho
+                </Badge>
+              ) : (
+                <span className="text-sm text-muted-foreground mt-2">Vago</span>
+              )}
             </CardContent>
           </Card>
-          <DialogContent
-            onInteractOutside={(e) => e.preventDefault()}
-            onEscapeKeyDown={(e) => e.preventDefault()}
-          >
+          <DialogContent>
             <DialogHeader>
               <DialogTitle>Admitir Paciente - Leito {bed.bed_number}</DialogTitle>
             </DialogHeader>
@@ -221,6 +279,26 @@ export function BedCard({ bed, patient, onUpdate, onPatientClick }: BedCardProps
           </DialogContent>
         </Dialog>
         
+        <AlertDialog open={showCloseAlert} onOpenChange={setShowCloseAlert}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Rascunho de admissão</AlertDialogTitle>
+              <AlertDialogDescription>
+                Há dados preenchidos no formulário. O que deseja fazer?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+              <AlertDialogCancel>Voltar ao formulário</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDiscardAndClose} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Descartar
+              </AlertDialogAction>
+              <AlertDialogAction onClick={handleSaveDraftAndClose}>
+                Salvar Rascunho
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         <BlockBedDialog
           bedId={bed.id}
           bedNumber={bed.bed_number}
