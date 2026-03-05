@@ -149,7 +149,19 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate, onDraftCh
       };
 
       ws.onerror = () => toast.error('Erro na conexão de voz');
-      ws.onclose = () => { setIsProcessing(false); setPartialTranscript(''); };
+      ws.onclose = () => {
+        // Fallback: move any remaining partial transcript to main text
+        setPartialTranscript(prev => {
+          if (prev.trim()) {
+            setNewEvolution(text => {
+              const separator = text.trim() ? ' ' : '';
+              return text.trim() + separator + prev.trim();
+            });
+          }
+          return '';
+        });
+        setIsProcessing(false);
+      };
 
       wsRef.current = ws;
       setIsRecording(true);
@@ -167,6 +179,13 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate, onDraftCh
   const stopRecording = useCallback(() => {
     setIsRecording(false);
     setIsProcessing(true);
+
+    // 1. Force commit any pending partial transcript
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ message_type: "commit" }));
+    }
+
+    // 2. Stop audio immediately
     processorRef.current?.disconnect();
     sourceRef.current?.disconnect();
     audioContextRef.current?.close();
@@ -175,7 +194,9 @@ export function PatientEvolutions({ patient, authorProfiles, onUpdate, onDraftCh
     sourceRef.current = null;
     audioContextRef.current = null;
     streamRef.current = null;
-    setTimeout(() => { wsRef.current?.close(); wsRef.current = null; }, 1500);
+
+    // 3. Wait longer for server to process the final commit, then close
+    setTimeout(() => { wsRef.current?.close(); wsRef.current = null; }, 3000);
   }, []);
 
   const forceCommit = useCallback(() => {

@@ -201,8 +201,17 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
       };
 
       ws.onclose = () => {
+        // Fallback: move any remaining partial transcript to main text
+        setPartialTranscript(prev => {
+          if (prev.trim()) {
+            setAdmissionHistory(text => {
+              const separator = text.trim() ? ' ' : '';
+              return text.trim() + separator + prev.trim();
+            });
+          }
+          return '';
+        });
         setIsProcessing(false);
-        setPartialTranscript('');
       };
 
       wsRef.current = ws;
@@ -223,6 +232,13 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
   const stopRecording = useCallback(() => {
     setIsRecording(false);
     setIsProcessing(true);
+
+    // 1. Force commit any pending partial transcript
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ message_type: "commit" }));
+    }
+
+    // 2. Stop audio immediately
     processorRef.current?.disconnect();
     sourceRef.current?.disconnect();
     audioContextRef.current?.close();
@@ -231,11 +247,12 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
     sourceRef.current = null;
     audioContextRef.current = null;
     streamRef.current = null;
-    // Close WebSocket after a brief delay to allow final commits
+
+    // 3. Wait longer for server to process the final commit, then close
     setTimeout(() => {
       wsRef.current?.close();
       wsRef.current = null;
-    }, 1500);
+    }, 3000);
   }, []);
 
   const forceCommit = useCallback(() => {
