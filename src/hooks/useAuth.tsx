@@ -52,7 +52,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const fetchRoles = async (userId: string) => {
-    setRolesLoaded(false);
     const { data, error } = await supabase
       .from('user_roles')
       .select('role')
@@ -77,7 +76,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
 
-        // Defer Supabase calls with setTimeout to avoid deadlock
+        // Skip re-fetching profile/roles on token refresh — data doesn't change
+        if (event === 'TOKEN_REFRESHED') {
+          return;
+        }
+
         if (session?.user) {
           setTimeout(() => {
             fetchProfile(session.user.id);
