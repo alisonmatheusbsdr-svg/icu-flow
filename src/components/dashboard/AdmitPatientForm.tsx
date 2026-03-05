@@ -238,7 +238,13 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
     }, 1500);
   }, []);
 
-  const handleImproveText = async () => {
+  const forceCommit = useCallback(() => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ message_type: "commit" }));
+    }
+  }, []);
+
+
     if (!admissionHistory.trim()) {
       toast.error('Digite ou grave um texto antes de melhorar');
       return;
