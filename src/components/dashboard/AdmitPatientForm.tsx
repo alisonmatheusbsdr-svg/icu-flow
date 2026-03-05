@@ -245,6 +245,7 @@ export function AdmitPatientForm({ bedId, onSuccess }: AdmitPatientFormProps) {
   }, []);
 
   const handleImproveText = async () => {
+    if (!admissionHistory.trim()) {
       toast.error('Digite ou grave um texto antes de melhorar');
       return;
     }
